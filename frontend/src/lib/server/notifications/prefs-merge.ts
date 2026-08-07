@@ -22,6 +22,12 @@ import 'server-only';
 export type ChannelPrefs = { email?: boolean; inApp?: boolean };
 export type NotificationPrefs = Record<string, ChannelPrefs>;
 
+/** Narrow a Prisma `Json` column value down to `NotificationPrefs`, defaulting to `{}`. */
+export function parsePrefs(raw: unknown): NotificationPrefs {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw as NotificationPrefs;
+}
+
 /**
  * Deep-merge two prefs objects.
  *

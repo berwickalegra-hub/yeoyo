@@ -30,6 +30,20 @@ const config: NextConfig = {
   // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
   // Has no impact on `next dev` / `next start` workflows.
   output: 'standalone',
+  images: {
+    remotePatterns: [
+      // Cloudinary-hosted profile photos/avatars (frontend/src/lib/server/upload).
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+      // Illustrative fixture photos only (scripts/seed-yeoyo-profiles.ts) —
+      // real avatars from this project's own Banani design export (public
+      // GCS bucket). Not used by any real upload path.
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/banani-avatars/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {

@@ -13,6 +13,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { pathToFileURL } from 'node:url';
 
 const SEED_USERS = [
   { email: 'admin@example.com', password: 'AdminPassword123!', role: 'SUPERADMIN' },
@@ -66,8 +67,10 @@ export async function main(_args: string[] = [], deps: SeedDeps = {}): Promise<v
 }
 
 // CLI entrypoint guard — only run when invoked as a script, not when
-// imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// imported by tests. Uses pathToFileURL (not a template-string `file://`
+// join) so this matches on Windows, where process.argv[1] is backslash-based
+// and import.meta.url is a URL-encoded forward-slash file:// URL.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main()
     .then(() => process.exit(0))
     .catch((err) => {

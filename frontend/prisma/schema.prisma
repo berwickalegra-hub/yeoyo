@@ -42,6 +42,19 @@ model User {
   withdrawals       Withdrawal[]
   oauthAccounts     OAuthAccount[]
   adminActions      AdminAction[]
+  profile           Profile?
+  likesGiven        Like[]           @relation("LikesGiven")
+  likesReceived     Like[]           @relation("LikesReceived")
+  contactRequestsSent     ContactRequest[] @relation("ContactRequestsSent")
+  contactRequestsReceived ContactRequest[] @relation("ContactRequestsReceived")
+  conversationsAsUserA    Conversation[]   @relation("ConversationsAsUserA")
+  conversationsAsUserB    Conversation[]   @relation("ConversationsAsUserB")
+  messagesSent            Message[]        @relation("MessagesSent")
+  blocksGiven             BlockedUser[]    @relation("BlocksGiven")
+  blocksReceived          BlockedUser[]    @relation("BlocksReceived")
+  subscriptions           Subscription[]
+  reportsFiled            Report[]         @relation("ReportsFiled")
+  reportsReceived         Report[]         @relation("ReportsReceived")
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -166,17 +179,176 @@ model VerificationCode {
 // File uploads — Cloudinary (column names kept from the R2 era; no migration needed)
 // ───────────────────────────────────────────────────────────────────────
 model FileUpload {
-  id        String   @id @default(cuid())
-  userId    String? // nullable — uploads can be anonymous if route allows
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  key       String   @unique // Cloudinary public_id (column name historical — was R2 object key)
-  filename  String
-  mimeType  String
-  sizeBytes Int
-  createdAt DateTime @default(now())
+  id            String        @id @default(cuid())
+  userId        String? // nullable — uploads can be anonymous if route allows
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  key           String        @unique // Cloudinary public_id (column name historical — was R2 object key)
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  createdAt     DateTime      @default(now())
+  profilePhoto  ProfilePhoto?
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — dating-app profile (1:1 with User).
+//
+// `gender` / `religion` / `maritalStatus` / `childrenCount` / `intent` follow
+// this kit's convention of a plain String with an inline comment listing
+// valid values, rather than a native Prisma enum (see User.role for the
+// precedent) — keeps adding a new option a data change, not a migration.
+//
+// Note: the Banani onboarding designs disagree on name capture — the mobile
+// single-step screen asks for "Nom complet" (full name), the desktop 4-step
+// flow asks only "Prénom" (first name). Modeled as firstName + optional
+// lastName so either UI can populate it; reconcile the actual form copy
+// when Phase B builds the onboarding screens.
+// ───────────────────────────────────────────────────────────────────────
+model Profile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gender                String // HOMME | FEMME
+  firstName             String
+  lastName              String?
+  dateOfBirth           DateTime
+  city                  String    @default("Kinshasa")
+  commune               String? // Kinshasa neighborhood, e.g. "Gombe"
+  religion              String? // CHRETIEN | CATHOLIQUE | PROTESTANT | MUSULMAN
+  maritalStatus         String? // CELIBATAIRE | DIVORCE | VEUF_VEUVE
+  childrenCount         String? // "0" | "1" | "2" | "3+"
+  intent                String // COURT_TERME | MOYEN_TERME | LONG_TERME
+  job                   String?
+  bio                   String?
+  interests             String[] @default([])
+  languages             String[] @default([])
+  visibilityPublic      Boolean   @default(true)
+  onlineStatusVisible   Boolean   @default(true)
+  // Flexible discovery filters — { ageMin, ageMax, commune, intent: [...] }.
+  // JSON like NotificationPreferences.prefs, to avoid a migration per new filter.
+  searchPrefs           Json?
+  // Set by an admin via the Admin Panel's "Vérification IA" queue for now
+  // (no AI vendor wired yet — see .planning/banani/IMPLEMENTATION-PLAN.md §3.4).
+  // verificationStatus drives the queue itself (PENDING = awaiting review);
+  // verifiedAt is only set together with VERIFIED, kept for its existing
+  // consumer (profile/card.ts's `verified: !!p.verifiedAt`).
+  verifiedAt            DateTime?
+  verificationStatus    String    @default("PENDING") // PENDING | VERIFIED | REJECTED
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  photos ProfilePhoto[]
+
+  @@index([userId])
+  @@index([verifiedAt])
+  @@index([verificationStatus])
+  @@index([gender, city])
+}
+
+model ProfilePhoto {
+  id           String     @id @default(cuid())
+  profileId    String
+  profile      Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  fileUploadId String     @unique
+  fileUpload   FileUpload @relation(fields: [fileUploadId], references: [id], onDelete: Cascade)
+  isPrimary    Boolean    @default(false)
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@index([profileId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — discovery loop. Liking a profile auto-creates a PENDING
+// ContactRequest (per the Demandes screen's own explainer: "Tu likes un
+// profil → Une demande de contact est envoyée automatiquement") — see
+// POST /api/likes, which writes both rows in one transaction.
+// ───────────────────────────────────────────────────────────────────────
+model Like {
+  id        String   @id @default(cuid())
+  likerId   String
+  liker     User     @relation("LikesGiven", fields: [likerId], references: [id], onDelete: Cascade)
+  likedId   String
+  liked     User     @relation("LikesReceived", fields: [likedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([likerId, likedId])
+  @@index([likedId])
+}
+
+model ContactRequest {
+  id          String   @id @default(cuid())
+  requesterId String
+  requester   User     @relation("ContactRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetId    String
+  target      User     @relation("ContactRequestsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  status      String   @default("PENDING") // PENDING | VIEWED | ACCEPTED | CANCELLED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  conversation Conversation?
+
+  @@unique([requesterId, targetId])
+  @@index([targetId, status])
+  @@index([requesterId, status])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — messaging (Phase D). A Conversation is created when the
+// target ACCEPTs a ContactRequest (see POST /api/contact-requests/[id]/respond).
+// userAId/userBId are stored in canonical sorted-id order (see
+// lib/server/conversations/lib.ts:orderedPair) so the unique constraint
+// holds regardless of which side is the requester/target, and lookups
+// don't need an OR clause.
+// ───────────────────────────────────────────────────────────────────────
+model Conversation {
+  id               String         @id @default(cuid())
+  userAId          String
+  userA            User           @relation("ConversationsAsUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId          String
+  userB            User           @relation("ConversationsAsUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  contactRequestId String         @unique
+  contactRequest   ContactRequest @relation(fields: [contactRequestId], references: [id], onDelete: Cascade)
+  lastMessageAt    DateTime?
+  createdAt        DateTime       @default(now())
+
+  messages Message[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// Blocking hides both users from each other's Découverte/Explorer results
+// and refuses new messages in either direction (existing conversation rows
+// are kept for history/moderation, not deleted).
+model BlockedUser {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -305,9 +477,39 @@ model Order {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  subscription Subscription?
+
   @@index([userId, createdAt])
   @@index([status, expiresAt])
   @@index([provider, providerChargeId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — Premium subscription (Phase E). The plan catalog itself
+// is a static config (lib/server/subscriptions/plans.ts), not a table —
+// Banani shows a fixed 3-plan catalog and there's no admin-editable-plans
+// requirement yet. This row just tracks a user's subscription lifecycle.
+//
+// `provider` is "stub" today (see lib/server/payments/stub.ts) per the
+// explicit decision to build the Premium Checkout UI against a fake
+// provider first and wire a real Stripe/Moneroo charge later — swapping
+// providers only touches the checkout route, not this model.
+// ───────────────────────────────────────────────────────────────────────
+model Subscription {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId            String // "monthly" | "semiannual" | "annual" — see plans.ts
+  status            String    @default("PENDING") // PENDING | ACTIVE | CANCELLED | EXPIRED
+  provider          String // "stub" for now; "stripe" | "moneroo" once wired for real
+  orderId           String?   @unique
+  order             Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  currentPeriodEnd  DateTime?
+  cancelAtPeriodEnd Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, status])
 }
 
 model Withdrawal {
@@ -331,4 +533,28 @@ model Withdrawal {
   @@index([userId, requestedAt])
   @@index([status, requestedAt])
   @@index([provider, providerPayoutId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — Signalements (Phase F). No Banani screen actually exposes
+// a "Signaler" trigger (only the Admin Panel's review side was designed),
+// but a moderation queue with nothing feeding it is dead UI — added a
+// minimal report action alongside the existing "Bloquer" button in the
+// Messages thread (both are user-safety actions, natural pairing) so
+// POST /api/reports has a real caller.
+// ───────────────────────────────────────────────────────────────────────
+model Report {
+  id         String    @id @default(cuid())
+  reporterId String
+  reporter   User      @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetId   String
+  target     User      @relation("ReportsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  reason     String
+  details    String?
+  status     String    @default("PENDING") // PENDING | RESOLVED | DISMISSED
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([targetId])
 }

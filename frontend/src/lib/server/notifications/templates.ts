@@ -50,3 +50,44 @@ export function paymentReceived(
     dedupeKey: `payment-received:${orderId}`,
   };
 }
+
+/**
+ * YeOyo — someone liked your profile, which auto-creates a PENDING contact
+ * request (see POST /api/likes). dedupeKey is the ContactRequest's own id,
+ * so re-liking (upsert no-op) doesn't re-notify.
+ */
+export function contactRequestReceived(
+  userId: string,
+  contactRequestId: string,
+  fromName: string,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'CONTACT_REQUEST',
+    title: 'Nouvelle demande de contact',
+    body: `${fromName} souhaite entrer en contact avec toi.`,
+    data: { contactRequestId },
+    dedupeKey: `contact-request:${contactRequestId}`,
+  };
+}
+
+/**
+ * YeOyo — new message in a conversation. dedupeKey is the message's own id
+ * (each Message row is exactly one logical event), not a timestamp.
+ */
+export function messageReceived(
+  userId: string,
+  conversationId: string,
+  messageId: string,
+  senderName: string,
+  preview: string,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'MESSAGE_RECEIVED',
+    title: `Nouveau message de ${senderName}`,
+    body: preview.length > 140 ? `${preview.slice(0, 140)}…` : preview,
+    data: { conversationId, messageId },
+    dedupeKey: `message:${messageId}`,
+  };
+}

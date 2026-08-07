@@ -13,7 +13,11 @@ import type { Prisma } from '@prisma/client';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
-import { mergePrefs, type NotificationPrefs } from '@/lib/server/notifications/prefs-merge';
+import {
+  mergePrefs,
+  parsePrefs,
+  type NotificationPrefs,
+} from '@/lib/server/notifications/prefs-merge';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const ChannelPrefs = z.object({
@@ -23,11 +27,6 @@ const ChannelPrefs = z.object({
 const PatchBody = z.object({
   prefs: z.record(z.string().min(1), ChannelPrefs),
 });
-
-function readPrefs(raw: Prisma.JsonValue | undefined | null): NotificationPrefs {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  return raw as NotificationPrefs;
-}
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -41,7 +40,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     return NextResponse.json(
-      { prefs: readPrefs(row?.prefs) },
+      { prefs: parsePrefs(row?.prefs) },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });
@@ -69,7 +68,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       where: { userId: auth.user.sub },
       select: { prefs: true },
     });
-    const existing = readPrefs(existingRow?.prefs);
+    const existing = parsePrefs(existingRow?.prefs);
     // Cast to NotificationPrefs — Zod inference produces an explicit
     // `email?: boolean | undefined` shape (exactOptionalPropertyTypes),
     // while NotificationPrefs uses `email?: boolean`. Structurally identical.

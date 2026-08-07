@@ -1,0 +1,129 @@
+// Mes likes — profiles that liked me (GET /api/likes/received). Liking one
+// back reuses the existing POST /api/likes — same auto-ContactRequest
+// behaviour as Découverte/Explorer, so accepting still happens via Demandes.
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { api, ApiError } from '@/lib/api';
+import { useUser } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
+import { Icon } from '@/components/ui/Icon';
+import { UserAvatar } from '@/components/ui/UserAvatar';
+import { AppShell } from '@/components/yeoyo/AppShell';
+import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
+
+interface LikeRow {
+  likeId: string;
+  createdAt: string;
+  likedBack: boolean;
+  profile: ProfileCard;
+}
+
+export default function LikesPage() {
+  const user = useUser();
+  const router = useRouter();
+  const { toast } = useToast();
+  const badgeCounts = useNavCounts();
+  const [likes, setLikes] = useState<LikeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [likingId, setLikingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api<{ likes: LikeRow[] }>('/api/likes/received');
+      setLikes(res.likes);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (user) void load();
+  }, [user, load]);
+
+  async function likeBack(userId: string) {
+    setLikingId(userId);
+    try {
+      const res = await api<{ conversationId: string }>('/api/likes', {
+        method: 'POST',
+        body: { targetUserId: userId },
+      });
+      toast('C’est un match — direction la conversation !', 'success');
+      router.push(`/app/messages/${res.conversationId}`);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      setLikingId(null);
+    }
+  }
+
+  if (!user) return null;
+
+  return (
+    <AppShell active="likes" user={{ name: user.email }} badgeCounts={badgeCounts}>
+      <div className="border-b border-border px-5 py-5 lg:px-8">
+        <h1 className="font-headings text-xl font-bold text-foreground">Mes likes</h1>
+        <p className="mt-0.5 font-body text-sm text-muted-foreground">Profils qui t’ont aimé(e)</p>
+      </div>
+
+      <div className="flex flex-col gap-3 px-5 py-6 lg:mx-auto lg:w-full lg:max-w-2xl lg:px-8">
+        {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
+        {!loading && likes.length === 0 && (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-8 text-center">
+            <Icon name="heart" size={28} className="text-muted-foreground" />
+            <p className="font-body text-sm text-muted-foreground">
+              Personne ne t’a encore aimé(e). Complète ton profil et explore pour te faire
+              remarquer.
+            </p>
+          </div>
+        )}
+        {likes.map((l) => (
+          <div
+            key={l.likeId}
+            className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
+          >
+            <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-headings text-base font-bold text-foreground">
+                  {l.profile.firstName}
+                </span>
+                <span className="font-body text-sm text-muted-foreground">{l.profile.age} ans</span>
+                {l.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+              </div>
+              <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+                <Icon name="gem" size={11} />
+                <span className="font-body text-xs">
+                  {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
+                </span>
+                {l.profile.commune && (
+                  <>
+                    <span className="text-border">•</span>
+                    <Icon name="map-pin" size={11} />
+                    <span className="font-body text-xs">{l.profile.commune}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => likeBack(l.profile.userId)}
+              disabled={l.likedBack || likingId === l.profile.userId}
+              aria-label={l.likedBack ? 'Déjà aimé' : 'Aimer en retour'}
+              className="flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 text-primary-foreground disabled:opacity-50 sm:px-4"
+            >
+              <Icon name="heart" size={15} />
+              <span className="hidden font-body text-sm font-semibold sm:inline">
+                {l.likedBack ? 'Aimé' : 'Aimer en retour'}
+              </span>
+            </button>
+          </div>
+        ))}
+      </div>
+    </AppShell>
+  );
+}

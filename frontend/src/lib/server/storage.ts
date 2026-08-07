@@ -96,6 +96,26 @@ export function createStorageClient(env: CreateStorageClientEnv): StorageClient 
 }
 
 /**
+ * Reconstructs a Cloudinary delivery URL from a stored `key` (public_id).
+ * `FileUpload` only persists `key`, not the `secure_url` returned at upload
+ * time — reads that need a renderable URL (e.g. profile photo cards) go
+ * through this instead of re-uploading. Returns `null` when Cloudinary
+ * isn't configured (mirrors `tryCreateStorageClient`'s no-op contract).
+ */
+export function cloudinaryUrlForKey(key: string): string | null {
+  // Fixture/seed data (see scripts/seed-yeoyo-profiles.ts) stores a full
+  // external URL as `key` instead of a Cloudinary public_id, so illustrative
+  // profile photos render even when Cloudinary itself isn't configured —
+  // pass it through unchanged rather than trying to build a Cloudinary path
+  // out of it. Real uploads never produce a `key` starting with http(s), so
+  // this can't collide with an actual Cloudinary public_id.
+  if (key.startsWith('http://') || key.startsWith('https://')) return key;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  if (!cloudName) return null;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${key}`;
+}
+
+/**
  * Lazy boot helper — returns a storage client when env is fully set,
  * or `null` when any required var is missing. Callers can use this to
  * gracefully no-op uploads in dev without Cloudinary.

@@ -107,10 +107,14 @@ export class ApiError extends Error {
   readonly status: number;
   readonly body: Record<string, unknown>;
   /**
-   * Stable error code from the backend's response body (`body.error`).
-   * Use this for branching UI (e.g. `if (err.code === 'PIN_REQUIRED')`),
-   * not the message string. Empty when the backend didn't return one
-   * (e.g. network errors set status=0, code='').
+   * Stable error code from the backend's response body. Newer routes (the
+   * YeOyo domain, withdrawals, admin/*) return `{ code, message }`; the
+   * original auth routes (login, signup, verify-email, forgot/reset-password)
+   * predate that convention and still return `{ error, message }` — `code`
+   * is read from whichever is present, preferring `code`. Use this for
+   * branching UI (e.g. `if (err.code === 'PIN_REQUIRED')`), not the message
+   * string. Empty when the backend didn't return one (e.g. network errors
+   * set status=0, code='').
    */
   readonly code: ApiErrorCode | (string & {}) | '';
 
@@ -118,7 +122,12 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
     this.body = body || {};
-    this.code = typeof body?.error === 'string' ? body.error : '';
+    this.code =
+      typeof body?.code === 'string'
+        ? body.code
+        : typeof body?.error === 'string'
+          ? body.error
+          : '';
     this.name = 'ApiError';
   }
 }
@@ -179,7 +188,10 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
           try {
             const json = JSON.parse(text);
             errorBody = json as Record<string, unknown>;
-            errorMessage = (json as { error?: string }).error || errorMessage;
+            // Prefer the human-readable `message` (what every route sets for
+            // display text) over the machine `code`/`error` field.
+            const typed = json as { message?: string; error?: string };
+            errorMessage = typed.message || typed.error || errorMessage;
           } catch {
             errorMessage =
               response.status >= 500

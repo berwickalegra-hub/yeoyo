@@ -17,6 +17,7 @@
 // csrfFromCookies().
 
 import { PrismaClient } from '@prisma/client';
+import { pathToFileURL } from 'node:url';
 
 const BASE_URL = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000';
 const TEST_EMAIL = `smoke-${Date.now()}@example.test`;
@@ -150,7 +151,7 @@ export async function main(): Promise<number> {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main()
     .then((code) => process.exit(code))
     .catch((err) => {

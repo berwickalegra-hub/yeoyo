@@ -3,5 +3,5 @@
 # Then run typecheck across the workspace as a fast safety net (~2-3s).
 # Tests are NOT run here — they run in CI. To skip locally, use `git commit --no-verify`.
 
-pnpm exec lint-staged
+pnpm exec lint-staged --max-arg-length=4000
 pnpm typecheck
