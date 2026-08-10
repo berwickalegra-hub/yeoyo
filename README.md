@@ -170,7 +170,7 @@ Le smoke script demande `DATABASE_URL` et `JWT_SECRET` set (il lit le code de v�
 
 1. Push le repo vers un projet Vercel pointé sur `frontend/` comme root directory (le projet est un workspace pnpm ; Vercel auto-détecte via `pnpm-workspace.yaml`).
 2. Map chaque variable d'environnement requise au boot dans les Vercel project settings (Production + Preview + Development).
-3. [`frontend/vercel.json`](frontend/vercel.json) déclare les schedules cron — Vercel les enregistre automatiquement au deploy. Aucun setup additionnel.
+3. [`frontend/vercel.json`](frontend/vercel.json) déclare les schedules cron — Vercel les enregistre automatiquement au deploy. Aucun setup additionnel. **Plan Hobby (gratuit) :** les cron jobs sont limités à 1 exécution/jour max — les 6 schedules ici sont donc calées sur une fois par jour (2026-08-10) plutôt que sur leur cadence "idéale" (outbox-drain/email-queue-drain à la minute, order-expiration toutes les 5 min). Conséquence concrète : sur Hobby, les codes de vérification email peuvent mettre jusqu'à 24h à partir. Deux options : passer au plan Pro (cron à la fréquence voulue) ou pinguer `/api/cron/outbox-drain` et `/api/cron/email-queue-drain` depuis un scheduler externe gratuit (ex. cron-job.org) avec le header `Authorization: Bearer <CRON_SECRET>`.
 4. L'upload des source-maps Sentry tourne dans `next build` si `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` sont définis comme build-time env vars.
 5. Le standalone output est auto-détecté (`next.config.ts` l'active) ; aucune config supplémentaire.
 6. Détails init Sentry / OTel dans [`frontend/instrumentation.ts`](frontend/instrumentation.ts) et les fichiers `sentry.*.config.ts` — lis-les pour les détails d'ordre des hooks.
