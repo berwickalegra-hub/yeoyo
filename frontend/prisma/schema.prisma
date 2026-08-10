@@ -55,6 +55,7 @@ model User {
   subscriptions           Subscription[]
   reportsFiled            Report[]         @relation("ReportsFiled")
   reportsReceived         Report[]         @relation("ReportsReceived")
+  coachMessages           CoachMessage[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -188,6 +189,7 @@ model FileUpload {
   sizeBytes     Int
   createdAt     DateTime      @default(now())
   profilePhoto  ProfilePhoto?
+  messageImage  Message?
 
   @@index([userId])
   @@index([createdAt])
@@ -220,6 +222,19 @@ model Profile {
   religion              String? // CHRETIEN | CATHOLIQUE | PROTESTANT | MUSULMAN
   maritalStatus         String? // CELIBATAIRE | DIVORCE | VEUF_VEUVE
   childrenCount         String? // "0" | "1" | "2" | "3+"
+  // "Projet de vie" fields — optional, filled after onboarding (Paramètres),
+  // per explicit product decision not to lengthen the signup wizard further.
+  wantsChildren         String? // OUI | NON | PEUT_ETRE
+  relocateOpen          String? // OUI | NON | A_DISCUTER
+  qualities             String? // free text — "Mes qualités"
+  flaws                 String? // free text — "Mes défauts"
+  dealbreakers          String? // free text — "Ce que je n'accepte pas"
+  // Who shows up in Découvrir/Explorer for this user. Null = default to the
+  // opposite of `gender` (binary onboarding model, unchanged default
+  // behavior). "TOUS" opts into seeing both genders — set at onboarding or
+  // in Paramètres. Explorer's own gender chip filter can still override this
+  // per-search; this only changes what loads with no override applied.
+  interestedIn          String? // HOMME | FEMME | TOUS
   intent                String // COURT_TERME | MOYEN_TERME | LONG_TERME
   job                   String?
   bio                   String?
@@ -329,7 +344,14 @@ model Message {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
   sender         User         @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
-  body           String
+  // Empty string for an image-only message (no caption) — kept non-nullable
+  // so every existing consumer that reads `.body` as a string keeps working.
+  body           String       @default("")
+  // Optional image attachment (2026-08-10, user-driven — "ajouter une image
+  // pour envoyer une image ou juste chater"). One upload per message, same
+  // ownership-check pattern as ProfilePhoto/POST /api/profile/photos.
+  imageUploadId  String?      @unique
+  imageUpload    FileUpload?  @relation(fields: [imageUploadId], references: [id], onDelete: SetNull)
   readAt         DateTime?
   createdAt      DateTime     @default(now())
 
@@ -557,4 +579,26 @@ model Report {
 
   @@index([status, createdAt])
   @@index([targetId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// YeOyo domain — "Coach" AI chat (2026-08-10, user-driven, inspired by a
+// competitor app's floating coach widget). One flat, ever-growing thread
+// per user (no separate "conversation" wrapper — simpler than the peer
+// Conversation model since there's exactly one coach, not N counterparts).
+// Free tier: 3 USER-role messages per UTC calendar day (counted via a
+// `createdAt` range query on this table — no separate counter row, so
+// there's nothing to keep in sync); ACTIVE subscribers are unlimited. See
+// lib/server/coach/ for the quota check and the (optional, inert without
+// ANTHROPIC_API_KEY) Anthropic-backed reply generator.
+// ───────────────────────────────────────────────────────────────────────
+model CoachMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String // USER | ASSISTANT
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

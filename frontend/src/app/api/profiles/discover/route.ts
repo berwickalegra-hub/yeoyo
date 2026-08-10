@@ -1,9 +1,11 @@
 // GET /api/profiles/discover — the "Profil du jour" featured card + a
 // compatibility breakdown (same commune / same religion / same intent),
-// matching the Découverte Profils screen. Candidates exclude the caller,
-// anyone already liked, and (v1 scope) are restricted to the opposite of
-// the caller's own gender — the onboarding wizard only collects a binary
-// HOMME/FEMME gender, so this is the only orientation model available.
+// matching the Découverte Profils screen. Candidates exclude the caller and
+// anyone already liked. Gender pool follows `me.interestedIn` (HOMME | FEMME
+// | TOUS, set at onboarding or in Paramètres) — null/unset falls back to
+// the opposite of the caller's own gender, same as before that preference
+// existed (the onboarding wizard only collects a binary HOMME/FEMME gender,
+// so "opposite" was the only orientation model available pre-2026-08-10).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -31,6 +33,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     const oppositeGender = me.gender === 'HOMME' ? 'FEMME' : 'HOMME';
+    const genderFilter =
+      me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
     const [alreadyLiked, blocked] = await Promise.all([
       prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
       blockedUserIds(auth.user.sub),
@@ -40,11 +44,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const candidates = await prisma.profile.findMany({
       where: {
         userId: { notIn: excludeIds },
-        gender: oppositeGender,
+        ...(genderFilter ? { gender: genderFilter } : {}),
         visibilityPublic: true,
         onboardingCompletedAt: { not: null },
       },
-      include: { photos: { where: { isPrimary: true }, take: 1, include: { fileUpload: true } } },
+      include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
       orderBy: { createdAt: 'desc' },
       take: CANDIDATE_POOL_SIZE,
     });

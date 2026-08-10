@@ -39,3 +39,71 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
+
+/* Small, tasteful entrance animations (2026-08-10) — opacity/transform only
+   (GPU-friendly), no scroll-linked JS. Sticky headers get fade-in-down on
+   mount so a "floating" bar reads as intentional chrome rather than a
+   layout jump; lists/cards get fade-in(-up) so content doesn't just pop in;
+   panels (filters, Coach chat) get scale-in for a soft open. Interactive
+   tap feedback (`active:scale-95`) uses Tailwind's built-in utilities
+   directly at each call site instead of a custom class here. */
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.35s ease-out;
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out both;
+}
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-down,
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-scale-in {
+    animation: none;
+  }
+}

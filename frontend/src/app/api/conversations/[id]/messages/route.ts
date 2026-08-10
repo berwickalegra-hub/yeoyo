@@ -5,6 +5,11 @@
 // fires a MESSAGE_RECEIVED notification, and — if ABLY_API_KEY is configured
 // — publishes to the `conversation:{id}` Ably channel so the recipient's
 // open thread updates without polling (see /api/realtime/token).
+//
+// Image attachments (2026-08-10, user-driven): a message is text, an image,
+// or both (image + caption) — never neither. `imageUploadId` follows the
+// same ownership-check pattern as POST /api/profile/photos (upload via
+// /api/upload first, then reference the resulting FileUpload id here).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -21,12 +26,18 @@ import { messageReceived } from '@/lib/server/notifications/templates';
 import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-merge';
 import { isParticipant, otherParticipant } from '@/lib/server/conversations/lib';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
+import { cloudinaryUrlForKey } from '@/lib/server/storage';
 
 const log = createLogger();
 
 const PAGE_SIZE = 30;
 const Query = z.object({ before: z.string().datetime().optional() });
-const Body = z.object({ body: z.string().trim().min(1).max(2000) });
+const Body = z
+  .object({
+    body: z.string().trim().max(2000).optional(),
+    imageUploadId: z.string().optional(),
+  })
+  .refine((b) => !!b.body || !!b.imageUploadId, 'body or imageUploadId required');
 
 export async function GET(
   req: NextRequest,
@@ -59,6 +70,7 @@ export async function GET(
         conversationId: id,
         ...(parsed.data.before ? { createdAt: { lt: new Date(parsed.data.before) } } : {}),
       },
+      include: { imageUpload: { select: { key: true } } },
       orderBy: { createdAt: 'desc' },
       take: PAGE_SIZE,
     });
@@ -74,6 +86,7 @@ export async function GET(
           id: m.id,
           senderId: m.senderId,
           body: m.body,
+          imageUrl: m.imageUpload ? cloudinaryUrlForKey(m.imageUpload.key) : null,
           createdAt: m.createdAt.toISOString(),
           fromSelf: m.senderId === auth.user.sub,
         })),
@@ -116,19 +129,38 @@ export async function POST(
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json(
-        { code: 'VALIDATION_FAILED', message: 'body must be 1-2000 characters' },
+        { code: 'VALIDATION_FAILED', message: 'body or imageUploadId required' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
+    }
+
+    if (parsed.data.imageUploadId) {
+      const upload = await prisma.fileUpload.findFirst({
+        where: { id: parsed.data.imageUploadId, userId: auth.user.sub },
+      });
+      if (!upload) {
+        return NextResponse.json(
+          { code: 'PHOTO_NOT_FOUND', message: 'imageUploadId does not belong to this user' },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
     }
 
     const now = new Date();
     const message = await prisma.$transaction(async (tx) => {
       const created = await tx.message.create({
-        data: { conversationId: id, senderId: auth.user.sub, body: parsed.data.body },
+        data: {
+          conversationId: id,
+          senderId: auth.user.sub,
+          body: parsed.data.body ?? '',
+          ...(parsed.data.imageUploadId ? { imageUploadId: parsed.data.imageUploadId } : {}),
+        },
+        include: { imageUpload: { select: { key: true } } },
       });
       await tx.conversation.update({ where: { id }, data: { lastMessageAt: now } });
       return created;
     });
+    const imageUrl = message.imageUpload ? cloudinaryUrlForKey(message.imageUpload.key) : null;
 
     const [senderProfile, recipientPrefsRow] = await Promise.all([
       prisma.profile.findUnique({ where: { userId: auth.user.sub }, select: { firstName: true } }),
@@ -145,7 +177,7 @@ export async function POST(
           id,
           message.id,
           senderProfile?.firstName ?? 'Quelqu’un',
-          message.body,
+          message.body || '📷 Photo',
         ),
       );
     }
@@ -157,6 +189,7 @@ export async function POST(
           id: message.id,
           senderId: message.senderId,
           body: message.body,
+          imageUrl,
           createdAt: message.createdAt.toISOString(),
         });
       } catch (err) {
@@ -172,6 +205,7 @@ export async function POST(
         id: message.id,
         senderId: message.senderId,
         body: message.body,
+        imageUrl,
         createdAt: message.createdAt.toISOString(),
         fromSelf: true,
       },

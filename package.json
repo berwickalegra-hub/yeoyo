@@ -24,6 +24,7 @@
     "db:make-superadmin": "pnpm --filter frontend run db:make-superadmin",
     "seed:dev": "pnpm --filter frontend run seed:dev",
     "seed:yeoyo": "pnpm --filter frontend run seed:yeoyo",
+    "seed:yeoyo-women": "pnpm --filter frontend run seed:yeoyo-women",
     "smoke:auth": "pnpm --filter frontend run smoke:auth",
     "prepare": "husky"
   },

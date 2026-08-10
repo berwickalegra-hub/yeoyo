@@ -1,9 +1,10 @@
 // GET /api/profiles/explorer — paginated, filtered profile grid matching
 // the Explorer screen's filter panel (âge / intention / religion / enfants).
-// Defaults to the opposite of the caller's own gender (see discover route's
-// comment on the binary-gender onboarding model) but accepts an explicit
+// Defaults to `me.interestedIn` (HOMME | FEMME | TOUS, set at onboarding or
+// in Paramètres); null/unset falls back to the opposite of the caller's own
+// gender, same as before that preference existed. Accepts an explicit
 // `gender` query param override since Explorer's own chip row exposes a
-// Femmes/Hommes toggle independent of the viewer's gender.
+// Femmes/Hommes/Tous toggle independent of the stored preference.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -54,11 +55,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
     const q = parsed.data;
     const oppositeGender = me.gender === 'HOMME' ? 'FEMME' : 'HOMME';
+    // null/unset interestedIn = legacy default (opposite gender only).
+    // "TOUS" = no gender restriction unless the caller passes an explicit
+    // `gender` override via the filter panel.
+    const defaultGender =
+      me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
     const blocked = await blockedUserIds(auth.user.sub);
 
     const where: Prisma.ProfileWhereInput = {
       userId: { notIn: [auth.user.sub, ...blocked] },
-      gender: q.gender ?? oppositeGender,
+      ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
       onboardingCompletedAt: { not: null },
       ...(q.commune ? { commune: q.commune } : {}),
@@ -85,7 +91,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       prisma.profile.count({ where }),
       prisma.profile.findMany({
         where,
-        include: { photos: { where: { isPrimary: true }, take: 1, include: { fileUpload: true } } },
+        include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
         orderBy: { createdAt: 'desc' },
         skip: (q.page - 1) * q.pageSize,
         take: q.pageSize,

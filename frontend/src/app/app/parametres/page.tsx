@@ -26,16 +26,62 @@ import { AppShell } from '@/components/yeoyo/AppShell';
 import { SettingsSection, SettingsRow } from '@/components/yeoyo/SettingsSection';
 import { Toggle } from '@/components/ui/Toggle';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Icon } from '@/components/ui/Icon';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { KINSHASA_COMMUNES, INTENT_OPTIONS } from '@/lib/yeoyo/constants';
+import { RELIGION_LABELS, MARITAL_STATUS_LABELS } from '@/lib/yeoyo/types';
+import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
+import {
+  BIO_SUGGESTIONS,
+  QUALITIES_SUGGESTIONS,
+  FLAWS_SUGGESTIONS,
+  DEALBREAKERS_SUGGESTIONS,
+} from '@/lib/yeoyo/content';
 import type { NotificationPrefs } from '@/lib/server/notifications/prefs-merge';
 
+const CHILDREN_OPTIONS = [
+  { value: '0', label: 'Sans enfant' },
+  { value: '1', label: '1 enfant' },
+  { value: '2', label: '2 enfants' },
+  { value: '3+', label: '3 enfants ou plus' },
+];
+
+const WANTS_CHILDREN_OPTIONS = [
+  { value: 'OUI', label: 'Oui' },
+  { value: 'NON', label: 'Non' },
+  { value: 'PEUT_ETRE', label: 'Peut-être' },
+];
+
+const RELOCATE_OPTIONS = [
+  { value: 'OUI', label: 'Oui' },
+  { value: 'NON', label: 'Non' },
+  { value: 'A_DISCUTER', label: 'À discuter' },
+];
+
+const INTERESTED_IN_OPTIONS = [
+  { value: 'FEMME', label: 'Femmes' },
+  { value: 'HOMME', label: 'Hommes' },
+  { value: 'TOUS', label: 'Les deux' },
+];
+
 interface ProfileSettings {
+  firstName: string;
+  photoUrl: string | null;
   visibilityPublic: boolean;
   onlineStatusVisible: boolean;
   commune: string | null;
   intent: string;
   verifiedAt: string | null;
+  bio: string | null;
+  religion: string | null;
+  maritalStatus: string | null;
+  childrenCount: string | null;
+  wantsChildren: string | null;
+  relocateOpen: string | null;
+  qualities: string | null;
+  flaws: string | null;
+  dealbreakers: string | null;
+  interestedIn: string | null;
 }
 
 interface SubscriptionInfo {
@@ -112,7 +158,23 @@ export default function ParametresPage() {
 
   async function patchProfile(
     patch: Partial<
-      Pick<ProfileSettings, 'visibilityPublic' | 'onlineStatusVisible' | 'commune' | 'intent'>
+      Pick<
+        ProfileSettings,
+        | 'visibilityPublic'
+        | 'onlineStatusVisible'
+        | 'commune'
+        | 'intent'
+        | 'bio'
+        | 'religion'
+        | 'maritalStatus'
+        | 'childrenCount'
+        | 'wantsChildren'
+        | 'relocateOpen'
+        | 'qualities'
+        | 'flaws'
+        | 'dealbreakers'
+        | 'interestedIn'
+      >
     >,
   ) {
     if (!profile) return;
@@ -190,6 +252,26 @@ export default function ParametresPage() {
       </div>
 
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
+        {profile && (
+          <Link
+            href="/app/profil"
+            className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 transition-transform active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-3">
+              <UserAvatar name={profile.firstName} avatarUrl={profile.photoUrl} size={48} />
+              <div>
+                <p className="font-headings text-sm font-semibold text-foreground">
+                  {profile.firstName}
+                </p>
+                <p className="font-body text-xs text-muted-foreground">
+                  Voir mon profil, ajouter une photo
+                </p>
+              </div>
+            </div>
+            <Icon name="chevron-right" size={18} className="text-muted-foreground" />
+          </Link>
+        )}
+
         <AccountSection userEmail={user.email} verifiedAt={profile?.verifiedAt ?? null} />
 
         {profile && (
@@ -214,6 +296,170 @@ export default function ParametresPage() {
           </SettingsSection>
         )}
 
+        {profile && (
+          <SettingsSection title="Détails du profil">
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">
+                Ta vision du mariage
+              </span>
+              <textarea
+                value={profile.bio ?? ''}
+                onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                onBlur={(e) => patchProfile({ bio: e.target.value.trim() || null })}
+                maxLength={500}
+                rows={3}
+                placeholder="Décris en quelques mots ce que tu recherches…"
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              />
+              <SuggestionChips
+                suggestions={BIO_SUGGESTIONS}
+                onSelect={(text) => {
+                  setProfile({ ...profile, bio: text });
+                  void patchProfile({ bio: text });
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">Mes qualités</span>
+              <textarea
+                value={profile.qualities ?? ''}
+                onChange={(e) => setProfile({ ...profile, qualities: e.target.value })}
+                onBlur={(e) => patchProfile({ qualities: e.target.value.trim() || null })}
+                maxLength={300}
+                rows={2}
+                placeholder="Ex : Déterminé(e), patient(e), à l'écoute…"
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              />
+              <SuggestionChips
+                suggestions={QUALITIES_SUGGESTIONS}
+                onSelect={(text) => {
+                  setProfile({ ...profile, qualities: text });
+                  void patchProfile({ qualities: text });
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">Mes défauts</span>
+              <textarea
+                value={profile.flaws ?? ''}
+                onChange={(e) => setProfile({ ...profile, flaws: e.target.value })}
+                onBlur={(e) => patchProfile({ flaws: e.target.value.trim() || null })}
+                maxLength={300}
+                rows={2}
+                placeholder="Ex : Un peu impatient(e), perfectionniste…"
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              />
+              <SuggestionChips
+                suggestions={FLAWS_SUGGESTIONS}
+                onSelect={(text) => {
+                  setProfile({ ...profile, flaws: text });
+                  void patchProfile({ flaws: text });
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">
+                Ce que je n&rsquo;accepte pas
+              </span>
+              <textarea
+                value={profile.dealbreakers ?? ''}
+                onChange={(e) => setProfile({ ...profile, dealbreakers: e.target.value })}
+                onBlur={(e) => patchProfile({ dealbreakers: e.target.value.trim() || null })}
+                maxLength={300}
+                rows={2}
+                placeholder="Ex : Le manque de sincérité, la violence…"
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              />
+              <SuggestionChips
+                suggestions={DEALBREAKERS_SUGGESTIONS}
+                onSelect={(text) => {
+                  setProfile({ ...profile, dealbreakers: text });
+                  void patchProfile({ dealbreakers: text });
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">Religion</span>
+              <select
+                value={profile.religion ?? ''}
+                onChange={(e) => patchProfile({ religion: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Non précisé</option>
+                {Object.entries(RELIGION_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">Statut marital</span>
+              <select
+                value={profile.maritalStatus ?? ''}
+                onChange={(e) => patchProfile({ maritalStatus: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Non précisé</option>
+                {Object.entries(MARITAL_STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">Enfants</span>
+              <select
+                value={profile.childrenCount ?? ''}
+                onChange={(e) => patchProfile({ childrenCount: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Non précisé</option>
+                {CHILDREN_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">
+                Souhaite (encore) des enfants
+              </span>
+              <select
+                value={profile.wantsChildren ?? ''}
+                onChange={(e) => patchProfile({ wantsChildren: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Non précisé</option>
+                {WANTS_CHILDREN_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">
+                Ouvert(e) à déménager
+              </span>
+              <select
+                value={profile.relocateOpen ?? ''}
+                onChange={(e) => patchProfile({ relocateOpen: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Non précisé</option>
+                {RELOCATE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </SettingsSection>
+        )}
+
         <SettingsSection title="Notifications">
           {NOTIF_EVENTS.map((e) => (
             <SettingsRow key={e.key} label={e.label} helper={e.helper}>
@@ -228,6 +474,23 @@ export default function ParametresPage() {
 
         {profile && (
           <SettingsSection title="Préférences de recherche">
+            <label className="flex flex-col gap-1.5">
+              <span className="font-body text-sm font-medium text-foreground">
+                Je souhaite voir
+              </span>
+              <select
+                value={profile.interestedIn ?? ''}
+                onChange={(e) => patchProfile({ interestedIn: e.target.value || null })}
+                className="rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground"
+              >
+                <option value="">Par défaut (sexe opposé)</option>
+                {INTERESTED_IN_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex flex-col gap-1.5">
               <span className="font-body text-sm font-medium text-foreground">Localité</span>
               <select

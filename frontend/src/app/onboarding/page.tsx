@@ -23,6 +23,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { Icon } from '@/components/ui/Icon';
 import { KINSHASA_COMMUNES } from '@/lib/yeoyo/constants';
+import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
+import { BIO_SUGGESTIONS } from '@/lib/yeoyo/content';
 
 type ProfileStep = 1 | 2 | 3 | 4;
 type Step = 'signup' | 'verify' | ProfileStep;
@@ -41,6 +43,20 @@ const MARITAL_STATUSES = [
 ];
 
 const CHILDREN_OPTIONS = ['0', '1', '2', '3+'];
+
+const WANTS_CHILDREN_OPTIONS = [
+  { value: 'OUI', label: 'Oui' },
+  { value: 'NON', label: 'Non' },
+  { value: 'PEUT_ETRE', label: 'Peut-être' },
+];
+
+// Not shown as "required" — leaving it unset keeps the existing default
+// (opposite of `gender`) exactly as before this preference existed.
+const INTERESTED_IN_OPTIONS = [
+  { value: 'FEMME', label: 'Femmes' },
+  { value: 'HOMME', label: 'Hommes' },
+  { value: 'TOUS', label: 'Les deux' },
+];
 
 const INTENTS = [
   {
@@ -66,25 +82,31 @@ const INTENTS = [
 interface WizardData {
   email: string;
   gender: 'HOMME' | 'FEMME' | null;
+  interestedIn: string | null;
   firstName: string;
   dateOfBirth: string;
   commune: string;
   religion: string | null;
   maritalStatus: string | null;
   childrenCount: string | null;
+  wantsChildren: string | null;
   intent: string | null;
+  bio: string;
 }
 
 const INITIAL_DATA: WizardData = {
   email: '',
   gender: null,
+  interestedIn: null,
   firstName: '',
   dateOfBirth: '',
   commune: '',
   religion: null,
   maritalStatus: null,
   childrenCount: null,
+  wantsChildren: null,
   intent: null,
+  bio: '',
 };
 
 // api.ts doesn't export a CSRF-token getter (protected file), and the
@@ -264,13 +286,16 @@ export default function OnboardingPage() {
         method: 'POST',
         body: {
           gender: data.gender,
+          interestedIn: data.interestedIn || undefined,
           firstName: data.firstName,
           dateOfBirth: data.dateOfBirth,
           commune: data.commune || undefined,
           religion: data.religion || undefined,
           maritalStatus: data.maritalStatus || undefined,
           childrenCount: data.childrenCount || undefined,
+          wantsChildren: data.wantsChildren || undefined,
           intent: data.intent,
+          bio: data.bio.trim() || undefined,
           photoUploadId,
         },
       });
@@ -409,6 +434,28 @@ export default function OnboardingPage() {
                 active={data.gender === 'FEMME'}
                 onClick={() => setData((d) => ({ ...d, gender: 'FEMME' }))}
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block font-body text-sm text-foreground">
+              Je souhaite voir (optionnel)
+            </label>
+            <div className="flex gap-3">
+              {INTERESTED_IN_OPTIONS.map((opt) => (
+                <div key={opt.value} className="flex-1">
+                  <PillOption
+                    label={opt.label}
+                    active={data.interestedIn === opt.value}
+                    onClick={() =>
+                      setData((d) => ({
+                        ...d,
+                        interestedIn: d.interestedIn === opt.value ? null : opt.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
@@ -552,6 +599,28 @@ export default function OnboardingPage() {
             </div>
           </div>
 
+          <div>
+            <label className="mb-2 block font-body text-sm text-foreground">
+              Souhaites-tu (encore) des enfants ? (optionnel)
+            </label>
+            <div className="flex gap-3">
+              {WANTS_CHILDREN_OPTIONS.map((opt) => (
+                <div key={opt.value} className="flex-1">
+                  <PillOption
+                    label={opt.label}
+                    active={data.wantsChildren === opt.value}
+                    onClick={() =>
+                      setData((d) => ({
+                        ...d,
+                        wantsChildren: d.wantsChildren === opt.value ? null : opt.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <button
             type="button"
             disabled={!data.commune || !data.maritalStatus || !data.childrenCount}
@@ -617,6 +686,29 @@ export default function OnboardingPage() {
               YeOyo te met en relation uniquement avec des personnes partageant la même intention.
               Zéro perte de temps.
             </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block font-headings text-sm font-semibold text-foreground">
+              Ta vision du mariage{' '}
+              <span className="font-body text-xs font-normal text-muted-foreground">
+                (optionnel)
+              </span>
+            </label>
+            <textarea
+              value={data.bio}
+              onChange={(e) => setData((d) => ({ ...d, bio: e.target.value.slice(0, 500) }))}
+              placeholder="Ex : Pour moi, le mariage c'est avant tout un engagement sincère et..."
+              rows={3}
+              className="w-full rounded-xl border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+            />
+            <p className="mt-1 text-right font-body text-xs text-muted-foreground">
+              {data.bio.length}/500
+            </p>
+            <SuggestionChips
+              suggestions={BIO_SUGGESTIONS}
+              onSelect={(text) => setData((d) => ({ ...d, bio: text }))}
+            />
           </div>
 
           <button

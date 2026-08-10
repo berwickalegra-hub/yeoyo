@@ -25,10 +25,12 @@ export default function MessagesPage() {
           <div className="border-b border-border px-5 py-5">
             <h1 className="font-headings text-xl font-bold text-foreground">Messages</h1>
           </div>
-          <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
-            {loading && <p className="px-3 font-body text-sm text-muted-foreground">Chargement…</p>}
+          <div className="flex flex-1 flex-col overflow-y-auto">
+            {loading && (
+              <p className="px-5 py-3 font-body text-sm text-muted-foreground">Chargement…</p>
+            )}
             {!loading && conversations.length === 0 && (
-              <p className="px-3 font-body text-sm text-muted-foreground">
+              <p className="px-5 py-3 font-body text-sm text-muted-foreground">
                 Aucune conversation pour l’instant — accepte une demande de contact pour démarrer.
               </p>
             )}

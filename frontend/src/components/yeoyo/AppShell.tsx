@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Sidebar, type SidebarUser, type SidebarBadgeCounts } from './Sidebar';
 import { MobileTabBar } from './MobileTabBar';
+import { CoachWidget } from './CoachWidget';
 import type { SidebarTab } from './nav-items';
 
 // Shared app-shell layout: Sidebar (hidden on mobile, icon rail at `md`,
@@ -34,6 +35,7 @@ export function AppShell({
       <Sidebar active={active} user={user} badgeCounts={badgeCounts} />
       <div className="flex flex-1 flex-col pb-16 md:pb-0">{children}</div>
       <MobileTabBar active={active} badgeCounts={badgeCounts} />
+      <CoachWidget />
     </div>
   );
 }

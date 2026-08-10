@@ -42,6 +42,12 @@ const config: NextConfig = {
         hostname: 'storage.googleapis.com',
         pathname: '/banani-avatars/**',
       },
+      // Illustrative fixture photos only (scripts/seed-yeoyo-women.ts) —
+      // randomuser.me portraits, chosen deliberately over scraping arbitrary
+      // photos of real people off Google Images (would put a real person's
+      // face on a fake dating profile without consent). Not used by any
+      // real upload path.
+      { protocol: 'https', hostname: 'randomuser.me' },
     ],
   },
   async headers() {

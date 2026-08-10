@@ -127,37 +127,39 @@ export default function DemandesPage() {
     <AppShell active="demandes" user={{ name: user.email }} badgeCounts={badgeCounts}>
       <div className="flex flex-1 flex-col lg:flex-row">
         <div className="flex-1">
-          <div className="border-b border-border px-5 py-5 lg:px-8">
-            <h1 className="font-headings text-xl font-bold text-foreground">Demandes</h1>
-            <p className="mt-0.5 font-body text-sm text-muted-foreground">
-              Gérez vos demandes de contact
-            </p>
-          </div>
+          <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
+            <div className="border-b border-border px-5 py-5 lg:px-8">
+              <h1 className="font-headings text-xl font-bold text-foreground">Demandes</h1>
+              <p className="mt-0.5 font-body text-sm text-muted-foreground">
+                Gérez vos demandes de contact
+              </p>
+            </div>
 
-          <div className="flex gap-1 border-b border-border px-5 lg:px-8">
-            {(['received', 'sent', 'contacts'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 font-body text-sm font-medium sm:px-6 ${
-                  tab === t
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground'
-                }`}
-              >
-                {TAB_LABELS[t]}
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full font-body text-xs font-bold ${
+            <div className="flex gap-1 border-b border-border px-5 lg:px-8">
+              {(['received', 'sent', 'contacts'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`flex items-center gap-2 border-b-2 px-4 py-3 font-body text-sm font-medium transition-colors sm:px-6 ${
                     tab === t
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground'
                   }`}
                 >
-                  {TAB_COUNTS[t]}
-                </span>
-              </button>
-            ))}
+                  {TAB_LABELS[t]}
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full font-body text-xs font-bold ${
+                      tab === t
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {TAB_COUNTS[t]}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 px-5 py-6 lg:px-8">

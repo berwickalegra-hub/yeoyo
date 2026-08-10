@@ -30,7 +30,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       include: {
         userA: { include: profileInclude },
         userB: { include: profileInclude },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { imageUpload: { select: { key: true } } },
+        },
       },
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -60,6 +64,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           lastMessage: lastMessage
             ? {
                 body: lastMessage.body,
+                hasImage: !!lastMessage.imageUpload,
                 createdAt: lastMessage.createdAt.toISOString(),
                 fromSelf: lastMessage.senderId === selfId,
               }

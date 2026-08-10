@@ -33,3 +33,13 @@ export const INTENT_OPTIONS = [
   { value: 'MOYEN_TERME', label: 'Mariage à moyen terme' },
   { value: 'LONG_TERME', label: 'Mariage à long terme' },
 ];
+
+// Shared between the Messages thread header and the profile-detail screen —
+// both expose "Signaler" against the same POST /api/reports.
+export const REPORT_REASONS = [
+  { value: 'FAKE_PROFILE', label: 'Faux profil' },
+  { value: 'INAPPROPRIATE_CONTENT', label: 'Contenu inapproprié' },
+  { value: 'HARASSMENT', label: 'Harcèlement' },
+  { value: 'SCAM', label: 'Arnaque' },
+  { value: 'OTHER', label: 'Autre' },
+] as const;

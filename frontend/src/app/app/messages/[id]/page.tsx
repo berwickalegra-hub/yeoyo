@@ -6,9 +6,18 @@
 // dès le départ" requirement. Sending is a plain POST; the just-sent
 // message is appended optimistically from the POST response, then deduped
 // by id if/when the same message also arrives over Ably.
+//
+// Header (2026-08-10, user-driven — "comme WhatsApp avec des options
+// professionnelles, le bouton bloquer ne doit pas être exposé comme ça"):
+// Signaler/Bloquer moved from two always-visible buttons into a kebab (⋮)
+// dropdown; the avatar+name are now clickable through to the full profile.
+// Image sending uses the same upload-then-attach pattern as
+// POST /api/profile/photos — see onImageSelected below.
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import Ably from 'ably';
 import { api, ApiError } from '@/lib/api';
@@ -18,7 +27,9 @@ import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Sidebar } from '@/components/yeoyo/Sidebar';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { COOKIE_PREFIX } from '@/lib/constants';
 import { INTENT_LABELS } from '@/lib/yeoyo/types';
+import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { useConversations } from '@/lib/yeoyo/useConversations';
 
@@ -28,20 +39,26 @@ const QUICK_REPLIES = [
   'Bonjour, ravi(e) de faire ta connaissance ! Tu es de quelle commune ?',
 ] as const;
 
-const REPORT_REASONS = [
-  { value: 'FAKE_PROFILE', label: 'Faux profil' },
-  { value: 'INAPPROPRIATE_CONTENT', label: 'Contenu inapproprié' },
-  { value: 'HARASSMENT', label: 'Harcèlement' },
-  { value: 'SCAM', label: 'Arnaque' },
-  { value: 'OTHER', label: 'Autre' },
-] as const;
-
 interface ThreadMessage {
   id: string;
   senderId: string;
   body: string;
+  imageUrl: string | null;
   createdAt: string;
   fromSelf: boolean;
+}
+
+// api.ts doesn't export a CSRF-token getter (protected file), and the
+// multipart /api/upload call can't go through api()'s JSON-only body — same
+// workaround used by onboarding/profil for their own photo uploads.
+function readCsrfToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const key = `${COOKIE_PREFIX}-csrf`;
+  const fromStorage = localStorage.getItem(key);
+  if (fromStorage) return fromStorage;
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]*)`));
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 export default function MessageThreadPage() {
@@ -58,6 +75,8 @@ export default function MessageThreadPage() {
   const [hasMore, setHasMore] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingBlock, setConfirmingBlock] = useState(false);
   const [liked, setLiked] = useState(false);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
@@ -65,6 +84,8 @@ export default function MessageThreadPage() {
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef<Set<string>>(new Set());
 
   const active = conversations.find((c) => c.id === conversationId);
@@ -92,6 +113,15 @@ export default function MessageThreadPage() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!user) return;
@@ -160,6 +190,41 @@ export default function MessageThreadPage() {
     }
   }
 
+  async function onImageSelected(file: File) {
+    setUploadingImage(true);
+    const caption = draft.trim();
+    setDraft('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const csrfToken = readCsrfToken();
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+        headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
+      });
+      if (!uploadRes.ok) {
+        const errBody = (await uploadRes.json().catch(() => ({}))) as { message?: string };
+        throw new Error(errBody.message ?? "L'envoi de l'image a échoué");
+      }
+      const uploaded = (await uploadRes.json()) as { id: string };
+
+      const res = await api<ThreadMessage>(`/api/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        body: { imageUploadId: uploaded.id, ...(caption ? { body: caption } : {}) },
+      });
+      if (!seenIds.current.has(res.id)) {
+        seenIds.current.add(res.id);
+        setMessages((prev) => [...prev, res]);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   async function addLike() {
     if (!active) return;
     try {
@@ -207,7 +272,7 @@ export default function MessageThreadPage() {
           <div className="border-b border-border px-5 py-5">
             <h1 className="font-headings text-xl font-bold text-foreground">Messages</h1>
           </div>
-          <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
+          <div className="flex flex-1 flex-col overflow-y-auto">
             {conversations.map((c) => (
               <ConversationListItem
                 key={c.id}
@@ -222,33 +287,71 @@ export default function MessageThreadPage() {
         </div>
 
         <div className="flex flex-1 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+            <div className="flex min-w-0 items-center gap-3">
               <a href="/app/messages" className="lg:hidden">
                 <Icon name="chevron-left" size={20} />
               </a>
               {active && (
-                <span className="font-headings text-base font-bold text-foreground">
-                  {active.otherUser.firstName}
-                </span>
+                <Link
+                  href={`/app/profils/${active.otherUser.userId}`}
+                  className="flex min-w-0 items-center gap-2.5"
+                >
+                  <UserAvatar
+                    name={active.otherUser.firstName}
+                    avatarUrl={active.otherUser.photoUrl}
+                    size={38}
+                  />
+                  <span className="truncate font-headings text-base font-bold text-foreground">
+                    {active.otherUser.firstName}
+                  </span>
+                </Link>
               )}
             </div>
             {active && (
-              <div className="flex items-center gap-2">
+              <div ref={menuRef} className="relative flex-shrink-0">
                 <button
                   type="button"
-                  onClick={() => setReportReason(reportReason === null ? 'OTHER' : null)}
-                  className="rounded-lg border border-border bg-surface px-3 py-1.5 font-body text-xs text-muted-foreground"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-label="Options de la conversation"
+                  aria-expanded={menuOpen}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
                 >
-                  Signaler
+                  <Icon name="more-vertical" size={18} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingBlock(true)}
-                  className="rounded-lg border border-red-500/40 bg-surface px-3 py-1.5 font-body text-xs text-red-500"
-                >
-                  Bloquer
-                </button>
+                {menuOpen && (
+                  <div className="animate-scale-in absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+                    <Link
+                      href={`/app/profils/${active.otherUser.userId}`}
+                      className="flex items-center gap-2.5 px-4 py-2.5 font-body text-sm text-foreground hover:bg-muted/50"
+                    >
+                      <Icon name="user" size={15} />
+                      Voir le profil
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setReportReason(reportReason === null ? 'OTHER' : null);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left font-body text-sm text-foreground hover:bg-muted/50"
+                    >
+                      <Icon name="info" size={15} />
+                      Signaler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setConfirmingBlock(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left font-body text-sm text-red-500 hover:bg-red-500/5"
+                    >
+                      <Icon name="ban" size={15} />
+                      Bloquer
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -333,13 +436,22 @@ export default function MessageThreadPage() {
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.fromSelf ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 font-body text-sm ${
-                      m.fromSelf
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-surface text-foreground'
-                    }`}
+                    className={`max-w-[75%] overflow-hidden rounded-2xl font-body text-sm ${
+                      m.imageUrl ? 'p-1' : 'px-4 py-2.5'
+                    } ${m.fromSelf ? 'bg-primary text-primary-foreground' : 'bg-surface text-foreground'}`}
                   >
-                    {m.body}
+                    {m.imageUrl && (
+                      <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+                        <Image
+                          src={m.imageUrl}
+                          alt="Image envoyée"
+                          width={280}
+                          height={280}
+                          className="max-h-72 w-full rounded-xl object-cover"
+                        />
+                      </a>
+                    )}
+                    {m.body && <p className={m.imageUrl ? 'px-2.5 py-2' : ''}>{m.body}</p>}
                   </div>
                 </div>
               ))}
@@ -366,6 +478,26 @@ export default function MessageThreadPage() {
             )}
             <div className="flex items-center gap-2">
               <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void onImageSelected(file);
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                aria-label="Envoyer une image"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-transform active:scale-90 disabled:opacity-50"
+              >
+                <Icon name="image" size={18} />
+              </button>
+              <input
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -375,13 +507,14 @@ export default function MessageThreadPage() {
                     void send();
                   }
                 }}
-                placeholder="Écris un message…"
-                className="flex-1 rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+                placeholder={uploadingImage ? 'Envoi de l’image…' : 'Écris un message…'}
+                disabled={uploadingImage}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={() => void send()}
-                disabled={sending || !draft.trim()}
+                disabled={sending || uploadingImage || !draft.trim()}
                 className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
                 aria-label="Envoyer"
               >

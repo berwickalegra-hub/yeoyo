@@ -8,7 +8,7 @@ import type { ProfileCard } from '@/lib/yeoyo/types';
 export interface ConversationRow {
   id: string;
   otherUser: ProfileCard;
-  lastMessage: { body: string; createdAt: string; fromSelf: boolean } | null;
+  lastMessage: { body: string; hasImage: boolean; createdAt: string; fromSelf: boolean } | null;
   unreadCount: number;
 }
 
