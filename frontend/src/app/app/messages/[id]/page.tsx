@@ -32,6 +32,7 @@ import { INTENT_LABELS } from '@/lib/yeoyo/types';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { useConversations } from '@/lib/yeoyo/useConversations';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 const QUICK_REPLIES = [
   'Bonjour ! J’ai beaucoup aimé ton profil, comment vas-tu ? 😊',
@@ -79,6 +80,7 @@ export default function MessageThreadPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingBlock, setConfirmingBlock] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [addingLike, setAddingLike] = useState(false);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
   );
@@ -89,6 +91,8 @@ export default function MessageThreadPage() {
   const seenIds = useRef<Set<string>>(new Set());
 
   const active = conversations.find((c) => c.id === conversationId);
+
+  const likePopping = useLikePop(liked);
 
   const loadInitial = useCallback(async () => {
     setLoading(true);
@@ -227,12 +231,15 @@ export default function MessageThreadPage() {
 
   async function addLike() {
     if (!active) return;
+    setAddingLike(true);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId: active.otherUser.userId } });
       setLiked(true);
       toast('Profil aimé', 'success');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setAddingLike(false);
     }
   }
 
@@ -581,10 +588,19 @@ export default function MessageThreadPage() {
                 <button
                   type="button"
                   onClick={() => void addLike()}
-                  disabled={liked}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 font-body text-sm font-medium text-foreground disabled:opacity-50"
+                  disabled={liked || addingLike}
+                  className={`btn-success-flash flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 font-body text-sm font-medium disabled:opacity-50 ${liked ? 'border-primary/30 bg-primary/5 text-primary' : 'border-border bg-background text-foreground'}`}
                 >
-                  <Icon name="heart" size={14} />
+                  {addingLike ? (
+                    <Icon name="refresh-cw" size={14} className="animate-spin" />
+                  ) : (
+                    <Icon
+                      name="heart"
+                      size={14}
+                      fill={liked ? 'currentColor' : 'none'}
+                      className={likePopping ? 'animate-heart-pop' : ''}
+                    />
+                  )}
                   {liked ? 'Profil aimé' : 'Ajouter un like'}
                 </button>
                 <button
