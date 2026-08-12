@@ -98,9 +98,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }),
     ]);
 
+    // "liked" lets grid/deck cards render a filled heart for profiles the
+    // caller already liked in a previous session — explorer (unlike
+    // discover) does not exclude already-liked profiles from the pool.
+    const likedRows =
+      profiles.length > 0
+        ? await prisma.like.findMany({
+            where: { likerId: auth.user.sub, likedId: { in: profiles.map((p) => p.userId) } },
+            select: { likedId: true },
+          })
+        : [];
+    const likedSet = new Set(likedRows.map((r) => r.likedId));
+
     return NextResponse.json(
       {
-        profiles: profiles.map(toProfileCard),
+        profiles: profiles.map((p) => ({ ...toProfileCard(p), liked: likedSet.has(p.userId) })),
         page: q.page,
         pageSize: q.pageSize,
         total,
