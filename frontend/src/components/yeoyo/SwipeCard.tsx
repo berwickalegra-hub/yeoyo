@@ -26,6 +26,7 @@ import { Icon } from '@/components/ui/Icon';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import type { ProfileCard } from '@/lib/yeoyo/types';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 const SWIPE_THRESHOLD = 90;
 const CLICK_THRESHOLD = 6;
@@ -48,6 +49,9 @@ export function SwipeCard({
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
+
+  const liked = profile.liked ?? false;
+  const popping = useLikePop(liked);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (busy) return;
@@ -171,17 +175,30 @@ export function SwipeCard({
           disabled={busy}
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-background text-foreground disabled:opacity-50"
         >
-          <Icon name="message-circle" size={17} />
+          {busy ? (
+            <Icon name="refresh-cw" size={17} className="animate-spin" />
+          ) : (
+            <Icon name="message-circle" size={17} />
+          )}
           <span className="font-body text-sm font-semibold">Message</span>
         </button>
         <button
           type="button"
           onClick={() => onLike(profile.userId)}
-          disabled={busy}
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50"
-          aria-label="Ajouter aux favoris"
+          disabled={busy || liked}
+          className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full btn-success-flash ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+          aria-label={liked ? 'Déjà aimé' : 'Ajouter aux favoris'}
         >
-          <Icon name="heart" size={20} />
+          {busy ? (
+            <Icon name="refresh-cw" size={20} className="animate-spin" />
+          ) : (
+            <Icon
+              name="heart"
+              size={20}
+              fill={liked ? 'currentColor' : 'none'}
+              className={popping ? 'animate-heart-pop' : ''}
+            />
+          )}
         </button>
       </div>
     </div>

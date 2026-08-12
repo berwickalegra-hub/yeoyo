@@ -13,12 +13,48 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 interface LikeRow {
   likeId: string;
   createdAt: string;
   likedBack: boolean;
   profile: ProfileCard;
+}
+
+function LikeBackButton({
+  liked,
+  busy,
+  onClick,
+}: {
+  liked: boolean;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  const popping = useLikePop(liked);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={liked || busy}
+      aria-label={liked ? 'Déjà aimé' : 'Aimer en retour'}
+      className={`btn-success-flash flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 ${busy ? 'opacity-50' : ''} sm:px-4 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+    >
+      {busy ? (
+        <Icon name="refresh-cw" size={15} className="animate-spin" />
+      ) : (
+        <Icon
+          name="heart"
+          size={15}
+          fill={liked ? 'currentColor' : 'none'}
+          className={popping ? 'animate-heart-pop' : ''}
+        />
+      )}
+      <span className="hidden font-body text-sm font-semibold sm:inline">
+        {liked ? 'Aimé' : 'Aimer en retour'}
+      </span>
+    </button>
+  );
 }
 
 export default function LikesPage() {
@@ -53,10 +89,14 @@ export default function LikesPage() {
         method: 'POST',
         body: { targetUserId: userId },
       });
+      setLikes((prev) =>
+        prev.map((l) => (l.profile.userId === userId ? { ...l, likedBack: true } : l)),
+      );
       toast('C’est un match — direction la conversation !', 'success');
       router.push(`/app/messages/${res.conversationId}`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
       setLikingId(null);
     }
   }
@@ -109,18 +149,11 @@ export default function LikesPage() {
                 )}
               </div>
             </div>
-            <button
-              type="button"
+            <LikeBackButton
+              liked={l.likedBack}
+              busy={likingId === l.profile.userId}
               onClick={() => likeBack(l.profile.userId)}
-              disabled={l.likedBack || likingId === l.profile.userId}
-              aria-label={l.likedBack ? 'Déjà aimé' : 'Aimer en retour'}
-              className="flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 text-primary-foreground disabled:opacity-50 sm:px-4"
-            >
-              <Icon name="heart" size={15} />
-              <span className="hidden font-body text-sm font-semibold sm:inline">
-                {l.likedBack ? 'Aimé' : 'Aimer en retour'}
-              </span>
-            </button>
+            />
           </div>
         ))}
       </div>

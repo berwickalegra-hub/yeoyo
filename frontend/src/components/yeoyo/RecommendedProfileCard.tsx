@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import type { ProfileCard } from '@/lib/yeoyo/types';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export function RecommendedProfileCard({
   profile,
@@ -24,6 +25,9 @@ export function RecommendedProfileCard({
   /** Real, derived "why recommended" line (shared commune/religion/objectif) — never a fabricated match score. */
   note?: string | undefined;
 }) {
+  const liked = profile.liked ?? false;
+  const popping = useLikePop(liked);
+
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className="relative">
@@ -46,11 +50,20 @@ export function RecommendedProfileCard({
         <button
           type="button"
           onClick={() => onLike(profile.userId)}
-          disabled={liking}
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-primary disabled:opacity-50"
-          aria-label="Aimer ce profil"
+          disabled={liking || liked}
+          aria-label={liked ? 'Déjà aimé' : 'Aimer ce profil'}
+          className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full btn-success-flash ${liking ? 'opacity-50' : ''} ${liked ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-primary'}`}
         >
-          <Icon name="heart" size={14} />
+          {liking ? (
+            <Icon name="refresh-cw" size={14} className="animate-spin" />
+          ) : (
+            <Icon
+              name="heart"
+              size={14}
+              fill={liked ? 'currentColor' : 'none'}
+              className={popping ? 'animate-heart-pop' : ''}
+            />
+          )}
         </button>
       </div>
 

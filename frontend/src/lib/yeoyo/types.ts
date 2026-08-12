@@ -18,6 +18,10 @@ export interface ProfileCard {
   qualities: string | null;
   flaws: string | null;
   dealbreakers: string | null;
+  // Only populated by endpoints that know the caller's identity and compute
+  // it server-side (currently /api/profiles/explorer and /api/profiles/[userId]
+  // via a sibling field) — undefined elsewhere, treat as "not liked".
+  liked?: boolean;
 }
 
 export const INTENT_LABELS: Record<string, string> = {

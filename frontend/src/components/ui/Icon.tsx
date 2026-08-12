@@ -98,11 +98,23 @@ export function Icon({
   name,
   size = 18,
   className,
+  fill,
+  strokeWidth,
 }: {
   name: IconName;
   size?: number;
   className?: string;
+  fill?: string;
+  strokeWidth?: number;
 }) {
   const Component = ICONS[name];
-  return <Component size={size} className={className} aria-hidden />;
+  return (
+    <Component
+      size={size}
+      className={className}
+      fill={fill}
+      strokeWidth={strokeWidth}
+      aria-hidden
+    />
+  );
 }

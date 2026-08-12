@@ -95,13 +95,17 @@ export default function DemandesPage() {
         `/api/contact-requests/${id}/respond`,
         { method: 'POST', body: { action } },
       );
+      // Remove the row immediately on either outcome — previously ACCEPT
+      // relied entirely on navigating away, so a delayed/blocked navigation
+      // left the row visibly stuck on PENDING after the server had already
+      // resolved it.
+      setReceived((prev) => prev.filter((r) => r.id !== id));
       if (action === 'ACCEPT' && res.conversationId) {
         toast('Demande acceptée — conversation ouverte', 'success');
         router.push(`/app/messages/${res.conversationId}`);
         return;
       }
       toast('Demande refusée', 'success');
-      setReceived((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {

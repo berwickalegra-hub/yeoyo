@@ -65,15 +65,23 @@ export function ContactRequestCard({
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground disabled:opacity-50"
             aria-label="Refuser"
           >
-            <Icon name="x" size={16} />
+            {responding ? (
+              <Icon name="refresh-cw" size={16} className="animate-spin" />
+            ) : (
+              <Icon name="x" size={16} />
+            )}
           </button>
           <button
             type="button"
             onClick={onAccept}
             disabled={responding}
-            className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-primary-foreground disabled:opacity-50"
+            className="btn-success-flash flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-primary-foreground disabled:opacity-50"
           >
-            <Icon name="check" size={16} />
+            {responding ? (
+              <Icon name="refresh-cw" size={16} className="animate-spin" />
+            ) : (
+              <Icon name="check" size={16} />
+            )}
             <span className="font-body text-sm font-semibold">Accepter</span>
           </button>
         </div>

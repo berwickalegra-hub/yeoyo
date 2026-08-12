@@ -80,7 +80,7 @@ export default function ExplorerPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
@@ -142,20 +142,21 @@ export default function ExplorerPage() {
   }
 
   async function onLike(targetUserId: string) {
-    setBusy(true);
+    setBusyUserId(targetUserId);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
+      setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
       toast('Profil aimé — une demande de contact a été envoyée', 'success');
       advance();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setBusy(false);
+      setBusyUserId(null);
     }
   }
 
   async function onMessage(targetUserId: string) {
-    setBusy(true);
+    setBusyUserId(targetUserId);
     try {
       const res = await api<{ conversationId: string }>('/api/likes', {
         method: 'POST',
@@ -165,7 +166,7 @@ export default function ExplorerPage() {
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setBusy(false);
+      setBusyUserId(null);
     }
   }
 
@@ -176,19 +177,20 @@ export default function ExplorerPage() {
   }
 
   async function onLikeGrid(targetUserId: string) {
-    setBusy(true);
+    setBusyUserId(targetUserId);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
+      setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
       toast('Profil aimé — une demande de contact a été envoyée', 'success');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setBusy(false);
+      setBusyUserId(null);
     }
   }
 
   async function onMessageGrid(targetUserId: string) {
-    setBusy(true);
+    setBusyUserId(targetUserId);
     try {
       const res = await api<{ conversationId: string }>('/api/likes', {
         method: 'POST',
@@ -198,7 +200,7 @@ export default function ExplorerPage() {
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setBusy(false);
+      setBusyUserId(null);
     }
   }
 
@@ -400,7 +402,7 @@ export default function ExplorerPage() {
             onDismiss={onDismiss}
             onMessage={onMessage}
             onLike={onLike}
-            busy={busy}
+            busy={busyUserId === current.userId}
           />
         )}
 
@@ -432,7 +434,7 @@ export default function ExplorerPage() {
                   onLike={onLikeGrid}
                   onMessage={onMessageGrid}
                   onDismiss={onDismissGrid}
-                  busy={busy}
+                  busy={busyUserId === p.userId}
                 />
               ))}
             </div>

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export function ProfileGridCard({
   profile,
@@ -22,6 +23,9 @@ export function ProfileGridCard({
   onDismiss: (userId: string) => void;
   busy?: boolean;
 }) {
+  const liked = profile.liked ?? false;
+  const popping = useLikePop(liked);
+
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <Link href={`/app/profils/${profile.userId}`} className="block">
@@ -90,17 +94,30 @@ export function ProfileGridCard({
             disabled={busy}
             className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background text-foreground disabled:opacity-50"
           >
-            <Icon name="message-circle" size={15} />
+            {busy ? (
+              <Icon name="refresh-cw" size={15} className="animate-spin" />
+            ) : (
+              <Icon name="message-circle" size={15} />
+            )}
             <span className="font-body text-sm font-medium">Message</span>
           </button>
           <button
             type="button"
             onClick={() => onLike(profile.userId)}
-            disabled={busy}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
-            aria-label="Liker ce profil"
+            disabled={busy || liked}
+            aria-label={liked ? 'Déjà aimé' : 'Liker ce profil'}
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg btn-success-flash ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
           >
-            <Icon name="heart" size={18} />
+            {busy ? (
+              <Icon name="refresh-cw" size={18} className="animate-spin" />
+            ) : (
+              <Icon
+                name="heart"
+                size={18}
+                fill={liked ? 'currentColor' : 'none'}
+                className={popping ? 'animate-heart-pop' : ''}
+              />
+            )}
           </button>
         </div>
       </div>
