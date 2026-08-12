@@ -94,7 +94,7 @@ export default function DecouvrirPage() {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [acting, setActing] = useState(false);
+  const [actingUserId, setActingUserId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,14 +125,17 @@ export default function DecouvrirPage() {
   }, [user, load]);
 
   async function onLike(targetUserId: string) {
-    setActing(true);
+    setActingUserId(targetUserId);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
+      setRecommended((prev) =>
+        prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)),
+      );
       toast('Profil aimé — une demande de contact a été envoyée', 'success');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setActing(false);
+      setActingUserId(null);
     }
   }
 
@@ -240,7 +243,7 @@ export default function DecouvrirPage() {
                       key={p.userId}
                       profile={p}
                       onLike={onLike}
-                      liking={acting}
+                      liking={actingUserId === p.userId}
                       note={matchNote(profile, p)}
                     />
                   ))}
