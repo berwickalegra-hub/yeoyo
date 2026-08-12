@@ -12,7 +12,10 @@ export function useLikePop(liked: boolean): boolean {
   useEffect(() => {
     const justLiked = liked && !prevLikedRef.current;
     prevLikedRef.current = liked;
-    if (!justLiked) return undefined;
+    if (!justLiked) {
+      setPopping(false);
+      return undefined;
+    }
     setPopping(true);
     const timer = setTimeout(() => setPopping(false), 300);
     return () => clearTimeout(timer);
