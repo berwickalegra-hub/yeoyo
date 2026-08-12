@@ -1,24 +1,27 @@
-// Login — not a Banani-designed screen (no "Login" screen was ever
-// exported; the flow only designs first-time signup). Built functionally
-// so `useUser()`'s default redirect target exists for every authenticated
-// app/* page, styled with the app's dark/gold theme but without the design
-// polish of the Banani-sourced screens — revisit if/when a login mockup
-// is added to the Banani project.
+// Login — styled to match the rest of the site (AuthShell gives it the
+// same branded logo-home-link + card treatment as forgot/reset-password)
+// after having shipped for a while as a bare functional form with no
+// design pass (no Banani "Login" screen was ever exported — the flow
+// only designs first-time signup).
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { Suspense, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { AuthShell } from '@/components/yeoyo/AuthShell';
+import { PasswordInput } from '@/components/yeoyo/PasswordInput';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const params = useSearchParams();
   const { refresh } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const justReset = params.get('reset') === 'ok';
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,29 +43,60 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 bg-background px-4 font-body">
-      <h1 className="font-headings text-2xl font-bold text-foreground">Se connecter</h1>
+    <AuthShell
+      title="Content de te revoir"
+      subtitle="Connecte-toi pour continuer ta recherche."
+      footer={
+        <p className="font-body text-sm text-muted-foreground">
+          Pas encore de compte ?{' '}
+          <Link
+            href="/onboarding"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Créer un profil
+          </Link>
+        </p>
+      }
+    >
+      {justReset && (
+        <p className="mb-4 rounded-lg border border-verified/30 bg-verified/10 px-4 py-2.5 font-body text-sm text-verified">
+          Mot de passe mis à jour — connecte-toi avec ton nouveau mot de passe.
+        </p>
+      )}
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2 font-body text-sm text-foreground">
+        <label
+          htmlFor="login-email"
+          className="flex flex-col gap-2 font-body text-sm text-foreground"
+        >
           Email
           <input
+            id="login-email"
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+            className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="flex flex-col gap-2 font-body text-sm text-foreground">
-          Mot de passe
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
+        <label
+          htmlFor="login-password"
+          className="flex flex-col gap-2 font-body text-sm text-foreground"
+        >
+          <span className="flex items-center justify-between">
+            Mot de passe
+            <Link
+              href="/forgot-password"
+              className="font-body text-xs font-medium text-primary hover:underline"
+            >
+              Mot de passe oublié ?
+            </Link>
+          </span>
+          <PasswordInput
+            id="login-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+            onChange={setPassword}
+            autoComplete="current-password"
           />
         </label>
         {error && (
@@ -73,17 +107,19 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+          className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] disabled:opacity-50"
         >
           {submitting ? 'Connexion…' : 'Se connecter'}
         </button>
       </form>
-      <p className="font-body text-sm text-muted-foreground">
-        Pas encore de compte ?{' '}
-        <Link href="/onboarding" className="text-primary underline">
-          Créer un profil
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

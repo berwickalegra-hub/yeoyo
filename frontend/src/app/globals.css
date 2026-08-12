@@ -40,6 +40,43 @@ body {
   color: var(--color-foreground);
 }
 
+/* Appearance templates (Paramètres → Apparence) — override the same custom
+   properties the `@theme` block above defines. The `@theme` values ARE the
+   default "dark-gold" template, so it needs no block of its own; these
+   apply once ThemeContext puts `data-theme="…"` on <html>. Utilities like
+   `bg-background` compile to `background-color: var(--color-background)`,
+   so overriding the variable here is enough — no per-component changes
+   needed anywhere else in the app. */
+[data-theme='light'] {
+  --color-background: #faf8f2;
+  --color-foreground: #211c12;
+  --color-border: #e6dcc4;
+  --color-input: #ffffff;
+  --color-primary: #b8862f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f2e8d2;
+  --color-secondary-foreground: #8a6420;
+  --color-muted: #ede2c8;
+  --color-muted-foreground: #83775f;
+  --color-accent: #d9b571;
+  --color-surface: #ffffff;
+  --color-verified: #2f9e5c;
+}
+
+[data-theme='dark-rose'] {
+  --color-primary: #d1668a;
+  --color-primary-foreground: #0d0d0d;
+  --color-secondary-foreground: #d1668a;
+  --color-accent: #e6a3bb;
+}
+
+[data-theme='dark-emerald'] {
+  --color-primary: #3fae74;
+  --color-primary-foreground: #0d0d0d;
+  --color-secondary-foreground: #3fae74;
+  --color-accent: #82cca4;
+}
+
 /* Small, tasteful entrance animations (2026-08-10) — opacity/transform only
    (GPU-friendly), no scroll-linked JS. Sticky headers get fade-in-down on
    mount so a "floating" bar reads as intentional chrome rather than a

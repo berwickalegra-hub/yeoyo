@@ -17,11 +17,13 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { Icon } from '@/components/ui/Icon';
+import { PasswordInput } from '@/components/yeoyo/PasswordInput';
 import { KINSHASA_COMMUNES } from '@/lib/yeoyo/constants';
 import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
 import { BIO_SUGGESTIONS } from '@/lib/yeoyo/content';
@@ -170,7 +172,13 @@ function WizardShell({
           <Icon name="chevron-left" size={24} />
         </button>
         <span className="font-body text-xs text-muted-foreground">{stepLabel}</span>
-        <Icon name="x" size={20} className="text-muted-foreground" />
+        <Link
+          href="/"
+          aria-label="Fermer et revenir à l'accueil"
+          className="text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Icon name="x" size={20} />
+        </Link>
       </div>
       <div className="h-1 flex-shrink-0 bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
@@ -328,14 +336,12 @@ export default function OnboardingPage() {
           </label>
           <label className="flex flex-col gap-2 font-body text-sm text-foreground">
             Mot de passe
-            <input
-              type="password"
-              required
-              minLength={10}
-              autoComplete="new-password"
+            <PasswordInput
+              id="signup-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+              onChange={setPassword}
+              autoComplete="new-password"
+              minLength={10}
             />
           </label>
           {error && (
@@ -346,11 +352,20 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] disabled:opacity-50"
           >
             {submitting ? 'Création…' : 'Continuer'}
           </button>
         </form>
+        <p className="mt-5 text-center font-body text-sm text-muted-foreground">
+          Déjà un compte ?{' '}
+          <Link
+            href="/login"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Se connecter
+          </Link>
+        </p>
       </WizardShell>
     );
   }

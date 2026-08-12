@@ -185,9 +185,17 @@ const LANGUAGES_POOL = ['Français', 'Lingala', 'Swahili', 'Kikongo', 'Tshiluba'
 // (their /api/ endpoint returns *random* data per request, which would make
 // this script non-idempotent; the /portraits/ image paths are stable
 // static assets and don't have that problem).
+//
+// 2026-08-12: randomuser.me dropped the `large` size — every `large` URL
+// now 404s (confirmed across the full 0-99 range), while `med` and `thumb`
+// still serve fine. `portraitUrl` used to pick `large` for each profile's
+// FIRST photo specifically (`med` for the rest), which meant every single
+// primary photo — the one shown on cards/avatars, i.e. the one actually
+// visible without opening a profile — was broken. Standardized on `med`
+// for all photos so nothing depends on the now-dead size.
 const PORTRAIT_POOL_SIZE = 100;
-function portraitUrl(size: 'large' | 'med', index: number): string {
-  return `https://randomuser.me/api/portraits/${size}/women/${index % PORTRAIT_POOL_SIZE}.jpg`;
+function portraitUrl(index: number): string {
+  return `https://randomuser.me/api/portraits/med/women/${index % PORTRAIT_POOL_SIZE}.jpg`;
 }
 
 function pick<T>(pool: readonly T[], index: number): T {
@@ -273,9 +281,7 @@ export async function main(_args: string[] = [], deps: SeedDeps = {}): Promise<v
       });
 
       const photoCount = 1 + (i % 3); // 1..3 photos
-      const photoUrls = Array.from({ length: photoCount }, (_, j) =>
-        portraitUrl(j === 0 ? 'large' : 'med', i + j * 17),
-      );
+      const photoUrls = Array.from({ length: photoCount }, (_, j) => portraitUrl(i + j * 17));
 
       const profile = await prisma.profile.upsert({
         where: { userId: user.id },

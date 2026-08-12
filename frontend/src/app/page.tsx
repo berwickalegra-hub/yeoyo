@@ -156,18 +156,25 @@ export default function LandingPage() {
           <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:gap-4">
             <Link
               href="/onboarding"
-              className="rounded-xl bg-primary py-4 text-center font-headings text-base font-semibold text-primary-foreground lg:px-8"
+              className="rounded-xl bg-primary py-4 text-center font-headings text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] lg:px-8"
             >
               Créer mon profil gratuitement
             </Link>
             <Link
               href="/app/explorer"
-              className="flex items-center justify-center gap-2 rounded-xl border border-border py-3.5 font-body text-sm font-medium text-foreground lg:px-8 lg:py-4 lg:text-base"
+              className="flex items-center justify-center gap-2 rounded-xl border border-border py-3.5 font-body text-sm font-medium text-foreground transition-colors hover:border-primary hover:text-primary lg:px-8 lg:py-4 lg:text-base"
             >
               <Icon name="search" size={16} />
               Parcourir les profils
             </Link>
           </div>
+
+          <p className="mt-4 font-body text-xs text-muted-foreground lg:mt-6 lg:text-sm">
+            Déjà membre ?{' '}
+            <Link href="/login" className="font-medium text-primary hover:underline">
+              Se connecter
+            </Link>
+          </p>
 
           <div className="mt-5 flex items-center gap-2 lg:mt-8 lg:gap-3">
             <div className="h-8 w-8 rounded-full border-2 border-background bg-secondary lg:h-10 lg:w-10" />
@@ -282,12 +289,18 @@ export default function LandingPage() {
           </h2>
           <Link
             href="/onboarding"
-            className="mb-3 inline-block w-full rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground lg:mb-4 lg:w-auto lg:px-10"
+            className="mb-3 inline-block w-full rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] lg:mb-4 lg:w-auto lg:px-10"
           >
             Rejoindre YeOyo
           </Link>
           <p className="font-body text-xs text-muted-foreground lg:text-sm">
             Gratuit à l&rsquo;inscription — Paiement Mobile Money uniquement
+          </p>
+          <p className="mt-3 font-body text-xs text-muted-foreground lg:text-sm">
+            Déjà membre ?{' '}
+            <Link href="/login" className="font-medium text-primary hover:underline">
+              Se connecter
+            </Link>
           </p>
         </div>
       </div>

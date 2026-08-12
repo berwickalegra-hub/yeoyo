@@ -99,8 +99,15 @@ export async function uploadBuffer(
     resource_type: 'auto',
   };
   if (_preset) options.upload_preset = _preset;
-  // Surface the validated MIME so transformations/CDN behave sensibly.
-  if (contentType) options.metadata = `mime=${contentType}`;
+  // Surface the validated MIME on the asset. Deliberately `context` (a
+  // freeform key-value bag every Cloudinary account supports out of the
+  // box), NOT `metadata` (Cloudinary's *Structured Metadata* — referencing
+  // an external_id, e.g. `mime`, that isn't pre-defined in the account's
+  // Settings > Metadata schema makes the entire upload fail with
+  // `Metadata External IDs do not exist: ["mime"]`, a 400 our route only
+  // saw as an opaque 502 UPLOAD_FAILED — this bug was dormant until the
+  // first fork actually configured Cloudinary and hit it for real).
+  if (contentType) options.context = `mime=${contentType}`;
 
   const res = await new Promise<UploadApiResponse>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(options, (err, response) => {

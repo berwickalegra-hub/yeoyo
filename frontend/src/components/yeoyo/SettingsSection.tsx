@@ -1,6 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { Icon, type IconName } from '@/components/ui/Icon';
 
 export function SettingsSection({
   title,
@@ -19,6 +21,39 @@ export function SettingsSection({
       )}
       <div className="mt-4 flex flex-col gap-4">{children}</div>
     </section>
+  );
+}
+
+// Index-page row that navigates to a dedicated sub-page instead of
+// expanding its content inline — see SettingsSubHeader.tsx for why the
+// Paramètres index was split this way.
+export function SettingsNavRow({
+  href,
+  icon,
+  label,
+  helper,
+}: {
+  href: string;
+  icon: IconName;
+  label: string;
+  helper?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-transform active:scale-[0.99]"
+    >
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+        <Icon name={icon} size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-body text-sm font-medium text-foreground">{label}</p>
+        {helper && (
+          <p className="mt-0.5 truncate font-body text-xs text-muted-foreground">{helper}</p>
+        )}
+      </div>
+      <Icon name="chevron-right" size={18} className="flex-shrink-0 text-muted-foreground" />
+    </Link>
   );
 }
 
