@@ -106,7 +106,7 @@ export function ProfileGridCard({
             onClick={() => onLike(profile.userId)}
             disabled={busy || liked}
             aria-label={liked ? 'Déjà aimé' : 'Liker ce profil'}
-            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg btn-success-flash disabled:opacity-50 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg btn-success-flash ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
           >
             {busy ? (
               <Icon name="refresh-cw" size={18} className="animate-spin" />

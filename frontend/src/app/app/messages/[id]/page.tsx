@@ -589,7 +589,7 @@ export default function MessageThreadPage() {
                   type="button"
                   onClick={() => void addLike()}
                   disabled={liked || addingLike}
-                  className={`btn-success-flash flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 font-body text-sm font-medium disabled:opacity-50 ${liked ? 'border-primary/30 bg-primary/5 text-primary' : 'border-border bg-background text-foreground'}`}
+                  className={`btn-success-flash flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 font-body text-sm font-medium ${addingLike ? 'opacity-50' : ''} ${liked ? 'border-primary/30 bg-primary/20 text-primary' : 'border-border bg-background text-foreground'}`}
                 >
                   {addingLike ? (
                     <Icon name="refresh-cw" size={14} className="animate-spin" />

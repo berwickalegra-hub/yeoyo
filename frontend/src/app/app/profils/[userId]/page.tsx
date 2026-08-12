@@ -214,7 +214,7 @@ export default function ProfileDetailPage() {
                   type="button"
                   onClick={() => void onLike()}
                   disabled={busy || liked}
-                  className={`btn-success-flash flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+                  className={`btn-success-flash flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
                   aria-label={liked ? 'Déjà aimé' : 'Aimer ce profil'}
                 >
                   {busy ? (

@@ -186,7 +186,7 @@ export function SwipeCard({
           type="button"
           onClick={() => onLike(profile.userId)}
           disabled={busy || liked}
-          className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full btn-success-flash disabled:opacity-50 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+          className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full btn-success-flash ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
           aria-label={liked ? 'Déjà aimé' : 'Ajouter aux favoris'}
         >
           {busy ? (

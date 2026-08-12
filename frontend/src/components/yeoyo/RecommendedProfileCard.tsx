@@ -52,7 +52,7 @@ export function RecommendedProfileCard({
           onClick={() => onLike(profile.userId)}
           disabled={liking || liked}
           aria-label={liked ? 'Déjà aimé' : 'Aimer ce profil'}
-          className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full btn-success-flash disabled:opacity-50 ${liked ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-primary'}`}
+          className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full btn-success-flash ${liking ? 'opacity-50' : ''} ${liked ? 'bg-primary text-primary-foreground' : 'bg-background/90 text-primary'}`}
         >
           {liking ? (
             <Icon name="refresh-cw" size={14} className="animate-spin" />

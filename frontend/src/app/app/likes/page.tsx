@@ -38,7 +38,7 @@ function LikeBackButton({
       onClick={onClick}
       disabled={liked || busy}
       aria-label={liked ? 'Déjà aimé' : 'Aimer en retour'}
-      className={`btn-success-flash flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-primary-foreground disabled:opacity-50 sm:px-4 ${liked ? 'bg-primary/60' : 'bg-primary'}`}
+      className={`btn-success-flash flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 ${busy ? 'opacity-50' : ''} sm:px-4 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
     >
       {busy ? (
         <Icon name="refresh-cw" size={15} className="animate-spin" />
