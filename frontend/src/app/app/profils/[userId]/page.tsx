@@ -21,6 +21,7 @@ import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import type { ProfileCard } from '@/lib/yeoyo/types';
+import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export default function ProfileDetailPage() {
   const user = useUser();
@@ -31,6 +32,7 @@ export default function ProfileDetailPage() {
 
   const [profile, setProfile] = useState<ProfileCard | null>(null);
   const [liked, setLiked] = useState(false);
+  const popping = useLikePop(liked);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -201,17 +203,30 @@ export default function ProfileDetailPage() {
                   disabled={busy}
                   className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-background text-foreground disabled:opacity-50"
                 >
-                  <Icon name="message-circle" size={17} />
+                  {busy ? (
+                    <Icon name="refresh-cw" size={17} className="animate-spin" />
+                  ) : (
+                    <Icon name="message-circle" size={17} />
+                  )}
                   <span className="font-body text-sm font-semibold">Message</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => void onLike()}
-                  disabled={busy}
-                  className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
+                  disabled={busy || liked}
+                  className={`btn-success-flash flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
                   aria-label={liked ? 'Déjà aimé' : 'Aimer ce profil'}
                 >
-                  <Icon name="heart" size={20} />
+                  {busy ? (
+                    <Icon name="refresh-cw" size={20} className="animate-spin" />
+                  ) : (
+                    <Icon
+                      name="heart"
+                      size={20}
+                      fill={liked ? 'currentColor' : 'none'}
+                      className={popping ? 'animate-heart-pop' : ''}
+                    />
+                  )}
                 </button>
               </div>
 
