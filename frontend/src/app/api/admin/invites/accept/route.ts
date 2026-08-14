@@ -25,6 +25,14 @@
 // already consumed the invite, `count === 0` and we throw a sentinel to
 // surface INVITE_ALREADY_ACCEPTED — the second racer can never create a
 // second User row or silently re-accept.
+//
+// Password policy: a freshly-minted admin credential is at least as
+// sensitive as a regular password change, so this mirrors AUTH-09
+// change-password's three-step gate — length, banned-list, optional HIBP —
+// using the same `AUTH_PASSWORD_MIN_LENGTH` / `PASSWORD_HIBP_CHECK` env
+// vars and error codes/messages for consistency. Runs BEFORE any DB read
+// (even the invite lookup) so weak-password probing can't time-attack
+// token validity.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -32,6 +40,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { hashPassword } from '@/lib/server/auth';
+import { isBanned } from '@/lib/server/auth/banned-passwords';
+import { isPwned } from '@/lib/server/auth/hibp';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
@@ -39,7 +49,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 
 const Body = z.object({
   token: z.string().min(1),
-  password: z.string().min(10),
+  password: z.string().min(1),
 });
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
@@ -72,6 +82,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (rateFail) {
       rateFail.headers.set('x-request-id', ctx.requestId);
       return rateFail;
+    }
+
+    // Password policy — length, banned, optional HIBP. All BEFORE the
+    // invite lookup so weak-password probing can't time-attack token
+    // validity. Mirrors AUTH-09 change-password's gate exactly.
+    const minLength = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
+    if (password.length < minLength) {
+      return NextResponse.json(
+        {
+          error: 'PASSWORD_TOO_SHORT',
+          message: `Password must be at least ${minLength} characters`,
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (isBanned(password)) {
+      return NextResponse.json(
+        { error: 'PASSWORD_BANNED', message: 'This password is too common — choose another' },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (process.env.PASSWORD_HIBP_CHECK === '1' && (await isPwned(password))) {
+      return NextResponse.json(
+        {
+          error: 'PASSWORD_PWNED',
+          message: 'This password has appeared in a known data breach — choose another',
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
     }
 
     const tokenHash = hashToken(token);

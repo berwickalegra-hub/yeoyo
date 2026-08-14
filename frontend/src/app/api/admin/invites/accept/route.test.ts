@@ -16,6 +16,29 @@ function makePost(body: unknown): NextRequest {
 beforeEach(() => vi.clearAllMocks());
 
 describe('POST /api/admin/invites/accept', () => {
+  it('rejects a too-short password before any invite lookup', async () => {
+    const res = await POST(makePost({ token: 'raw-token-value', password: 'short1' }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('PASSWORD_TOO_SHORT');
+    expect(prismaMock.adminInvite.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a banned password with no user/invite mutation', async () => {
+    // 'password123' is in the banned-list fixture (banned-passwords.ts) and
+    // is >=10 chars, so it exercises the banned check specifically rather
+    // than tripping the length check first.
+    const res = await POST(makePost({ token: 'raw-token-value', password: 'password123' }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('PASSWORD_BANNED');
+    // Password policy runs BEFORE the invite lookup — a banned password
+    // never even reaches prisma.
+    expect(prismaMock.adminInvite.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.adminInvite.updateMany).not.toHaveBeenCalled();
+  });
+
   it('creates the admin user and marks the invite accepted', async () => {
     // seedAdminInvite()'s default expiresAt is anchored to the fixture
     // module's FROZEN_NOW (2026-05-08), which is in the past relative to
