@@ -43,6 +43,11 @@ const superadminCtx = {
   admin: { id: 'super-1', email: 'super@test.local', role: 'SUPERADMIN' as const },
 };
 
+const moderatorCtx = {
+  user: { sub: 'mod-1', email: 'mod@test.local' },
+  admin: { id: 'mod-1', email: 'mod@test.local', role: 'MODERATOR' as const },
+};
+
 function makeGet(): NextRequest {
   return new NextRequest('http://test/api/admin/me', { method: 'GET' });
 }
@@ -53,6 +58,25 @@ beforeEach(() => {
 });
 
 describe('GET /api/admin/me [Wave 1]', () => {
+  it('GET returns role + capability list for MODERATOR (4-item exact list)', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(moderatorCtx);
+    const res = await GET(makeGet());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.admin).toEqual({
+      id: 'mod-1',
+      email: 'mod@test.local',
+      role: 'MODERATOR',
+    });
+    expect(body.can).toEqual([
+      'verification-queue:read',
+      'verification-queue:process',
+      'reports:read',
+      'reports:resolve',
+    ]);
+    expect(body.can).toHaveLength(4);
+  });
+
   it('GET returns role + capability list for ADMIN (8-item exact list)', async () => {
     mockRequireAdmin.mockResolvedValueOnce(adminCtx);
     const res = await GET(makeGet());
@@ -89,10 +113,10 @@ describe('GET /api/admin/me [Wave 1]', () => {
     expect(body.can).toContain('users:role');
     expect(body.can).toContain('withdrawals:cancel');
     expect(body.can).toContain('users:status:restore');
-    expect(body.can).toHaveLength(11);
+    expect(body.can).toHaveLength(13);
   });
 
-  it('SUPERADMIN list is the exact 11-item set required by D-ADMIN-04', async () => {
+  it('SUPERADMIN list is the exact 13-item set required by D-ADMIN-04', async () => {
     mockRequireAdmin.mockResolvedValueOnce(superadminCtx);
     const res = await GET(makeGet());
     const body = await res.json();
@@ -108,6 +132,8 @@ describe('GET /api/admin/me [Wave 1]', () => {
       'outbox:read',
       'email-queue:read',
       'rate-limits:read',
+      'admin:invite',
+      'admin:revoke',
     ]);
   });
 
@@ -147,21 +173,34 @@ describe('GET /api/admin/me [Wave 1]', () => {
     expect(mockEnforceRateLimit).toHaveBeenCalledWith('admin-1');
   });
 
-  it('ADMIN list does NOT include any SUPERADMIN-only capabilities', async () => {
+  it('ADMIN list does NOT include any SUPERADMIN-only or MODERATOR-only capabilities', async () => {
     mockRequireAdmin.mockResolvedValueOnce(adminCtx);
     const res = await GET(makeGet());
     const body = await res.json();
     expect(body.can).not.toContain('users:role');
     expect(body.can).not.toContain('users:status:restore');
     expect(body.can).not.toContain('withdrawals:cancel');
+    expect(body.can).not.toContain('admin:invite');
+    expect(body.can).not.toContain('admin:revoke');
+    expect(body.can).not.toContain('verification-queue:read');
+    expect(body.can).not.toContain('reports:read');
+  });
+
+  it('MODERATOR list does NOT include any ADMIN or SUPERADMIN capabilities', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(moderatorCtx);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.can).not.toContain('users:read');
+    expect(body.can).not.toContain('orders:read');
+    expect(body.can).not.toContain('admin:invite');
   });
 });
 
 describe('source invariants', () => {
-  it("route source contains runtime='nodejs', requireAdmin('ADMIN'), enforceAdminRateLimit, CAPABILITIES_BY_ROLE, withRequestContext", () => {
+  it("route source contains runtime='nodejs', requireAdmin('MODERATOR'), enforceAdminRateLimit, CAPABILITIES_BY_ROLE, withRequestContext", () => {
     const src = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
     expect(src).toMatch(/export\s+const\s+runtime\s*=\s*['"]nodejs['"]/);
-    expect(src).toContain("requireAdmin('ADMIN')");
+    expect(src).toContain("requireAdmin('MODERATOR')");
     expect(src).toContain('enforceAdminRateLimit');
     expect(src).toContain('CAPABILITIES_BY_ROLE');
     expect(src).toContain('withRequestContext');

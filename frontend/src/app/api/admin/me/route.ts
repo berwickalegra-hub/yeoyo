@@ -14,11 +14,13 @@
 // here too, so a polling UI cannot burn the back-office budget.
 //
 // CAPABILITY LIST CONTRACT (D-ADMIN-04 — locked):
+//   MODERATOR sees 4: verification-queue:read, verification-queue:process,
+//     reports:read, reports:resolve.
 //   ADMIN sees 8 capabilities: users:read, users:status:suspend,
 //     orders:read, withdrawals:read, audit-log:read, outbox:read,
 //     email-queue:read, rate-limits:read.
-//   SUPERADMIN sees 11: same 8 + users:role + users:status:restore +
-//     withdrawals:cancel.
+//   SUPERADMIN sees 13: same 8 + users:role + users:status:restore +
+//     withdrawals:cancel + admin:invite + admin:revoke.
 //
 // Front-end teams can pivot off this shape; changing the list is a
 // breaking change to the back-office UI.
@@ -30,7 +32,13 @@ import { requireAdmin } from '@/lib/server/middleware';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
-const CAPABILITIES_BY_ROLE: Record<'ADMIN' | 'SUPERADMIN', readonly string[]> = {
+const CAPABILITIES_BY_ROLE: Record<'MODERATOR' | 'ADMIN' | 'SUPERADMIN', readonly string[]> = {
+  MODERATOR: [
+    'verification-queue:read',
+    'verification-queue:process',
+    'reports:read',
+    'reports:resolve',
+  ],
   ADMIN: [
     'users:read',
     'users:status:suspend',
@@ -53,22 +61,25 @@ const CAPABILITIES_BY_ROLE: Record<'ADMIN' | 'SUPERADMIN', readonly string[]> = 
     'outbox:read',
     'email-queue:read',
     'rate-limits:read',
+    'admin:invite',
+    'admin:revoke',
   ],
 } as const;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
   return withRequestContext(ctx, async () => {
-    const auth = await requireAdmin('ADMIN');
+    const auth = await requireAdmin('MODERATOR');
     if (auth instanceof NextResponse) return auth;
 
     const limited = await enforceAdminRateLimit(auth.admin.id);
     if (limited) return limited;
 
-    // requireAdmin('ADMIN') has already filtered USER away (returns 403),
-    // so narrow the role type for the capability-list lookup. The runtime
-    // contract is enforced by `requireAdmin`; this cast just teaches TS.
-    const role = auth.admin.role as 'ADMIN' | 'SUPERADMIN';
+    // requireAdmin('MODERATOR') has already filtered USER away (returns
+    // 403), so narrow the role type for the capability-list lookup. The
+    // runtime contract is enforced by `requireAdmin`; this cast just
+    // teaches TS.
+    const role = auth.admin.role as 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
 
     return NextResponse.json(
       {

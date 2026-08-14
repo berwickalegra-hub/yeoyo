@@ -13,7 +13,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
   return withRequestContext(ctx, async () => {
-    const auth = await requireAdmin('ADMIN');
+    const auth = await requireAdmin('MODERATOR');
     if (auth instanceof NextResponse) return auth;
 
     const limited = await enforceAdminRateLimit(auth.admin.id);

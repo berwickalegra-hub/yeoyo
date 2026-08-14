@@ -25,7 +25,7 @@ export async function POST(
     const csrfFail = verifyCsrf(req);
     if (csrfFail) return csrfFail;
 
-    const auth = await requireAdmin('ADMIN');
+    const auth = await requireAdmin('MODERATOR');
     if (auth instanceof NextResponse) return auth;
 
     const limited = await enforceAdminRateLimit(auth.admin.id);
