@@ -26,7 +26,7 @@ import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-use
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
-  role: z.enum(['USER', 'ADMIN', 'SUPERADMIN']),
+  role: z.enum(['USER', 'MODERATOR', 'ADMIN', 'SUPERADMIN']),
 });
 
 type Discriminator =
