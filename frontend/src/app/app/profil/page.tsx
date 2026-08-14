@@ -47,7 +47,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { useAuth, useUser } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -159,7 +159,6 @@ function InfoRow({ icon, label, value }: { icon: IconName; label: string; value:
 
 export default function ProfilPage() {
   const user = useUser();
-  const { logout } = useAuth();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
 
@@ -442,7 +441,7 @@ export default function ProfilPage() {
                   </div>
                   <Link
                     href={`/app/profils/${user.id}`}
-                    className="flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 font-body text-sm text-muted-foreground"
+                    className="flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary px-4 py-2 font-body text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
                   >
                     <Icon name="eye" size={14} />
                     Voir mon profil public
@@ -1136,72 +1135,6 @@ export default function ProfilPage() {
                     </Link>
                   </div>
                 )}
-
-                {/* Settings shortcuts — the full list of real, non-profile
-                    settings (each still its own page, none duplicated here
-                    or anywhere else). This card is now the *only* entry
-                    point to them — the standalone /app/parametres index was
-                    deleted (2026-08-14, second pass, explicit user ask: "il
-                    y a déjà l'icône profil... on peut juste cliquer dessus,
-                    je n'aime pas ce design [de l'index]"). Visibilité isn't
-                    listed here anymore since it's now an inline toggle
-                    above, on this same page. */}
-                <div className="rounded-xl border border-border bg-surface p-5">
-                  <p className="mb-3 font-headings text-base font-bold text-foreground">
-                    Paramètres
-                  </p>
-                  <div className="flex flex-col gap-1">
-                    <Link
-                      href="/app/parametres/compte"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="user" size={15} className="text-muted-foreground" />
-                      Compte
-                    </Link>
-                    <Link
-                      href="/app/parametres/notifications"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="bell" size={15} className="text-muted-foreground" />
-                      Notifications
-                    </Link>
-                    <Link
-                      href="/app/parametres/apparence"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="palette" size={15} className="text-muted-foreground" />
-                      Apparence
-                    </Link>
-                    <Link
-                      href="/app/parametres/paiement"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="credit-card" size={15} className="text-muted-foreground" />
-                      Paiement
-                    </Link>
-                    <Link
-                      href="/app/parametres/confidentialite"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="lock" size={15} className="text-muted-foreground" />
-                      Confidentialité
-                    </Link>
-                    <Link
-                      href="/app/parametres/apropos"
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 font-body text-sm text-foreground"
-                    >
-                      <Icon name="info" size={15} className="text-muted-foreground" />À propos
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => void logout()}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-left font-body text-sm text-primary"
-                    >
-                      <Icon name="log-out" size={15} className="text-primary" />
-                      Se déconnecter
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

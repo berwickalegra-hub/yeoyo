@@ -20,7 +20,8 @@
 // opens the full profile detail screen (`/app/profils/[userId]`) — action
 // buttons and the photo carousel's tap zones stopPropagation their
 // pointerdown so tapping them doesn't also count as "open profile".
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
@@ -53,6 +54,11 @@ export function SwipeCard({
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
+  // Which photo the small carousel is currently showing — mirrored from
+  // PhotoCarousel's own index so the lightbox opens on the same photo
+  // instead of always resetting to the first one.
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const liked = profile.liked ?? false;
   const popping = useLikePop(liked);
@@ -69,6 +75,9 @@ export function SwipeCard({
     setDragX(e.clientX - startXRef.current);
   }
 
+  // A plain tap on the photo opens the full-size lightbox (2026-08-14,
+  // explicit user ask) — it used to navigate to the profile page, which is
+  // now the name overlay's own job (see the dedicated onClick below it).
   function endDrag(e: React.PointerEvent<HTMLDivElement>) {
     if (!dragging || pointerIdRef.current !== e.pointerId) return;
     pointerIdRef.current = null;
@@ -78,7 +87,7 @@ export function SwipeCard({
     } else if (dragX < -SWIPE_THRESHOLD) {
       onDismiss(profile.userId);
     } else if (Math.abs(dragX) < CLICK_THRESHOLD) {
-      router.push(`/app/profils/${profile.userId}`);
+      setLightboxOpen(true);
     }
     setDragX(0);
   }
@@ -95,13 +104,32 @@ export function SwipeCard({
           transform: `translateX(${dragX}px) rotate(${dragX / 20}deg)`,
           transition: dragging ? 'none' : 'transform 0.25s ease',
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
       >
-        <div className="relative">
-          <PhotoCarousel photoUrls={profile.photoUrls} name={profile.firstName} heightPx={340} />
+        {/* Drag-to-swipe + tap-to-open handlers live on the photo area only
+            (2026-08-14 fix) — they used to sit on this whole scrollable
+            wrapper, so scrolling down into ProfileInfoSections below (a
+            vertical drag with ~0 horizontal movement) was misread as a tap
+            and navigated to the profile page. Scoping them to just the
+            photo means scrolling the info section is now plain scrolling —
+            no click, no navigation. Tapping the photo itself now opens the
+            full-size lightbox below instead of navigating away (2026-08-14,
+            explicit user ask) — navigating to the profile is the name
+            overlay's own dedicated onClick further down, which stops its
+            pointerdown from propagating so it doesn't also register as a
+            drag-to-swipe start. */}
+        <div
+          className="relative"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <PhotoCarousel
+            photoUrls={profile.photoUrls}
+            name={profile.firstName}
+            heightPx={340}
+            onIndexChange={setActivePhotoIndex}
+          />
           {profile.boosted && (
             <div
               className={`absolute left-3 flex items-center gap-1 rounded-xl bg-primary px-2.5 py-1 ${hasMultiplePhotos ? 'top-6' : 'top-3'}`}
@@ -147,7 +175,20 @@ export function SwipeCard({
               <span className="font-headings text-lg font-bold text-red-400">PASSER</span>
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={`Voir le profil de ${profile.firstName}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => router.push(`/app/profils/${profile.userId}`)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                router.push(`/app/profils/${profile.userId}`);
+              }
+            }}
+            className="absolute inset-x-0 bottom-0 cursor-pointer bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14"
+          >
             <div className="flex items-baseline gap-2">
               <span className="font-headings text-xl font-bold text-white">
                 {profile.firstName}
@@ -186,16 +227,21 @@ export function SwipeCard({
         </div>
       </div>
 
-      {/* Fixed footer — never scrolls with the photo/info above it. Matches
-          Banani's DiscoverScreen action row exactly (2026-08-14 fidelity
-          pass): X = soft-red circle, terracotta icon (h-14, not h-12);
-          Message = bare accent-bordered icon circle, NO text label (Banani's
-          own button has no text — ours previously added one, a drift);
-          third button = a wide secondary pill with a plus icon + label,
-          relabeled "Demander" (was "Ajouter") to match the exact same
-          action's label on the profile-detail page — both buttons call the
-          identical POST /api/likes (like + auto contact request), so using
-          one label everywhere keeps the app's terminology predictable. */}
+      {/* Fixed footer — never scrolls with the photo/info above it. X =
+          soft-red circle, terracotta icon (h-14). Third button = a wide
+          secondary pill with a plus icon + label, relabeled "Demander" (was
+          "Ajouter") to match the exact same action's label on the
+          profile-detail page — both buttons call the identical POST
+          /api/likes (like + auto contact request), so using one label
+          everywhere keeps the app's terminology predictable.
+          Message (2026-08-14, explicit user ask): was a hairline
+          accent-bordered circle using `text-accent`/`border-accent` — those
+          resolve to the pale beige *background* shade (#f3e4d9), not the
+          dark accent-foreground, so the icon was nearly invisible against
+          the card. Rebuilt as a solid terracotta-filled circle at the same
+          h-14 as the other two buttons: equally visible, and visually its
+          own thing (solid primary fill vs the soft-red outline and the
+          solid-secondary pill) rather than a copy of either. */}
       <div
         className="flex flex-shrink-0 items-center justify-center gap-5 border-t border-border bg-surface px-4 py-3"
         onPointerDown={(e) => e.stopPropagation()}
@@ -214,10 +260,10 @@ export function SwipeCard({
           onClick={() => onMessage(profile.userId)}
           disabled={busy}
           aria-label="Envoyer un message"
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-accent bg-accent/10 text-accent disabled:opacity-50"
+          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95 disabled:opacity-50"
         >
           {busy ? (
-            <Icon name="refresh-cw" size={17} className="animate-spin" />
+            <Icon name="refresh-cw" size={19} className="animate-spin" />
           ) : (
             <Icon name="message-circle" size={19} />
           )}
@@ -236,6 +282,77 @@ export function SwipeCard({
           {liked ? 'Envoyée' : 'Demander'}
         </button>
       </div>
+
+      {lightboxOpen && (
+        <PhotoLightbox
+          photoUrl={profile.photoUrls[activePhotoIndex] ?? profile.photoUrls[0] ?? null}
+          name={profile.firstName}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// Full-size photo viewer — tap the photo, name, or close button to shrink
+// back to the card (2026-08-14, explicit user ask: viewing a photo larger
+// must never navigate to the profile page, that's the name overlay's job).
+// Rendered via a portal to document.body: the card's photo wrapper has an
+// inline `transform` (the drag animation) which — per CSS spec — makes it a
+// containing block for `position: fixed` descendants, so a plain nested
+// fixed overlay would be pinned to the card instead of the viewport.
+function PhotoLightbox({
+  photoUrl,
+  name,
+  onClose,
+}: {
+  photoUrl: string | null;
+  name: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose]);
+
+  if (!photoUrl) return null;
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo de ${name} en grand`}
+      onClick={onClose}
+      className="animate-fade-in-up fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Réduire la photo"
+        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white"
+      >
+        <Icon name="x" size={22} />
+      </button>
+      {/* One-off full-viewport viewer — not worth next/image's fixed-container
+          sizing here (same rationale as /app/profil's photo grid). */}
+      <img
+        src={photoUrl}
+        alt={name}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        className="max-h-full max-w-full cursor-pointer rounded-lg object-contain"
+      />
+    </div>,
+    document.body,
   );
 }

@@ -3,6 +3,14 @@
 // after having shipped for a while as a bare functional form with no
 // design pass (no Banani "Login" screen was ever exported — the flow
 // only designs first-time signup).
+//
+// "Continuer avec Google" (2026-08-14, explicit user ask) — plain `<a>` to
+// GET /api/auth/oauth/google/start?next=/app/decouvrir, not a client-side
+// handler: the OAuth dance is a full-page redirect to Google, so there is
+// nothing for React to intercept. The button is always rendered (matching
+// examples/frontend-pages/login.tsx's own pattern) — if a fork hasn't set
+// GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI, the route just 404s per google.ts's
+// conditional-boot design; this project has them configured.
 'use client';
 
 import { Suspense, useState, type FormEvent } from 'react';
@@ -12,6 +20,7 @@ import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthShell } from '@/components/yeoyo/AuthShell';
 import { PasswordInput } from '@/components/yeoyo/PasswordInput';
+import { GoogleIcon } from '@/components/ui/GoogleIcon';
 
 function LoginForm() {
   const router = useRouter();
@@ -112,6 +121,20 @@ function LoginForm() {
           {submitting ? 'Connexion…' : 'Se connecter'}
         </button>
       </form>
+
+      <div className="my-1 flex items-center gap-3 font-body text-xs uppercase tracking-wider text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        ou
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <a
+        href="/api/auth/oauth/google/start?next=/app/decouvrir"
+        className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface py-3.5 font-body text-sm font-medium text-foreground transition-colors hover:bg-background"
+      >
+        <GoogleIcon />
+        Continuer avec Google
+      </a>
     </AuthShell>
   );
 }

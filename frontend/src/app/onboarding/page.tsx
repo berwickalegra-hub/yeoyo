@@ -25,13 +25,20 @@ import { useToast } from '@/contexts/ToastContext';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { Icon } from '@/components/ui/Icon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
+import { GoogleIcon } from '@/components/ui/GoogleIcon';
 import { PasswordInput } from '@/components/yeoyo/PasswordInput';
+import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DateOfBirthFields } from '@/components/yeoyo/DateOfBirthFields';
 import { KINSHASA_COMMUNES } from '@/lib/yeoyo/constants';
 import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
 import { BIO_SUGGESTIONS } from '@/lib/yeoyo/content';
 
 const MIN_AGE_YEARS = 18;
+// Mirrors the real server policy (AUTH_PASSWORD_MIN_LENGTH=10 in this
+// project's .env, not the framework default of 10) so client-side
+// validation never disagrees with what POST /api/auth/signup will actually
+// enforce.
+const SIGNUP_PASSWORD_MIN = 10;
 
 // Simple, permissive check — real validation is server-side (zEmail). This
 // only exists so an obviously-malformed email gets an instant French
@@ -222,6 +229,13 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<Step>('signup');
   const [data, setData] = useState<WizardData>(INITIAL_DATA);
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordConfirmError, setPasswordConfirmError] = useState<string | null>(null);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [googleRedirecting, setGoogleRedirecting] = useState(false);
   const [code, setCode] = useState('');
   // TEMPORARY dev aid — see frontend/src/app/api/auth/dev-verification-code
   // (remove both once RESEND_API_KEY is configured for real).
@@ -283,28 +297,55 @@ export default function OnboardingPage() {
   async function onSignup(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setEmailError(null);
+    setPasswordError(null);
+    setPasswordConfirmError(null);
+    setTermsError(null);
 
+    // Each check sets its own inline error under the relevant field instead
+    // of bailing on the first failure, so a user fixing one mistake doesn't
+    // get surprised by a second one appearing only after resubmitting.
+    let hasError = false;
     if (!looksLikeEmail(data.email)) {
-      const msg = 'Merci de saisir une adresse email valide.';
-      setError(msg);
-      toast(msg, 'error');
-      return;
+      setEmailError('Merci de saisir une adresse email valide.');
+      hasError = true;
     }
-    if (password.length < 10) {
-      const msg = 'Le mot de passe doit contenir au moins 10 caractères.';
-      setError(msg);
-      toast(msg, 'error');
-      return;
+    if (password.length < SIGNUP_PASSWORD_MIN) {
+      setPasswordError(`Le mot de passe doit contenir au moins ${SIGNUP_PASSWORD_MIN} caractères.`);
+      hasError = true;
     }
+    if (passwordConfirm !== password) {
+      setPasswordConfirmError('Les deux mots de passe ne correspondent pas.');
+      hasError = true;
+    }
+    if (!acceptTerms) {
+      setTermsError('Merci d’accepter les conditions pour continuer.');
+      hasError = true;
+    }
+    if (hasError) return;
 
     setSubmitting(true);
     try {
       await api('/api/auth/signup', { method: 'POST', body: { email: data.email, password } });
       setStep('verify');
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Une erreur est survenue. Réessaie.';
-      setError(msg);
-      toast(msg, 'error');
+      if (err instanceof ApiError) {
+        // Signup is enumeration-resistant by design (POST /api/auth/signup
+        // always returns 201 whether the email is new or already taken) —
+        // there is deliberately no "email already in use" branch here.
+        if (err.code === 'PASSWORD_TOO_SHORT' || err.code === 'PASSWORD_BANNED') {
+          setPasswordError(err.message);
+        } else if (err.code === 'VALIDATION_FAILED') {
+          setEmailError(err.message);
+        } else {
+          setError(err.message);
+          toast(err.message, 'error');
+        }
+      } else {
+        const msg = 'Une erreur est survenue. Réessaie.';
+        setError(msg);
+        toast(msg, 'error');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -425,46 +466,162 @@ export default function OnboardingPage() {
   if (step === 'signup') {
     return (
       <WizardShell stepLabel="Compte" progressPct={0}>
-        <h1 className="mb-2 font-headings text-2xl font-bold text-foreground">Créer ton compte</h1>
-        <p className="mb-6 font-body text-sm text-muted-foreground">
-          C&rsquo;est rapide et sécurisé. Tes infos restent confidentielles.
-        </p>
+        {/* Logo, centered — reuses the existing brand mark (BrandMark.tsx),
+            not a fresh asset, per explicit instruction. */}
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <BrandMark className="h-10 w-auto" />
+          <span className="font-headings text-lg font-bold text-foreground">YeOyo</span>
+        </div>
+
+        <div className="mb-6 text-center">
+          <h1 className="mb-2 font-headings text-2xl font-bold text-foreground">Crée ton profil</h1>
+          <p className="font-body text-sm text-muted-foreground">
+            C&rsquo;est rapide et sécurisé. Tes infos restent confidentielles.
+          </p>
+        </div>
+
+        {/* Google — the privileged sign-up path, full width and visually
+            dominant (solid border, own row) so it reads as the primary
+            action before the secondary email form below.
+            next=/onboarding (not /app/decouvrir) — a first-time Google
+            signup has no Profile row yet. Landing back here with a session
+            already set, the "returning user" effect above detects the
+            missing profile and auto-advances straight to step 1, skipping
+            signup/verify entirely (Google already verified the email). */}
+        <a
+          href="/api/auth/oauth/google/start?next=/onboarding"
+          onClick={() => setGoogleRedirecting(true)}
+          aria-disabled={googleRedirecting}
+          className="flex items-center justify-center gap-2 rounded-xl border-2 border-foreground/15 bg-surface py-3.5 font-body text-sm font-semibold text-foreground transition-colors hover:bg-background"
+        >
+          {googleRedirecting ? (
+            <Icon name="refresh-cw" size={17} className="animate-spin" />
+          ) : (
+            <GoogleIcon />
+          )}
+          Continuer avec Google
+        </a>
+
+        <div className="my-5 flex items-center gap-3 font-body text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          ou
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* Email form — secondary path: same functional weight, lighter
+            visual weight (muted labels, no card/shadow treatment) than the
+            Google button above. */}
         <form onSubmit={onSignup} noValidate className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 font-body text-sm text-foreground">
+          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
             Email
             <input
               type="email"
               autoComplete="email"
               value={data.email}
-              onChange={(e) => setData((d) => ({ ...d, email: e.target.value }))}
+              onChange={(e) => {
+                setData((d) => ({ ...d, email: e.target.value }));
+                if (emailError) setEmailError(null);
+              }}
+              aria-invalid={!!emailError}
               className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
+            {emailError && (
+              <span role="alert" className="font-body text-xs text-red-500">
+                {emailError}
+              </span>
+            )}
           </label>
-          <label className="flex flex-col gap-2 font-body text-sm text-foreground">
+          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
             Mot de passe
             <PasswordInput
               id="signup-password"
               value={password}
-              onChange={setPassword}
+              onChange={(v) => {
+                setPassword(v);
+                if (passwordError) setPasswordError(null);
+              }}
               autoComplete="new-password"
-              minLength={10}
+              minLength={SIGNUP_PASSWORD_MIN}
             />
+            {passwordError && (
+              <span role="alert" className="font-body text-xs text-red-500">
+                {passwordError}
+              </span>
+            )}
           </label>
+          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
+            Confirmer le mot de passe
+            <PasswordInput
+              id="signup-password-confirm"
+              value={passwordConfirm}
+              onChange={(v) => {
+                setPasswordConfirm(v);
+                if (passwordConfirmError) setPasswordConfirmError(null);
+              }}
+              autoComplete="new-password"
+            />
+            {passwordConfirmError && (
+              <span role="alert" className="font-body text-xs text-red-500">
+                {passwordConfirmError}
+              </span>
+            )}
+          </label>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-start gap-2.5 font-body text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => {
+                  setAcceptTerms(e.target.checked);
+                  if (termsError) setTermsError(null);
+                }}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+              />
+              <span>
+                J&rsquo;accepte les{' '}
+                <Link
+                  href="/conditions-utilisation"
+                  target="_blank"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  conditions d&rsquo;utilisation
+                </Link>{' '}
+                et la{' '}
+                <Link
+                  href="/confidentialite"
+                  target="_blank"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  politique de confidentialité
+                </Link>
+              </span>
+            </label>
+            {termsError && (
+              <span role="alert" className="font-body text-xs text-red-500">
+                {termsError}
+              </span>
+            )}
+          </div>
+
           {error && (
             <p role="alert" className="font-body text-sm text-red-500">
               {error}
             </p>
           )}
+
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
+            className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-colors hover:bg-accent-foreground active:scale-[0.99] disabled:opacity-50"
           >
-            {submitting ? 'Création…' : 'Continuer'}
+            {submitting && <Icon name="refresh-cw" size={16} className="animate-spin" />}
+            {submitting ? 'Création…' : 'Créer mon compte'}
           </button>
         </form>
+
         <p className="mt-5 text-center font-body text-sm text-muted-foreground">
-          Déjà un compte ?{' '}
+          Tu as déjà un compte ?{' '}
           <Link
             href="/login"
             className="font-medium text-primary underline-offset-2 hover:underline"

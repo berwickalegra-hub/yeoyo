@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BrandMark } from './BrandMark';
 
 // Shared branded shell for the auth pages that sit outside the app
 // (login, forgot-password, reset-password). Gives them the same
@@ -21,9 +22,7 @@ export function AuthShell({
     <main className="flex min-h-screen flex-col bg-background font-body">
       <div className="flex justify-center px-5 py-6 lg:py-8">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="font-headings text-sm font-bold text-primary-foreground">Y</span>
-          </div>
+          <BrandMark className="h-8 w-auto" />
           <span className="font-headings text-base font-bold tracking-tight text-foreground">
             YeOyo
           </span>

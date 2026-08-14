@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120" fill="none" role="img" aria-label="YeOyo">
+  <g transform="translate(0,10)">
+  <circle cx="47" cy="50" r="40" fill="#1F3A2E"></circle>
+  <circle cx="101" cy="50" r="40" fill="#1F3A2E"></circle>
+  <path d="M74 20.49 A40 40 0 0 1 74 79.51 A40 40 0 0 1 74 20.49" fill="#C17A4E"></path>
+  </g>
+  <text x="176" y="86.5" font-family="&#39;Playfair Display&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-weight="500" font-size="76" fill="#1F3A2E">YeOyo</text>
+</svg>

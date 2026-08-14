@@ -17,11 +17,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { BrandMark } from './BrandMark';
 import { NotificationBell } from './NotificationBell';
 import {
   TOPNAV_ITEMS,
   PREMIUM_ITEM,
   ACCOUNT_MENU_ITEMS,
+  SETTINGS_MENU_ITEMS,
   badgeFor,
   type SidebarBadgeCounts,
   type SidebarTab,
@@ -127,8 +129,8 @@ function AccountMenu({ user }: { user: SidebarUser }) {
       </button>
 
       {open && (
-        <div className="animate-scale-in absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
-          <div className="border-b border-border px-4 py-3">
+        <div className="animate-scale-in absolute right-0 top-11 z-50 max-h-[75vh] w-60 overflow-y-auto rounded-xl border border-border bg-surface shadow-2xl">
+          <div className="sticky top-0 border-b border-border bg-surface px-4 py-3">
             <p className="truncate font-headings text-sm font-semibold text-foreground">
               {user.name}
             </p>
@@ -143,6 +145,19 @@ function AccountMenu({ user }: { user: SidebarUser }) {
             {ACCOUNT_MENU_ITEMS.map((item) => (
               <Link
                 key={item.id}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+              >
+                <Icon name={item.icon} size={16} className="text-muted-foreground" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+          <div className="border-t border-border py-1">
+            {SETTINGS_MENU_ITEMS.map((item) => (
+              <Link
+                key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
@@ -182,9 +197,7 @@ export function TopNav({
       {/* Desktop / tablet bar (md+) */}
       <div className="mx-auto hidden max-w-7xl items-center justify-between gap-4 px-6 py-3 md:flex lg:px-8">
         <Link href="/app/decouvrir" className="flex flex-shrink-0 items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-            <span className="font-headings text-base font-bold text-primary-foreground">Y</span>
-          </div>
+          <BrandMark className="h-8 w-auto" />
           <span className="hidden font-headings text-xl font-bold text-foreground lg:inline">
             YeOyo
           </span>
@@ -244,9 +257,7 @@ export function TopNav({
           below `md`, so this only surfaces what wouldn't fit there. */}
       <div className="flex items-center justify-between px-4 py-3 md:hidden">
         <Link href="/app/decouvrir" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-            <span className="font-headings text-base font-bold text-primary-foreground">Y</span>
-          </div>
+          <BrandMark className="h-8 w-auto" />
           <span className="font-headings text-lg font-bold text-foreground">YeOyo</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -261,9 +272,7 @@ export function TopNav({
             )}
           </Link>
           <NotificationBell />
-          <Link href="/app/profil" aria-label="Mon profil">
-            <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size={32} />
-          </Link>
+          <AccountMenu user={user} />
         </div>
       </div>
     </header>

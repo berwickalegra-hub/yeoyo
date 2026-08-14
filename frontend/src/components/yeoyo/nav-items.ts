@@ -33,13 +33,15 @@ export interface NavItem {
 }
 
 // The 5 primary tabs — TopNav's center row on desktop, MobileTabBar's full
-// row on mobile. Order matches Banani's TopNav.jsx exactly.
+// row on mobile. Order deliberately deviates from Banani's TopNav.jsx
+// (2026-08-14, explicit user ask): 'Découvrir' centered as the emphasized
+// middle tab, 'Visiteurs' pushed to the trailing/rightmost slot.
 export const TOPNAV_ITEMS: NavItem[] = [
   { id: 'accueil', icon: 'home', label: 'Accueil', href: '/app/decouvrir' },
-  { id: 'decouvrir', icon: 'search', label: 'Découvrir', href: '/app/explorer' },
-  { id: 'visiteurs', icon: 'eye', label: 'Visiteurs', href: '/app/visiteurs' },
   { id: 'favoris', icon: 'heart', label: 'Favoris', href: '/app/favoris' },
+  { id: 'decouvrir', icon: 'search', label: 'Découvrir', href: '/app/explorer' },
   { id: 'demandes', icon: 'users', label: 'Demandes', href: '/app/demandes' },
+  { id: 'visiteurs', icon: 'eye', label: 'Visiteurs', href: '/app/visiteurs' },
 ];
 
 export const PREMIUM_ITEM: NavItem = {
@@ -61,6 +63,28 @@ export const PREMIUM_ITEM: NavItem = {
 export const ACCOUNT_MENU_ITEMS: NavItem[] = [
   { id: 'profil', icon: 'user', label: 'Mon profil', href: '/app/profil' },
   { id: 'likes', icon: 'heart-handshake', label: 'Mes likes', href: '/app/likes' },
+];
+
+// Plain href links, not primary nav tabs, so they don't need a SidebarTab id
+// (nothing highlights them as "active"). Re-added to the avatar dropdown
+// (2026-08-14, third pass, explicit user ask) after living as a standalone
+// card at the bottom of /app/profil — that card is gone now, this list is
+// its only home, reused by TopNav's AccountMenu on both desktop and mobile
+// (mobile previously had no way to reach these at all, just a bare avatar
+// link to /app/profil).
+export interface SettingsMenuLink {
+  icon: IconName;
+  label: string;
+  href: string;
+}
+
+export const SETTINGS_MENU_ITEMS: SettingsMenuLink[] = [
+  { icon: 'user', label: 'Compte', href: '/app/parametres/compte' },
+  { icon: 'bell', label: 'Notifications', href: '/app/parametres/notifications' },
+  { icon: 'palette', label: 'Apparence', href: '/app/parametres/apparence' },
+  { icon: 'credit-card', label: 'Paiement', href: '/app/parametres/paiement' },
+  { icon: 'lock', label: 'Confidentialité', href: '/app/parametres/confidentialite' },
+  { icon: 'info', label: 'À propos', href: '/app/parametres/apropos' },
 ];
 
 export interface SidebarBadgeCounts {

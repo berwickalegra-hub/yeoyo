@@ -30,6 +30,7 @@ import { SuccessStoryCard } from '@/components/yeoyo/SuccessStoryCard';
 import { WhyFeatureCard } from '@/components/yeoyo/WhyFeatureCard';
 import { PricingCard } from '@/components/yeoyo/PricingCard';
 import { YeOyoNav } from '@/components/yeoyo/YeOyoNav';
+import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DownloadAppButton } from '@/components/yeoyo/DownloadAppButton';
 
 const WHY_FEATURES = [
@@ -405,9 +406,7 @@ export default function LandingPage() {
         {/* Mobile: flat block. Desktop: 5-col grid (logo spans 2). */}
         <div className="flex flex-col gap-4 lg:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <span className="font-headings text-xs font-bold text-primary-foreground">Y</span>
-            </div>
+            <BrandMark className="h-7 w-auto" />
             <span className="font-headings text-sm font-bold text-background">YeOyo</span>
           </div>
           <p className="font-body text-xs leading-relaxed text-background/60">
@@ -431,9 +430,7 @@ export default function LandingPage() {
           <div className="mx-auto grid max-w-6xl grid-cols-5 gap-8">
             <div className="col-span-2">
               <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-                  <span className="font-headings text-sm font-bold text-primary-foreground">Y</span>
-                </div>
+                <BrandMark className="h-8 w-auto" />
                 <span className="font-headings text-base font-bold text-background">YeOyo</span>
               </div>
               <p className="max-w-xs font-body text-xs leading-relaxed text-background/60">

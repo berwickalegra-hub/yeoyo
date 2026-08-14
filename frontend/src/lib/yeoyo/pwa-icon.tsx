@@ -2,8 +2,12 @@
 // app/pwa/icon/[size]/route.tsx). Rendered through Satori (`next/og`'s
 // ImageResponse), which only understands inline flexbox styles — it isn't a
 // browser, so the project's "no inline styles" rule doesn't apply here; this
-// is the only supported way to draw these images.
+// is the only supported way to draw these images. The mark itself mirrors
+// public/yeoyo-icon.svg (two overlapping circles + terracotta lens) — Satori
+// supports a subset of raw SVG elements (svg/circle/path) as JSX children.
 export function brandIconElement(px: number) {
+  const markWidth = px * 0.74;
+  const markHeight = (markWidth * 100) / 148;
   return (
     <div
       style={{
@@ -12,20 +16,15 @@ export function brandIconElement(px: number) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #c17a4e 0%, #8a4a28 100%)',
+        background: '#fdfbf8',
         borderRadius: px * 0.22,
       }}
     >
-      <span
-        style={{
-          fontFamily: 'sans-serif',
-          fontWeight: 700,
-          fontSize: px * 0.55,
-          color: '#ffffff',
-        }}
-      >
-        Y
-      </span>
+      <svg width={markWidth} height={markHeight} viewBox="0 0 148 100" fill="none">
+        <circle cx="47" cy="50" r="40" fill="#1F3A2E" />
+        <circle cx="101" cy="50" r="40" fill="#1F3A2E" />
+        <path d="M74 20.49 A40 40 0 0 1 74 79.51 A40 40 0 0 1 74 20.49" fill="#C17A4E" />
+      </svg>
     </div>
   );
 }

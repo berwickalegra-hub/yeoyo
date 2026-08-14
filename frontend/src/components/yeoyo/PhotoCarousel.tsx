@@ -16,10 +16,15 @@ export function PhotoCarousel({
   photoUrls,
   name,
   heightPx = 220,
+  onIndexChange,
 }: {
   photoUrls: string[];
   name: string;
   heightPx?: number;
+  // Optional — lets a parent (SwipeCard's photo lightbox) know which photo
+  // is currently showing, without this shared component (also used by the
+  // profile-detail page) needing to know why.
+  onIndexChange?: (index: number) => void;
 }) {
   const [index, setIndex] = useState(0);
   const safeIndex = Math.min(index, Math.max(photoUrls.length - 1, 0));
@@ -28,7 +33,11 @@ export function PhotoCarousel({
   function go(delta: number, e: React.PointerEvent<HTMLButtonElement>) {
     e.stopPropagation();
     e.preventDefault();
-    setIndex((i) => Math.min(Math.max(i + delta, 0), photoUrls.length - 1));
+    setIndex((i) => {
+      const next = Math.min(Math.max(i + delta, 0), photoUrls.length - 1);
+      onIndexChange?.(next);
+      return next;
+    });
   }
 
   return (

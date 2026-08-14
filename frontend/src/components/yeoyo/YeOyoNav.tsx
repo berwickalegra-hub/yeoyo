@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandMark } from './BrandMark';
 
 // Rebuilt for the "Rencontres Sérieuses Congo" Banani landing redesign
 // (2026-08-13, landing-nouveau-theme-2.md) — different link set (Accueil/
@@ -19,11 +20,7 @@ export function YeOyoNav() {
   return (
     <nav className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-surface px-5 py-4 lg:px-10 lg:py-5">
       <Link href="/" className="flex items-center gap-2 lg:gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary lg:h-10 lg:w-10">
-          <span className="font-headings text-sm font-bold text-primary-foreground lg:text-base">
-            Y
-          </span>
-        </div>
+        <BrandMark className="h-8 w-auto lg:h-10" />
         <span className="font-headings text-base font-bold tracking-tight text-foreground lg:text-lg">
           YeOyo
         </span>
