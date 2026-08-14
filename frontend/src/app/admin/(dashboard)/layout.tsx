@@ -1,8 +1,11 @@
-// /admin/* shell — gates every admin route behind GET /api/admin/me
-// (403 ADMIN_REQUIRED → redirect to /). Mirrors the pattern from
-// examples/frontend-pages/admin/layout.tsx, restyled with the app's
-// dark/gold theme (see AdminSidebar.tsx for why — the Banani export's
-// separate admin color tokens were never actually defined).
+// /admin/(dashboard)/* shell — gates every authenticated admin route
+// behind GET /api/admin/me (403 ADMIN_REQUIRED → redirect to
+// /admin/login). Lives in the (dashboard) route group so /admin/login
+// itself stays outside this guard (see /admin/login/layout.tsx).
+// Mirrors the pattern from examples/frontend-pages/admin/layout.tsx,
+// restyled with the app's dark/gold theme (see AdminSidebar.tsx for why
+// — the Banani export's separate admin color tokens were never
+// actually defined).
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -41,8 +44,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (!cancelled) {
-          if (err instanceof ApiError) router.replace('/');
-          else router.replace('/');
+          if (err instanceof ApiError) router.replace('/admin/login');
+          else router.replace('/admin/login');
         }
       } finally {
         if (!cancelled) setChecked(true);
