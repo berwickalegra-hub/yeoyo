@@ -36,12 +36,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     const { challengeId, code } = parsed.data;
 
+    // Atomic claim: increments `attempts` and only matches a row that is
+    // still unconsumed and under the cap. Concurrent requests against the
+    // same challenge can't all read a stale `attempts` value and all slip
+    // past the guard — only as many callers as remain under MAX_ATTEMPTS
+    // can ever have their `updateMany` match a row (TOCTOU fix, mirrors the
+    // claim pattern in outbox/dispatcher.ts).
+    const claim = await prisma.adminTwoFactorChallenge.updateMany({
+      where: { id: challengeId, consumedAt: null, attempts: { lt: MAX_ATTEMPTS } },
+      data: { attempts: { increment: 1 } },
+    });
+
+    if (claim.count === 0) {
+      // The atomic claim didn't match — read once more just to pick the
+      // right error code/message. This read is NOT what enforces the cap;
+      // the updateMany above already did that atomically.
+      const existing = await prisma.adminTwoFactorChallenge.findUnique({
+        where: { id: challengeId },
+      });
+      if (!existing || existing.consumedAt) {
+        return NextResponse.json(
+          { error: 'CHALLENGE_NOT_FOUND', message: 'Invalid or already-used challenge.' },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      return NextResponse.json(
+        { error: 'TOO_MANY_ATTEMPTS', message: 'Too many attempts. Log in again.' },
+        { status: 429, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
     const challenge = await prisma.adminTwoFactorChallenge.findUnique({
       where: { id: challengeId },
       include: { user: true },
     });
-
-    if (!challenge || challenge.consumedAt) {
+    if (!challenge) {
       return NextResponse.json(
         { error: 'CHALLENGE_NOT_FOUND', message: 'Invalid or already-used challenge.' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
@@ -51,12 +80,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { error: 'CHALLENGE_EXPIRED', message: 'This login attempt has expired. Log in again.' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-    if (challenge.attempts >= MAX_ATTEMPTS) {
-      return NextResponse.json(
-        { error: 'TOO_MANY_ATTEMPTS', message: 'Too many attempts. Log in again.' },
-        { status: 429, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 
@@ -76,10 +99,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (!ok) {
-      await prisma.adminTwoFactorChallenge.update({
-        where: { id: challengeId },
-        data: { attempts: { increment: 1 } },
-      });
+      // `attempts` was already incremented atomically by the claim above —
+      // no separate update needed here.
       return NextResponse.json(
         { error: 'INVALID_CODE', message: 'Invalid code.' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
