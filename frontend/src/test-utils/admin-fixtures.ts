@@ -27,10 +27,12 @@ const FROZEN_NOW = new Date('2026-05-08T12:00:00.000Z');
 interface UserOverrides {
   id?: string;
   email?: string;
-  role?: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  role?: 'USER' | 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
   status?: 'ACTIVE' | 'SUSPENDED';
   passwordHash?: string | null;
   emailVerifiedAt?: Date | null;
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string | null;
 }
 
 function buildUser(overrides: UserOverrides = {}): User {
@@ -46,6 +48,9 @@ function buildUser(overrides: UserOverrides = {}): User {
     avatarUrl: null,
     role: overrides.role ?? 'USER',
     status: overrides.status ?? 'ACTIVE',
+    twoFactorSecret: overrides.twoFactorSecret ?? null,
+    twoFactorEnabled: overrides.twoFactorEnabled ?? false,
+    twoFactorRecoveryCodes: null,
     createdAt: FROZEN_NOW,
     updatedAt: FROZEN_NOW,
   } as User;
@@ -66,6 +71,16 @@ export function seedSuperadmin(overrides: UserOverrides = {}): User {
     id: overrides.id ?? 'superadmin_seed_1',
     email: overrides.email ?? 'superadmin@test.local',
     role: 'SUPERADMIN',
+    ...overrides,
+  });
+}
+
+export function seedModerator(overrides: UserOverrides = {}): User {
+  return buildUser({
+    id: overrides.id ?? 'moderator_seed_1',
+    email: overrides.email ?? 'moderator@test.local',
+    role: 'MODERATOR',
+    status: overrides.status ?? 'ACTIVE',
     ...overrides,
   });
 }
@@ -361,4 +376,33 @@ export function seedWithdrawal(overrides: WithdrawalOverrides = {}): Withdrawal 
     processedAt: overrides.processedAt ?? null,
     completedAt: overrides.completedAt ?? null,
   } as Withdrawal;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Admin auth foundation — invite fixtures
+// ────────────────────────────────────────────────────────────────────
+
+interface AdminInviteOverrides {
+  id?: string;
+  email?: string;
+  role?: 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
+  tokenHash?: string;
+  invitedById?: string;
+  expiresAt?: Date;
+  acceptedAt?: Date | null;
+  revokedAt?: Date | null;
+}
+
+export function seedAdminInvite(overrides: AdminInviteOverrides = {}) {
+  return {
+    id: overrides.id ?? `invite_${Math.random().toString(36).slice(2, 10)}`,
+    email: overrides.email ?? 'invitee@test.local',
+    role: overrides.role ?? 'MODERATOR',
+    tokenHash: overrides.tokenHash ?? 'a'.repeat(64),
+    invitedById: overrides.invitedById ?? 'superadmin_seed_1',
+    expiresAt: overrides.expiresAt ?? new Date(FROZEN_NOW.getTime() + 48 * 60 * 60 * 1000),
+    acceptedAt: overrides.acceptedAt ?? null,
+    revokedAt: overrides.revokedAt ?? null,
+    createdAt: FROZEN_NOW,
+  };
 }

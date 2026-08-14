@@ -9,62 +9,73 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
+  id                     String    @id @default(cuid())
+  email                  String    @unique
   // Nullable: OAuth-only users (e.g. signed up with Google) never set a
   // password. Email/password signup still requires it; the auth route
   // enforces presence at runtime.
-  passwordHash      String?
-  emailVerifiedAt   DateTime?
-  tokenVersion      Int       @default(0)
-  withdrawalPinHash String? // bcrypt hash of withdrawal PIN; null = no PIN set
+  passwordHash           String?
+  emailVerifiedAt        DateTime?
+  tokenVersion           Int       @default(0)
+  withdrawalPinHash      String? // bcrypt hash of withdrawal PIN; null = no PIN set
   // Optional display name — populated from OAuth profile on first sign-in.
   // Email/password users can fill it later via /api/auth/me PATCH (future).
-  name              String?
+  name                   String?
   // Optional avatar URL — populated from OAuth profile on first sign-in.
-  avatarUrl         String?
-  // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
-  // SUPERADMIN can promote/demote other admins. Bootstrap an initial
-  // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
-  role              String    @default("USER") // USER | ADMIN | SUPERADMIN
+  avatarUrl              String?
+  // App-wide role. USER is the default; MODERATOR unlocks a scoped subset
+  // of /admin (verification queue, reports, support); ADMIN unlocks the
+  // full back-office; SUPERADMIN can promote/demote other admins and
+  // manage 2FA/invites. Bootstrap an initial SUPERADMIN via
+  // `pnpm db:make-superadmin <email>` (see scripts).
+  role                   String    @default("USER") // USER | MODERATOR | ADMIN | SUPERADMIN
   // Account status. ACTIVE = login + refresh allowed; SUSPENDED = both
   // refused with 403 ACCOUNT_SUSPENDED. Mutated via /api/admin/users/[id]/status
   // (ADMIN can suspend; only SUPERADMIN can restore).
-  status            String    @default("ACTIVE") // ACTIVE | SUSPENDED
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  status                 String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  // TOTP 2FA — SUPERADMIN only, opt-in. Secret is AES-256-GCM encrypted at
+  // rest (see lib/server/admin/two-factor.ts) using ENCRYPTION_KEY, never
+  // stored or logged in plaintext. Recovery codes are bcrypt hashes, each
+  // consumable once (removed from the array on use).
+  twoFactorSecret        String?
+  twoFactorEnabled       Boolean   @default(false)
+  twoFactorRecoveryCodes Json?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  verificationCodes VerificationCode[]
-  uploads           FileUpload[]
-  notifications     Notification[]
-  notifPrefs        NotificationPreferences?
-  orders            Order[]
-  withdrawals       Withdrawal[]
-  oauthAccounts     OAuthAccount[]
-  adminActions      AdminAction[]
-  profile           Profile?
-  likesGiven        Like[]           @relation("LikesGiven")
-  likesReceived     Like[]           @relation("LikesReceived")
-  contactRequestsSent     ContactRequest[] @relation("ContactRequestsSent")
-  contactRequestsReceived ContactRequest[] @relation("ContactRequestsReceived")
-  conversationsAsUserA    Conversation[]   @relation("ConversationsAsUserA")
-  conversationsAsUserB    Conversation[]   @relation("ConversationsAsUserB")
-  messagesSent            Message[]        @relation("MessagesSent")
-  blocksGiven             BlockedUser[]    @relation("BlocksGiven")
-  blocksReceived          BlockedUser[]    @relation("BlocksReceived")
+  verificationCodes       VerificationCode[]
+  uploads                 FileUpload[]
+  notifications           Notification[]
+  notifPrefs              NotificationPreferences?
+  orders                  Order[]
+  withdrawals             Withdrawal[]
+  oauthAccounts           OAuthAccount[]
+  adminActions            AdminAction[]
+  invitesSent             AdminInvite[]
+  twoFactorChallenges     AdminTwoFactorChallenge[]
+  profile                 Profile?
+  likesGiven              Like[]                    @relation("LikesGiven")
+  likesReceived           Like[]                    @relation("LikesReceived")
+  contactRequestsSent     ContactRequest[]          @relation("ContactRequestsSent")
+  contactRequestsReceived ContactRequest[]          @relation("ContactRequestsReceived")
+  conversationsAsUserA    Conversation[]            @relation("ConversationsAsUserA")
+  conversationsAsUserB    Conversation[]            @relation("ConversationsAsUserB")
+  messagesSent            Message[]                 @relation("MessagesSent")
+  blocksGiven             BlockedUser[]             @relation("BlocksGiven")
+  blocksReceived          BlockedUser[]             @relation("BlocksReceived")
   subscriptions           Subscription[]
-  reportsFiled            Report[]         @relation("ReportsFiled")
-  reportsReceived         Report[]         @relation("ReportsReceived")
+  reportsFiled            Report[]                  @relation("ReportsFiled")
+  reportsReceived         Report[]                  @relation("ReportsReceived")
   coachMessages           CoachMessage[]
-  profileViewsGiven       ProfileView[]    @relation("ProfileViewsGiven")
-  profileViewsReceived    ProfileView[]    @relation("ProfileViewsReceived")
-  favoritesGiven          Favorite[]       @relation("FavoritesGiven")
-  favoritesReceived       Favorite[]       @relation("FavoritesReceived")
+  profileViewsGiven       ProfileView[]             @relation("ProfileViewsGiven")
+  profileViewsReceived    ProfileView[]             @relation("ProfileViewsReceived")
+  favoritesGiven          Favorite[]                @relation("FavoritesGiven")
+  favoritesReceived       Favorite[]                @relation("FavoritesReceived")
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
   // on their domain models.
-  ownedOrganizations Organization[]      @relation("OrgOwner")
+  ownedOrganizations Organization[]       @relation("OrgOwner")
   memberships        OrganizationMember[] @relation("OrgMembership")
 
   @@index([email])
@@ -103,6 +114,45 @@ model AdminAction {
 }
 
 // ───────────────────────────────────────────────────────────────────────
+// Admin invitations — SUPERADMIN invites a new MODERATOR/ADMIN/SUPERADMIN
+// by email. `tokenHash` is a SHA-256 hex digest of the raw token mailed to
+// the invitee (the raw token is never stored — same threat model as a
+// password, since possessing it grants an admin role on acceptance).
+// ───────────────────────────────────────────────────────────────────────
+model AdminInvite {
+  id          String    @id @default(cuid())
+  email       String
+  role        String // MODERATOR | ADMIN | SUPERADMIN
+  tokenHash   String    @unique
+  invitedById String
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Restrict)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Bridges password-verified → TOTP-verified during SUPERADMIN login. A row
+// exists only while the second factor is pending; consumed (deleted) on
+// successful verify, or left to expire (short TTL) otherwise.
+// ───────────────────────────────────────────────────────────────────────
+model AdminTwoFactorChallenge {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
 // Multi-tenancy primitives — opt-in.
 //
 // Default project surface stays user-owned (`Order.userId`, `Withdrawal.userId`).
@@ -113,14 +163,14 @@ model AdminAction {
 // used as a stable URL segment.
 // ───────────────────────────────────────────────────────────────────────
 model Organization {
-  id        String   @id @default(cuid())
-  slug      String   @unique
+  id        String               @id @default(cuid())
+  slug      String               @unique
   name      String
   ownerId   String
-  owner     User     @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner     User                 @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members   OrganizationMember[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
 
   @@index([ownerId])
 }
@@ -184,16 +234,16 @@ model VerificationCode {
 // File uploads — Cloudinary (column names kept from the R2 era; no migration needed)
 // ───────────────────────────────────────────────────────────────────────
 model FileUpload {
-  id            String        @id @default(cuid())
-  userId        String? // nullable — uploads can be anonymous if route allows
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  key           String        @unique // Cloudinary public_id (column name historical — was R2 object key)
-  filename      String
-  mimeType      String
-  sizeBytes     Int
-  createdAt     DateTime      @default(now())
-  profilePhoto  ProfilePhoto?
-  messageImage  Message?
+  id           String        @id @default(cuid())
+  userId       String? // nullable — uploads can be anonymous if route allows
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  key          String        @unique // Cloudinary public_id (column name historical — was R2 object key)
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime      @default(now())
+  profilePhoto ProfilePhoto?
+  messageImage Message?
 
   @@index([userId])
   @@index([createdAt])
@@ -242,8 +292,8 @@ model Profile {
   intent                String // COURT_TERME | MOYEN_TERME | LONG_TERME
   job                   String?
   bio                   String?
-  interests             String[] @default([])
-  languages             String[] @default([])
+  interests             String[]  @default([])
+  languages             String[]  @default([])
   visibilityPublic      Boolean   @default(true)
   onlineStatusVisible   Boolean   @default(true)
   // Flexible discovery filters — { ageMin, ageMax, commune, intent: [...] }.
@@ -310,12 +360,12 @@ model Like {
 // tab / Découvrir star button. Unrelated to the existing /app/likes page
 // ("Mes likes" = who liked me, i.e. received Like rows).
 model Favorite {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation("FavoritesGiven", fields: [userId], references: [id], onDelete: Cascade)
-  targetId   String
-  target     User     @relation("FavoritesReceived", fields: [targetId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("FavoritesGiven", fields: [userId], references: [id], onDelete: Cascade)
+  targetId  String
+  target    User     @relation("FavoritesReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@unique([userId, targetId])
   @@index([targetId])
@@ -325,12 +375,12 @@ model Favorite {
 // profile). Written best-effort by GET /api/profiles/[userId] — a viewer
 // looking at their own profile never records a self-view.
 model ProfileView {
-  id         String   @id @default(cuid())
-  viewerId   String
-  viewer     User     @relation("ProfileViewsGiven", fields: [viewerId], references: [id], onDelete: Cascade)
-  viewedId   String
-  viewed     User     @relation("ProfileViewsReceived", fields: [viewedId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  viewerId  String
+  viewer    User     @relation("ProfileViewsGiven", fields: [viewerId], references: [id], onDelete: Cascade)
+  viewedId  String
+  viewed    User     @relation("ProfileViewsReceived", fields: [viewedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@index([viewedId, createdAt])
   @@index([viewerId])
@@ -522,21 +572,21 @@ model WebhookLog {
 // at the call site — the schema is currency-agnostic.
 // ───────────────────────────────────────────────────────────────────────
 model Order {
-  id              String    @id @default(cuid())
-  userId          String? // nullable — guest checkout supported
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  amount          Int // gross amount, smallest unit
-  currency        String    @default("XOF") // ISO 4217
-  status          String    @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
-  customerEmail   String?
-  customerPhone   String?
-  customerName    String?
-  metadata        Json? // app-specific fields
+  id            String  @id @default(cuid())
+  userId        String? // nullable — guest checkout supported
+  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amount        Int // gross amount, smallest unit
+  currency      String  @default("XOF") // ISO 4217
+  status        String  @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
+  customerEmail String?
+  customerPhone String?
+  customerName  String?
+  metadata      Json? // app-specific fields
 
   // Stripe-grade idempotency. Required header on POST /api/orders; replay
   // with same value returns the original Order row instead of double-charging.
   // Nullable so existing rows pre-migration don't break the @unique constraint.
-  idempotencyKey  String?   @unique
+  idempotencyKey String? @unique
 
   // Provider reference
   provider         String // e.g. "bictorys"
@@ -590,12 +640,12 @@ model Subscription {
 }
 
 model Withdrawal {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Restrict)
   amount      Int // requested amount, smallest unit
-  currency    String   @default("XOF")
-  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
+  currency    String @default("XOF")
+  status      String @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
   destination Json // { method: "WAVE" | "ORANGE_MONEY" | ..., phone: "+221...", accountName?: "..." }
 
   // Provider reference
