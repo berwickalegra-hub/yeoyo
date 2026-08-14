@@ -98,3 +98,21 @@ export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate 
     text: `Your password reset code is ${args.code}. It expires ${ttl}. If you did not request this, ignore this email.`,
   };
 }
+
+export interface AdminInviteEmailArgs {
+  inviteUrl: string;
+  role: string;
+  /** Optional ISO-8601 expiry; falls back to "soon" wording when omitted. */
+  expiresAt?: string;
+}
+
+export function adminInviteEmail(args: AdminInviteEmailArgs): EmailTemplate {
+  const url = htmlEscape(args.inviteUrl);
+  const role = htmlEscape(args.role);
+  const ttl = ttlWording(args.expiresAt);
+  return {
+    subject: 'Invitation à l’administration YeOyo',
+    html: `<p>Bonjour,</p><p>Vous avez été invité(e) à rejoindre le back-office YeOyo avec le rôle <strong>${role}</strong>.</p><p><a href="${url}">Accepter l'invitation</a></p><p>Ce lien expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
+    text: `Vous avez été invité(e) à rejoindre le back-office YeOyo avec le rôle ${args.role}. Accepter : ${args.inviteUrl}. Ce lien expire ${ttl}.`,
+  };
+}

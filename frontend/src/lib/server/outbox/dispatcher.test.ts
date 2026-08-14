@@ -11,7 +11,7 @@
 //   4. on dispatch failure with attempts >= MAX_ATTEMPTS, marks the row DEAD.
 //   5. concurrent claim losing the race (claimed.count === 0) is skipped
 //      without further work.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '@prisma/client';
 import { drainOutbox } from './dispatcher';
@@ -141,5 +141,58 @@ describe('drainOutbox (TEST-02)', () => {
 
     expect(stats).toEqual({ processed: 0, succeeded: 0, failed: 0, dead: 0 });
     expect(prismaMock.outboxEvent.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('dispatches email.admin_invite via the email queue', async () => {
+    const row = makeRow({
+      kind: 'email.admin_invite',
+      payload: {
+        to: 'invitee@test.local',
+        inviteUrl: 'https://example.test/admin/invites/accept?token=abc',
+        role: 'MODERATOR',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      },
+    });
+    prismaMock.outboxEvent.findMany.mockResolvedValue([{ id: 'oe_1' }] as never);
+    prismaMock.outboxEvent.updateMany.mockResolvedValue({ count: 1 } as never);
+    prismaMock.outboxEvent.findUnique.mockResolvedValue(row as never);
+    prismaMock.outboxEvent.update.mockResolvedValue({} as never);
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+
+    const stats = await drainOutbox({ prisma: prismaMock, emailQueue: { enqueue } as never });
+
+    expect(stats.succeeded).toBe(1);
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'invitee@test.local',
+        subject: expect.stringContaining('Invitation'),
+      }),
+    );
+  });
+
+  it('email.admin_invite dispatch fails (and reschedules) when no email queue is configured', async () => {
+    const row = makeRow({
+      kind: 'email.admin_invite',
+      payload: {
+        to: 'invitee@test.local',
+        inviteUrl: 'https://example.test/admin/invites/accept?token=abc',
+        role: 'MODERATOR',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      },
+      attempts: 1,
+    });
+    prismaMock.outboxEvent.findMany.mockResolvedValue([{ id: 'oe_1' }] as never);
+    prismaMock.outboxEvent.updateMany.mockResolvedValue({ count: 1 } as never);
+    prismaMock.outboxEvent.findUnique.mockResolvedValue(row as never);
+    prismaMock.outboxEvent.update.mockResolvedValue({} as never);
+
+    const stats = await drainOutbox({ prisma: prismaMock }); // no emailQueue
+
+    expect(stats.failed).toBe(1);
+    const finalUpdate = prismaMock.outboxEvent.update.mock.calls[0]?.[0];
+    expect(finalUpdate?.data).toMatchObject({
+      status: 'PENDING',
+      lastError: 'email queue not configured',
+    });
   });
 });

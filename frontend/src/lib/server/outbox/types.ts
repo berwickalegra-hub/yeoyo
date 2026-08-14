@@ -13,7 +13,8 @@ export type OutboxEvent =
   | NotificationPaymentReceivedEvent
   | EmailPaymentConfirmationEvent
   | EmailVerificationCodeEvent
-  | EmailPasswordResetEvent;
+  | EmailPasswordResetEvent
+  | EmailAdminInviteEvent;
 
 export interface NotificationPaymentReceivedEvent {
   kind: 'notification.payment_received';
@@ -57,6 +58,20 @@ export interface EmailPasswordResetEvent {
   payload: {
     to: string;
     code: string;
+    expiresAt: string;
+  };
+}
+
+/**
+ * Emitted by POST /api/admin/invites; consumed by the email-queue cron
+ * (which calls adminInviteEmail() to render).
+ */
+export interface EmailAdminInviteEvent {
+  kind: 'email.admin_invite';
+  payload: {
+    to: string;
+    inviteUrl: string;
+    role: string;
     expiresAt: string;
   };
 }

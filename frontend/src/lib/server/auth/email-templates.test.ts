@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verificationEmail, resetPasswordEmail } from './email-templates';
+import { verificationEmail, resetPasswordEmail, adminInviteEmail } from './email-templates';
 
 describe('verificationEmail', () => {
   it('returns { subject, html, text } all non-empty', () => {
@@ -82,5 +82,18 @@ describe('resetPasswordEmail', () => {
     const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
     const t = resetPasswordEmail({ code: 'WXYZ9876', email: 'a@b.com', expiresAt });
     expect(t.text).toMatch(/in 1[45] minutes/);
+  });
+});
+
+describe('adminInviteEmail', () => {
+  it('renders the invite URL and role, HTML-escaped', () => {
+    const tpl = adminInviteEmail({
+      inviteUrl: 'https://example.test/admin/invites/accept?token=abc',
+      role: 'MODERATOR',
+      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(tpl.subject).toContain('Invitation');
+    expect(tpl.html).toContain('https://example.test/admin/invites/accept?token=abc');
+    expect(tpl.html).toContain('MODERATOR');
   });
 });
