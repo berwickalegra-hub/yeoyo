@@ -4,6 +4,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
@@ -36,8 +37,8 @@ function LikeBackButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={liked || busy}
-      aria-label={liked ? 'Déjà aimé' : 'Aimer en retour'}
+      disabled={busy}
+      aria-label={liked ? 'Retirer le like' : 'Aimer en retour'}
       className={`btn-success-flash flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 ${busy ? 'opacity-50' : ''} sm:px-4 ${liked ? 'bg-primary/20 text-primary' : 'bg-primary text-primary-foreground'}`}
     >
       {busy ? (
@@ -82,9 +83,17 @@ export default function LikesPage() {
     if (user) void load();
   }, [user, load]);
 
-  async function likeBack(userId: string) {
+  async function likeBack(userId: string, alreadyLiked: boolean) {
     setLikingId(userId);
     try {
+      if (alreadyLiked) {
+        await api('/api/likes', { method: 'DELETE', body: { targetUserId: userId } });
+        setLikes((prev) =>
+          prev.map((l) => (l.profile.userId === userId ? { ...l, likedBack: false } : l)),
+        );
+        toast('Like retiré', 'success');
+        return;
+      }
       const res = await api<{ conversationId: string }>('/api/likes', {
         method: 'POST',
         body: { targetUserId: userId },
@@ -105,9 +114,13 @@ export default function LikesPage() {
 
   return (
     <AppShell active="likes" user={{ name: user.email }} badgeCounts={badgeCounts}>
-      <div className="border-b border-border px-5 py-5 lg:px-8">
-        <h1 className="font-headings text-xl font-bold text-foreground">Mes likes</h1>
-        <p className="mt-0.5 font-body text-sm text-muted-foreground">Profils qui t’ont aimé(e)</p>
+      <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-5 lg:px-8">
+        <div>
+          <h1 className="font-headings text-xl font-bold text-foreground">Mes likes</h1>
+          <p className="mt-0.5 font-body text-sm text-muted-foreground">
+            Profils qui t’ont aimé(e)
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 px-5 py-6 lg:mx-auto lg:w-full lg:max-w-2xl lg:px-8">
@@ -126,33 +139,40 @@ export default function LikesPage() {
             key={l.likeId}
             className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
           >
-            <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-headings text-base font-bold text-foreground">
-                  {l.profile.firstName}
-                </span>
-                <span className="font-body text-sm text-muted-foreground">{l.profile.age} ans</span>
-                {l.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+            <Link
+              href={`/app/profils/${l.profile.userId}`}
+              className="flex min-w-0 flex-1 items-center gap-4"
+            >
+              <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-headings text-base font-bold text-foreground">
+                    {l.profile.firstName}
+                  </span>
+                  <span className="font-body text-sm text-muted-foreground">
+                    {l.profile.age} ans
+                  </span>
+                  {l.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+                  <Icon name="gem" size={11} />
+                  <span className="font-body text-xs">
+                    {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
+                  </span>
+                  {l.profile.commune && (
+                    <>
+                      <span className="text-border">•</span>
+                      <Icon name="map-pin" size={11} />
+                      <span className="font-body text-xs">{l.profile.commune}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-                <Icon name="gem" size={11} />
-                <span className="font-body text-xs">
-                  {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
-                </span>
-                {l.profile.commune && (
-                  <>
-                    <span className="text-border">•</span>
-                    <Icon name="map-pin" size={11} />
-                    <span className="font-body text-xs">{l.profile.commune}</span>
-                  </>
-                )}
-              </div>
-            </div>
+            </Link>
             <LikeBackButton
               liked={l.likedBack}
               busy={likingId === l.profile.userId}
-              onClick={() => likeBack(l.profile.userId)}
+              onClick={() => likeBack(l.profile.userId, l.likedBack)}
             />
           </div>
         ))}

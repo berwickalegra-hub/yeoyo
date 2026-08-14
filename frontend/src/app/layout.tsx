@@ -1,18 +1,19 @@
-import type { Metadata } from 'next';
-import { DM_Sans } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { DM_Sans, PT_Serif } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { InstallPwaPrompt } from '@/components/yeoyo/InstallPwaPrompt';
 
 // Runs before paint (blocking, no `defer`/`async`) so a stored theme
 // preference from Paramètres → Apparence applies immediately instead of
-// flashing the default dark-gold theme for a frame — ThemeProvider's own
+// flashing the default terracotta theme for a frame — ThemeProvider's own
 // effect only syncs React state to match, it doesn't re-apply this.
 const THEME_INIT_SCRIPT = `
   try {
     var t = localStorage.getItem('yeoyo-theme');
-    if (t && t !== 'dark-gold') document.documentElement.setAttribute('data-theme', t);
+    if (t && t !== 'terracotta') document.documentElement.setAttribute('data-theme', t);
   } catch (e) {}
 `;
 
@@ -22,9 +23,29 @@ const dmSans = DM_Sans({
   display: 'swap',
 });
 
+// Headings font for the terracotta/cream default theme (Banani "Rencontres
+// Sérieuses Congo" flow, 2026-08-13) — fonts aren't per-theme (a single
+// pairing applies across every color template, unchanged pattern since the
+// 2026-07-30 DM Sans swap), so this becomes the app-wide headings font.
+const ptSerif = PT_Serif({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-pt-serif',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'YeOyo',
   description: 'La rencontre sérieuse, faite pour les Congolais.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'YeOyo',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#c17a4e',
 };
 
 export default function RootLayout({
@@ -33,14 +54,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={dmSans.variable}>
+    <html lang="fr" className={`${dmSans.variable} ${ptSerif.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className={dmSans.className}>
         <ThemeProvider>
           <ToastProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <InstallPwaPrompt />
+              {children}
+            </AuthProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>

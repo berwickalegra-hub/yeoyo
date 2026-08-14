@@ -130,7 +130,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const parsed = Body.safeParse(json);
     if (!parsed.success) {
       return NextResponse.json(
-        { code: 'VALIDATION_FAILED', message: 'Invalid profile data', issues: parsed.error.issues },
+        {
+          code: 'VALIDATION_FAILED',
+          message: 'Merci de vérifier les informations saisies.',
+          issues: parsed.error.issues,
+        },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -139,7 +143,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const dateOfBirth = new Date(input.dateOfBirth);
     if (ageInYears(dateOfBirth) < MIN_AGE_YEARS) {
       return NextResponse.json(
-        { code: 'AGE_BELOW_MINIMUM', message: `Must be at least ${MIN_AGE_YEARS} years old` },
+        {
+          code: 'AGE_BELOW_MINIMUM',
+          message: `Tu dois avoir au moins ${MIN_AGE_YEARS} ans pour utiliser YeOyo.`,
+        },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -147,7 +154,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const existing = await prisma.profile.findUnique({ where: { userId: auth.user.sub } });
     if (existing) {
       return NextResponse.json(
-        { code: 'PROFILE_ALREADY_EXISTS', message: 'Profile already created' },
+        { code: 'PROFILE_ALREADY_EXISTS', message: 'Ton profil existe déjà.' },
         { status: 409, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -158,7 +165,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
       if (!upload) {
         return NextResponse.json(
-          { code: 'PHOTO_NOT_FOUND', message: 'photoUploadId does not belong to this user' },
+          { code: 'PHOTO_NOT_FOUND', message: "Cette photo n'a pas pu être retrouvée. Réessaie." },
           { status: 400, headers: { 'x-request-id': ctx.requestId } },
         );
       }

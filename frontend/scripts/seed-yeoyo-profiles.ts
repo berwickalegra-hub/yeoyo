@@ -16,12 +16,12 @@
 // profile — not just view them as `user@example.com`.
 //
 // PHOTOS: real avatars from this project's own Banani design export (public
-// GCS bucket, supplied by the user 2026-08-07) — exactly 9 unique URLs
-// exist (Banani gave duplicates beyond these). FIXTURES below is
-// deliberately sized to 9 — one profile per unique photo — rather than
-// reusing a smaller photo pool across many profiles, so no two fixtures
-// show the same face. Extend both FIXTURES and the photo below it together
-// if more Banani URLs become available.
+// GCS bucket, supplied by the user 2026-08-07, extended 2026-08-13 with 4
+// more female/25-35 URLs). FIXTURES below is deliberately sized to one
+// profile per unique photo — rather than reusing a smaller photo pool
+// across many profiles, so no two fixtures show the same face. Extend both
+// FIXTURES and the photo below it together if more Banani URLs become
+// available.
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -147,6 +147,43 @@ const FIXTURES: Fixture[] = [
     age: 45,
     verified: true,
     photoUrl: 'https://storage.googleapis.com/banani-avatars/avatar/male/35-50/African/8',
+  },
+  // 2026-08-13 batch — net-new indices only (2/4/6 already used above).
+  {
+    email: `${FIXTURE_EMAIL_PREFIX}f06@example.com`,
+    gender: 'FEMME',
+    firstName: 'Josée',
+    lastName: 'Ngoyi',
+    age: 25,
+    verified: true,
+    photoUrl: 'https://storage.googleapis.com/banani-avatars/avatar/female/25-35/African/1',
+  },
+  {
+    email: `${FIXTURE_EMAIL_PREFIX}f07@example.com`,
+    gender: 'FEMME',
+    firstName: 'Merveille',
+    lastName: 'Kabongo',
+    age: 30,
+    verified: false,
+    photoUrl: 'https://storage.googleapis.com/banani-avatars/avatar/female/25-35/African/3',
+  },
+  {
+    email: `${FIXTURE_EMAIL_PREFIX}f08@example.com`,
+    gender: 'FEMME',
+    firstName: 'Christelle',
+    lastName: 'Ilunga',
+    age: 28,
+    verified: true,
+    photoUrl: 'https://storage.googleapis.com/banani-avatars/avatar/female/25-35/African/5',
+  },
+  {
+    email: `${FIXTURE_EMAIL_PREFIX}f09@example.com`,
+    gender: 'FEMME',
+    firstName: 'Odette',
+    lastName: 'Kalala',
+    age: 33,
+    verified: true,
+    photoUrl: 'https://storage.googleapis.com/banani-avatars/avatar/female/25-35/African/7',
   },
 ];
 

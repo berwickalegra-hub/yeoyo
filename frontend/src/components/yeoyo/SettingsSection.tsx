@@ -24,9 +24,25 @@ export function SettingsSection({
   );
 }
 
+// Groups related SettingsNavRow items into one card with dividers between
+// rows, instead of each row being its own separate bordered card — reads as
+// organized sections at a glance (mirrors the reference grouped-settings
+// pattern: "Pause notifications"+"General settings" in one card, "Dark
+// mode"+"Language"+"My Contact" in the next, …) rather than a flat stack of
+// N identical cards the eye has to scan one by one.
+export function SettingsGroupCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+      {children}
+    </div>
+  );
+}
+
 // Index-page row that navigates to a dedicated sub-page instead of
 // expanding its content inline — see SettingsSubHeader.tsx for why the
-// Paramètres index was split this way.
+// Paramètres index was split this way. Meant to live inside a
+// SettingsGroupCard (no border/rounding of its own — the group card owns
+// the outer shape and the `divide-y` between rows).
 export function SettingsNavRow({
   href,
   icon,
@@ -41,7 +57,7 @@ export function SettingsNavRow({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-transform active:scale-[0.99]"
+      className="flex items-center gap-3 p-4 transition-colors active:bg-secondary/20"
     >
       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
         <Icon name={icon} size={18} />

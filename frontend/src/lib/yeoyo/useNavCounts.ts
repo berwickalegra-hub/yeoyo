@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import type { SidebarBadgeCounts } from '@/components/yeoyo/Sidebar';
+import type { SidebarBadgeCounts } from '@/components/yeoyo/nav-items';
 
 // Fetched once per page mount — good enough for a sidebar badge (not
 // wired to Ably; a new message/request only updates the badge on next

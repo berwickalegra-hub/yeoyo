@@ -21,12 +21,35 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { Icon } from '@/components/ui/Icon';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 import { PasswordInput } from '@/components/yeoyo/PasswordInput';
+import { DateOfBirthFields } from '@/components/yeoyo/DateOfBirthFields';
 import { KINSHASA_COMMUNES } from '@/lib/yeoyo/constants';
 import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
 import { BIO_SUGGESTIONS } from '@/lib/yeoyo/content';
+
+const MIN_AGE_YEARS = 18;
+
+// Simple, permissive check — real validation is server-side (zEmail). This
+// only exists so an obviously-malformed email gets an instant French
+// message instead of a round trip to the API.
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function ageFromIso(iso: string): number {
+  const dob = new Date(iso);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const hadBirthdayThisYear =
+    today.getMonth() > dob.getMonth() ||
+    (today.getMonth() === dob.getMonth() && today.getDate() >= dob.getDate());
+  if (!hadBirthdayThisYear) age--;
+  return age;
+}
 
 type ProfileStep = 1 | 2 | 3 | 4;
 type Step = 'signup' | 'verify' | ProfileStep;
@@ -54,10 +77,14 @@ const WANTS_CHILDREN_OPTIONS = [
 
 // Not shown as "required" — leaving it unset keeps the existing default
 // (opposite of `gender`) exactly as before this preference existed.
+// Binary only (no "Les deux") — explicit user ask 2026-08-14: choosing one
+// should immediately scope Découvrir/Explorer to that gender, not leave a
+// third "both" option that dilutes the point of asking at all. "Ce que je
+// recherche" on /app/profil still allows opting into "Les deux" later if
+// someone changes their mind — this restriction is onboarding-only.
 const INTERESTED_IN_OPTIONS = [
   { value: 'FEMME', label: 'Femmes' },
   { value: 'HOMME', label: 'Hommes' },
-  { value: 'TOUS', label: 'Les deux' },
 ];
 
 const INTENTS = [
@@ -138,10 +165,10 @@ function PillOption({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border py-2.5 text-center font-body text-sm font-medium ${
+      className={`w-full rounded-xl border-2 py-2.5 text-center font-body text-sm font-semibold transition-all duration-150 active:scale-95 ${
         active
-          ? 'border-primary bg-secondary text-primary'
-          : 'border-border bg-surface text-foreground'
+          ? 'border-primary bg-secondary text-primary shadow-md shadow-primary/20'
+          : 'border-border bg-surface text-foreground shadow-sm hover:border-primary/40 hover:shadow-md'
       }`}
     >
       {label}
@@ -191,6 +218,7 @@ function WizardShell({
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading, refresh } = useAuth();
+  const { toast } = useToast();
   const [step, setStep] = useState<Step>('signup');
   const [data, setData] = useState<WizardData>(INITIAL_DATA);
   const [password, setPassword] = useState('');
@@ -199,29 +227,84 @@ export default function OnboardingPage() {
   // (remove both once RESEND_API_KEY is configured for real).
   const [devCode, setDevCode] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [checkingExistingProfile, setCheckingExistingProfile] = useState(true);
 
-  // Returning user who verified their email but abandoned before finishing
-  // their profile — skip straight to the profile wizard instead of asking
-  // them to sign up again.
+  // Live preview of the selected/dropped photo — object URLs are cheap and
+  // local (no upload happens until "Terminer et explorer"), revoked on
+  // every change so we don't leak blob URLs across re-selections.
   useEffect(() => {
-    if (!loading && user && step === 'signup') {
-      setStep(1);
+    if (!photoFile) {
+      setPhotoPreview(null);
+      return;
     }
-    // Intentionally omits `step` — this only fires the initial signup→profile
-    // skip and must not re-run every time `step` changes afterward.
-  }, [loading, user]);
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  // Returning user who already has a session — figure out where they
+  // actually belong instead of always dumping them into the wizard:
+  //   - no profile yet → skip signup, go straight to the profile wizard
+  //     (verified their email but abandoned before finishing their profile)
+  //   - profile already exists → send them to the app. Previously this
+  //     branch didn't exist, so an already-onboarded user landing on
+  //     /onboarding would fill out the entire 4-step wizard again and only
+  //     discover it was pointless at the very last step, when POST
+  //     /api/profile 409s with PROFILE_ALREADY_EXISTS — confusing, since
+  //     nothing they filled in looked wrong.
+  useEffect(() => {
+    if (loading) return;
+    if (!user || step !== 'signup') {
+      setCheckingExistingProfile(false);
+      return;
+    }
+    let cancelled = false;
+    api('/api/profile')
+      .then(() => {
+        if (!cancelled) router.push('/app/decouvrir');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStep(1);
+          setCheckingExistingProfile(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally omits `step` — this only fires the initial
+    // signup→profile-or-app routing and must not re-run every time `step`
+    // changes afterward.
+  }, [loading, user, router]);
 
   async function onSignup(e: FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+
+    if (!looksLikeEmail(data.email)) {
+      const msg = 'Merci de saisir une adresse email valide.';
+      setError(msg);
+      toast(msg, 'error');
+      return;
+    }
+    if (password.length < 10) {
+      const msg = 'Le mot de passe doit contenir au moins 10 caractères.';
+      setError(msg);
+      toast(msg, 'error');
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api('/api/auth/signup', { method: 'POST', body: { email: data.email, password } });
       setStep('verify');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Une erreur est survenue');
+      const msg = err instanceof ApiError ? err.message : 'Une erreur est survenue. Réessaie.';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -250,8 +333,16 @@ export default function OnboardingPage() {
 
   async function onVerify(e: FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+
+    if (code.length !== 8) {
+      const msg = 'Merci de saisir le code à 8 caractères reçu par email.';
+      setError(msg);
+      toast(msg, 'error');
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const res = await api<{ csrfToken?: string }>('/api/auth/verify-email', {
         method: 'POST',
@@ -261,7 +352,9 @@ export default function OnboardingPage() {
       await refresh();
       setStep(1);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Code invalide ou expiré');
+      const msg = err instanceof ApiError ? err.message : 'Code invalide ou expiré.';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -284,7 +377,7 @@ export default function OnboardingPage() {
         });
         if (!uploadRes.ok) {
           const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message ?? "L'envoi de la photo a échoué");
+          throw new Error(body.message ?? "L'envoi de la photo a échoué. Réessaie.");
         }
         const uploaded = (await uploadRes.json()) as { id: string };
         photoUploadId = uploaded.id;
@@ -309,10 +402,24 @@ export default function OnboardingPage() {
       });
       router.push('/app/decouvrir');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Une erreur est survenue');
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Une erreur est survenue. Réessaie.';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Avoid flashing "Créer ton compte" for a split second while we check
+  // whether a returning, already-authenticated visitor should instead be
+  // redirected straight to the app (see the effect above).
+  if (checkingExistingProfile) {
+    return <div className="min-h-screen bg-background" />;
   }
 
   if (step === 'signup') {
@@ -322,16 +429,15 @@ export default function OnboardingPage() {
         <p className="mb-6 font-body text-sm text-muted-foreground">
           C&rsquo;est rapide et sécurisé. Tes infos restent confidentielles.
         </p>
-        <form onSubmit={onSignup} className="flex flex-col gap-4">
+        <form onSubmit={onSignup} noValidate className="flex flex-col gap-4">
           <label className="flex flex-col gap-2 font-body text-sm text-foreground">
             Email
             <input
               type="email"
-              required
               autoComplete="email"
               value={data.email}
               onChange={(e) => setData((d) => ({ ...d, email: e.target.value }))}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </label>
           <label className="flex flex-col gap-2 font-body text-sm text-foreground">
@@ -352,7 +458,7 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] disabled:opacity-50"
+            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             {submitting ? 'Création…' : 'Continuer'}
           </button>
@@ -386,17 +492,16 @@ export default function OnboardingPage() {
             DEV — code : {devCode} (clique pour remplir — email non configuré)
           </button>
         )}
-        <form onSubmit={onVerify} className="flex flex-col gap-4">
+        <form onSubmit={onVerify} noValidate className="flex flex-col gap-4">
           <label className="flex flex-col gap-2 font-body text-sm text-foreground">
             Code de vérification
             <input
               type="text"
-              required
               maxLength={8}
               autoComplete="one-time-code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-mono text-sm uppercase tracking-widest text-foreground"
+              className="rounded-lg border border-border bg-surface px-4 py-3 font-mono text-sm uppercase tracking-widest text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </label>
           {error && (
@@ -407,7 +512,7 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+            className="mt-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             {submitting ? 'Vérification…' : 'Continuer'}
           </button>
@@ -478,24 +583,20 @@ export default function OnboardingPage() {
             Prénom
             <input
               type="text"
-              required
               value={data.firstName}
               onChange={(e) => setData((d) => ({ ...d, firstName: e.target.value }))}
               placeholder="ex. Nadège"
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </label>
 
-          <label className="flex flex-col gap-2 font-body text-sm text-foreground">
-            Date de naissance
-            <input
-              type="date"
-              required
+          <div className="flex flex-col gap-2">
+            <label className="font-body text-sm text-foreground">Date de naissance</label>
+            <DateOfBirthFields
               value={data.dateOfBirth}
-              onChange={(e) => setData((d) => ({ ...d, dateOfBirth: e.target.value }))}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+              onChange={(iso) => setData((d) => ({ ...d, dateOfBirth: iso }))}
             />
-          </label>
+          </div>
 
           {error && (
             <p role="alert" className="font-body text-sm text-red-500">
@@ -506,8 +607,17 @@ export default function OnboardingPage() {
           <button
             type="button"
             disabled={!data.gender || !data.firstName || !data.dateOfBirth}
-            onClick={() => setStep(2)}
-            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+            onClick={() => {
+              if (data.dateOfBirth && ageFromIso(data.dateOfBirth) < MIN_AGE_YEARS) {
+                const msg = `Tu dois avoir au moins ${MIN_AGE_YEARS} ans pour utiliser YeOyo.`;
+                setError(msg);
+                toast(msg, 'error');
+                return;
+              }
+              setError(null);
+              setStep(2);
+            }}
+            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             Continuer
           </button>
@@ -523,24 +633,17 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <label className="flex flex-col gap-2 font-body text-sm text-foreground">
-            Ta commune à Kinshasa
-            <select
-              required
+          <div className="flex flex-col gap-2">
+            <label className="font-body text-sm text-foreground">Ta commune à Kinshasa</label>
+            <CustomSelect
+              ariaLabel="Ta commune à Kinshasa"
+              placeholder="Choisis ta commune"
               value={data.commune}
-              onChange={(e) => setData((d) => ({ ...d, commune: e.target.value }))}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
-            >
-              <option value="" disabled>
-                Choisis ta commune
-              </option>
-              {KINSHASA_COMMUNES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
+              searchable
+              options={KINSHASA_COMMUNES.map((c) => ({ value: c, label: c }))}
+              onChange={(v) => setData((d) => ({ ...d, commune: v }))}
+            />
+          </div>
 
           <div>
             <label className="mb-2 block font-body text-sm text-foreground">
@@ -572,15 +675,19 @@ export default function OnboardingPage() {
                     type="button"
                     key={m.value}
                     onClick={() => setData((d) => ({ ...d, maritalStatus: m.value }))}
-                    className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-left ${
-                      active ? 'border-primary bg-secondary/20' : 'border-border bg-surface'
+                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all duration-150 active:scale-[0.99] ${
+                      active
+                        ? 'border-primary bg-secondary/20 shadow-md shadow-primary/20'
+                        : 'border-border bg-surface shadow-sm hover:border-primary/40 hover:shadow-md'
                     }`}
                   >
                     <div
-                      className={`h-4 w-4 flex-shrink-0 rounded-full border-2 ${
-                        active ? 'border-primary bg-primary' : 'border-border'
+                      className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        active ? 'border-primary' : 'border-border'
                       }`}
-                    />
+                    >
+                      {active && <div className="h-2 w-2 rounded-full bg-primary" />}
+                    </div>
                     <div>
                       <span className="font-body text-sm font-medium text-foreground">
                         {m.label}
@@ -640,7 +747,7 @@ export default function OnboardingPage() {
             type="button"
             disabled={!data.commune || !data.maritalStatus || !data.childrenCount}
             onClick={() => setStep(3)}
-            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             Continuer
           </button>
@@ -666,8 +773,10 @@ export default function OnboardingPage() {
                   type="button"
                   key={opt.value}
                   onClick={() => setData((d) => ({ ...d, intent: opt.value }))}
-                  className={`flex items-center gap-4 rounded-xl border px-5 py-4 text-left ${
-                    active ? 'border-primary bg-secondary/20' : 'border-border bg-surface'
+                  className={`flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition-all duration-150 active:scale-[0.99] ${
+                    active
+                      ? 'border-primary bg-secondary/20 shadow-md shadow-primary/20'
+                      : 'border-border bg-surface shadow-sm hover:border-primary/40 hover:shadow-md'
                   }`}
                 >
                   <div
@@ -684,10 +793,12 @@ export default function OnboardingPage() {
                     <p className="font-body text-sm text-muted-foreground">{opt.desc}</p>
                   </div>
                   <div
-                    className={`h-5 w-5 flex-shrink-0 rounded-full border-2 ${
-                      active ? 'border-primary bg-primary' : 'border-border'
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                      active ? 'border-primary' : 'border-border'
                     }`}
-                  />
+                  >
+                    {active && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                  </div>
                 </button>
               );
             })}
@@ -715,7 +826,7 @@ export default function OnboardingPage() {
               onChange={(e) => setData((d) => ({ ...d, bio: e.target.value.slice(0, 500) }))}
               placeholder="Ex : Pour moi, le mariage c'est avant tout un engagement sincère et..."
               rows={3}
-              className="w-full rounded-xl border border-border bg-surface px-4 py-3 font-body text-sm text-foreground"
+              className="w-full rounded-xl border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             <p className="mt-1 text-right font-body text-xs text-muted-foreground">
               {data.bio.length}/500
@@ -730,7 +841,7 @@ export default function OnboardingPage() {
             type="button"
             disabled={!data.intent}
             onClick={() => setStep(4)}
-            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+            className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             Continuer
           </button>
@@ -748,16 +859,42 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <label className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-border bg-surface py-12">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted">
-              <Icon name="camera" size={36} />
+          <label
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const dropped = e.dataTransfer.files?.[0];
+              if (dropped) setPhotoFile(dropped);
+            }}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed py-12 transition-colors ${
+              photoPreview
+                ? 'border-primary bg-secondary/10'
+                : 'border-border bg-surface hover:border-primary/50'
+            }`}
+          >
+            <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-muted">
+              {photoPreview ? (
+                <>
+                  {/* Local blob: preview — next/image can't optimize object URLs. */}
+                  <img
+                    src={photoPreview}
+                    alt="Aperçu de ta photo de profil"
+                    className="h-24 w-24 rounded-full object-cover"
+                  />
+                  <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-verified ring-2 ring-surface">
+                    <Icon name="check" size={14} className="text-white" />
+                  </span>
+                </>
+              ) : (
+                <Icon name="camera" size={36} />
+              )}
             </div>
             <div className="text-center">
               <p className="mb-1 font-headings text-base font-semibold text-foreground">
-                {photoFile ? photoFile.name : 'Ajoute ta photo'}
+                {photoFile ? 'Photo sélectionnée ✓' : 'Ajoute ta photo'}
               </p>
-              <p className="font-body text-sm text-muted-foreground">
-                Glisse ici ou clique pour sélectionner
+              <p className="max-w-[220px] truncate font-body text-sm text-muted-foreground">
+                {photoFile ? photoFile.name : 'Glisse ici ou clique pour sélectionner'}
               </p>
             </div>
             <input
@@ -766,8 +903,8 @@ export default function OnboardingPage() {
               className="hidden"
               onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
             />
-            <span className="rounded-lg bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground">
-              Choisir une photo
+            <span className="rounded-lg bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-95">
+              {photoFile ? 'Changer de photo' : 'Choisir une photo'}
             </span>
           </label>
 
@@ -815,7 +952,7 @@ export default function OnboardingPage() {
               type="button"
               disabled={submitting}
               onClick={() => void onFinish(false)}
-              className="rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground disabled:opacity-50"
+              className="rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
             >
               {submitting ? 'Finalisation…' : 'Terminer et explorer 🎉'}
             </button>
@@ -823,7 +960,7 @@ export default function OnboardingPage() {
               type="button"
               disabled={submitting}
               onClick={() => void onFinish(true)}
-              className="rounded-xl border border-border bg-surface py-3 font-body text-sm font-medium text-muted-foreground disabled:opacity-50"
+              className="rounded-xl border border-border bg-surface py-3 font-body text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 disabled:opacity-50"
             >
               Passer pour l&rsquo;instant
             </button>

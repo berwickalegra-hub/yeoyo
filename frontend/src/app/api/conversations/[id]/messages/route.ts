@@ -24,9 +24,10 @@ import { createLogger } from '@/lib/server/logger';
 import { createNotification } from '@/lib/server/notifications';
 import { messageReceived } from '@/lib/server/notifications/templates';
 import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-merge';
-import { isParticipant, otherParticipant } from '@/lib/server/conversations/lib';
+import { isParticipant, otherParticipant, isMutedBy } from '@/lib/server/conversations/lib';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
 import { cloudinaryUrlForKey } from '@/lib/server/storage';
+import { messageQuotaStatus } from '@/lib/server/conversations/message-quota';
 
 const log = createLogger();
 
@@ -75,22 +76,47 @@ export async function GET(
       take: PAGE_SIZE,
     });
 
-    await prisma.message.updateMany({
+    const now = new Date();
+    const { count: markedReadCount } = await prisma.message.updateMany({
       where: { conversationId: id, senderId: { not: auth.user.sub }, readAt: null },
-      data: { readAt: new Date() },
+      data: { readAt: now },
     });
+
+    // Only fetching the first page (no `before` cursor) reflects "the
+    // caller just opened the thread" — publishing a read receipt while
+    // scrolling up through old history would be misleading (nothing new
+    // was actually seen just now, it was already read on first open).
+    if (markedReadCount > 0 && !parsed.data.before && process.env.ABLY_API_KEY) {
+      try {
+        const client = new Ably.Rest(process.env.ABLY_API_KEY);
+        await client.channels
+          .get(`conversation:${id}`)
+          .publish('read', { readerId: auth.user.sub, readAt: now.toISOString() });
+      } catch (err) {
+        log.warn('Ably publish failed for read receipt', { error: err, conversationId: id });
+      }
+    }
+
+    const quota = await messageQuotaStatus(auth.user.sub);
 
     return NextResponse.json(
       {
         messages: messages.reverse().map((m) => ({
           id: m.id,
           senderId: m.senderId,
-          body: m.body,
-          imageUrl: m.imageUpload ? cloudinaryUrlForKey(m.imageUpload.key) : null,
+          body: m.deletedAt ? '' : m.body,
+          imageUrl: m.deletedAt
+            ? null
+            : m.imageUpload
+              ? cloudinaryUrlForKey(m.imageUpload.key)
+              : null,
           createdAt: m.createdAt.toISOString(),
+          readAt: m.readAt ? m.readAt.toISOString() : null,
+          deleted: !!m.deletedAt,
           fromSelf: m.senderId === auth.user.sub,
         })),
         hasMore: messages.length === PAGE_SIZE,
+        quota: { remaining: quota.remaining, limit: quota.limit, resetAt: quota.resetAt },
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
@@ -134,6 +160,18 @@ export async function POST(
       );
     }
 
+    const quota = await messageQuotaStatus(auth.user.sub);
+    if (quota.limit !== null && (quota.remaining ?? 0) <= 0) {
+      return NextResponse.json(
+        {
+          code: 'MESSAGE_DAILY_LIMIT_REACHED',
+          message: 'Tu as atteint la limite de messages gratuits pour aujourd’hui.',
+          resetAt: quota.resetAt,
+        },
+        { status: 403, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
     if (parsed.data.imageUploadId) {
       const upload = await prisma.fileUpload.findFirst({
         where: { id: parsed.data.imageUploadId, userId: auth.user.sub },
@@ -169,7 +207,10 @@ export async function POST(
         select: { prefs: true },
       }),
     ]);
-    if (isChannelEnabled(parsePrefs(recipientPrefsRow?.prefs), 'MESSAGE_RECEIVED', 'inApp')) {
+    if (
+      !isMutedBy(conversation, recipientId) &&
+      isChannelEnabled(parsePrefs(recipientPrefsRow?.prefs), 'MESSAGE_RECEIVED', 'inApp')
+    ) {
       await createNotification(
         prisma,
         messageReceived(
@@ -207,6 +248,8 @@ export async function POST(
         body: message.body,
         imageUrl,
         createdAt: message.createdAt.toISOString(),
+        readAt: null,
+        deleted: false,
         fromSelf: true,
       },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },

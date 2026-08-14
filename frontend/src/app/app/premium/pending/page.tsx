@@ -57,7 +57,7 @@ function PendingContent() {
   useEffect(() => {
     if (status?.orderStatus === 'PAID') {
       toast('Paiement confirmé — bienvenue dans Premium !', 'success');
-      router.push('/app/parametres');
+      router.push('/app/parametres/paiement');
     }
   }, [status, router, toast]);
 
@@ -112,7 +112,7 @@ function PendingContent() {
       </div>
 
       <Link
-        href="/app/parametres"
+        href="/app/parametres/paiement"
         className="mt-2 font-body text-xs text-muted-foreground underline"
       >
         Annuler et revenir aux paramètres

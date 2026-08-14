@@ -24,7 +24,7 @@ import { getPlan } from '@/lib/server/subscriptions/plans';
 import { createStubCharge } from '@/lib/server/payments/stub';
 
 const Body = z.object({
-  planId: z.enum(['monthly', 'semiannual', 'annual']),
+  planId: z.enum(['15j', '1m', '3m', '6m']),
   paymentMethod: z.enum(['M_PESA', 'AIRTEL_MONEY', 'ORANGE_MONEY']),
 });
 
@@ -78,8 +78,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const order = await tx.order.create({
         data: {
           userId: auth.user.sub,
-          amount: plan.priceCentsTotal,
-          currency: 'USD',
+          amount: plan.priceCdfTotal,
+          currency: 'CDF',
           provider: 'stub',
           status: 'PENDING',
           customerEmail: auth.user.email,

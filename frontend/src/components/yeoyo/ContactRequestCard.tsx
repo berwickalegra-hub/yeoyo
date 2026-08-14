@@ -19,6 +19,7 @@ export function ContactRequestCard({
   conversationId,
   onAccept,
   onDecline,
+  onWithdraw,
   responding,
 }: {
   otherUser: ProfileCard;
@@ -27,34 +28,41 @@ export function ContactRequestCard({
   conversationId?: string | null;
   onAccept?: () => void;
   onDecline?: () => void;
+  /** Sent + still PENDING only — retract a request before the other side responds. */
+  onWithdraw?: (() => void) | undefined;
   responding?: boolean;
 }) {
   return (
     <div className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4">
-      <UserAvatar name={otherUser.firstName} avatarUrl={otherUser.photoUrl} size={56} />
+      <Link
+        href={`/app/profils/${otherUser.userId}`}
+        className="flex min-w-0 flex-1 items-center gap-4"
+      >
+        <UserAvatar name={otherUser.firstName} avatarUrl={otherUser.photoUrl} size={56} />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-headings text-base font-bold text-foreground">
-            {otherUser.firstName}
-          </span>
-          <span className="font-body text-sm text-muted-foreground">{otherUser.age} ans</span>
-          {otherUser.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-headings text-base font-bold text-foreground">
+              {otherUser.firstName}
+            </span>
+            <span className="font-body text-sm text-muted-foreground">{otherUser.age} ans</span>
+            {otherUser.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+            <Icon name="gem" size={11} />
+            <span className="font-body text-xs">
+              {INTENT_LABELS[otherUser.intent] ?? otherUser.intent}
+            </span>
+            {otherUser.commune && (
+              <>
+                <span className="text-border">•</span>
+                <Icon name="map-pin" size={11} />
+                <span className="font-body text-xs">{otherUser.commune}</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-          <Icon name="gem" size={11} />
-          <span className="font-body text-xs">
-            {INTENT_LABELS[otherUser.intent] ?? otherUser.intent}
-          </span>
-          {otherUser.commune && (
-            <>
-              <span className="text-border">•</span>
-              <Icon name="map-pin" size={11} />
-              <span className="font-body text-xs">{otherUser.commune}</span>
-            </>
-          )}
-        </div>
-      </div>
+      </Link>
 
       {direction === 'received' && status === 'PENDING' ? (
         <div className="flex flex-shrink-0 items-center gap-2">
@@ -93,6 +101,20 @@ export function ContactRequestCard({
           <Icon name="message-circle" size={15} />
           Message
         </Link>
+      ) : direction === 'sent' && status === 'PENDING' && onWithdraw ? (
+        <button
+          type="button"
+          onClick={onWithdraw}
+          disabled={responding}
+          className="flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 font-body text-xs font-medium text-muted-foreground transition-colors hover:border-red-400/40 hover:text-red-400 disabled:opacity-50"
+        >
+          {responding ? (
+            <Icon name="refresh-cw" size={14} className="animate-spin" />
+          ) : (
+            <Icon name="x" size={14} />
+          )}
+          Retirer
+        </button>
       ) : (
         <span className="flex-shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 font-body text-xs font-medium text-muted-foreground">
           {STATUS_LABELS[status] ?? status}

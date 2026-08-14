@@ -3,6 +3,13 @@
 // liking auto-creates a PENDING ContactRequest in the same transaction.
 // Idempotent: liking twice returns the existing rows instead of erroring.
 //
+// DELETE /api/likes — unlike a profile (retract). Removes the Like row and,
+// if the auto-created ContactRequest is still PENDING, cancels it too — a
+// user should be able to change their mind before the other side responds.
+// An already-ACCEPTED request (they responded, a conversation exists) is
+// left alone: unliking never deletes a conversation or messages already
+// exchanged, only withdraws an unanswered request.
+//
 // GET /api/likes/received (sibling route) covers "who liked me".
 //
 // A Conversation is upserted in the same transaction as the Like/ContactRequest
@@ -80,7 +87,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const contactRequestRow = await tx.contactRequest.upsert({
         where: { requesterId_targetId: { requesterId: auth.user.sub, targetId: targetUserId } },
         create: { requesterId: auth.user.sub, targetId: targetUserId },
-        update: {},
+        // A previously-withdrawn (CANCELLED) request that gets re-liked
+        // should go back to PENDING instead of staying stuck as cancelled.
+        update: { status: 'PENDING' },
       });
 
       const conversationRow = await tx.conversation.upsert({
@@ -119,5 +128,46 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },
     );
+  });
+}
+
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    const json: unknown = await req.json().catch(() => null);
+    const parsed = Body.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { code: 'VALIDATION_FAILED', message: 'targetUserId is required' },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    const { targetUserId } = parsed.data;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const deleted = await tx.like
+        .delete({
+          where: { likerId_likedId: { likerId: auth.user.sub, likedId: targetUserId } },
+        })
+        .catch(() => null);
+
+      // Only withdraw the request while it's still unanswered — an ACCEPTED
+      // request already has a live conversation, and CANCELLED is already
+      // final either way.
+      const updated = await tx.contactRequest.updateMany({
+        where: { requesterId: auth.user.sub, targetId: targetUserId, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+
+      return { likeExisted: !!deleted, contactRequestCancelled: updated.count > 0 };
+    });
+
+    return NextResponse.json(result, { status: 200, headers: { 'x-request-id': ctx.requestId } });
   });
 }

@@ -113,6 +113,19 @@ export default function DemandesPage() {
     }
   }
 
+  async function withdraw(id: string, targetUserId: string) {
+    setRespondingId(id);
+    try {
+      await api('/api/likes', { method: 'DELETE', body: { targetUserId } });
+      setSent((prev) => prev.filter((r) => r.id !== id));
+      toast('Demande retirée', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setRespondingId(null);
+    }
+  }
+
   if (!user) return null;
 
   const activeRows = tab === 'received' ? received : tab === 'sent' ? sent : contacts;
@@ -132,30 +145,39 @@ export default function DemandesPage() {
       <div className="flex flex-1 flex-col lg:flex-row">
         <div className="flex-1">
           <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
-            <div className="border-b border-border px-5 py-5 lg:px-8">
-              <h1 className="font-headings text-xl font-bold text-foreground">Demandes</h1>
-              <p className="mt-0.5 font-body text-sm text-muted-foreground">
-                Gérez vos demandes de contact
-              </p>
+            <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-5 lg:px-8">
+              <div>
+                <h1 className="font-headings text-xl font-bold text-foreground">Demandes</h1>
+                <p className="mt-0.5 font-body text-sm text-muted-foreground">
+                  Gère tes demandes et contacts
+                </p>
+              </div>
+              <Link
+                href="/app/explorer"
+                className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 font-body text-sm font-medium text-foreground"
+              >
+                <Icon name="search" size={15} />
+                Découvrir
+              </Link>
             </div>
 
-            <div className="flex gap-1 border-b border-border px-5 lg:px-8">
+            <div className="mx-5 mb-4 flex items-center gap-1 rounded-xl border border-border bg-surface p-1 lg:mx-8">
               {(['received', 'sent', 'contacts'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 font-body text-sm font-medium transition-colors sm:px-6 ${
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 font-body text-sm font-medium transition-colors ${
                     tab === t
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-bold'
+                      : 'text-muted-foreground'
                   }`}
                 >
                   {TAB_LABELS[t]}
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full font-body text-xs font-bold ${
+                    className={`flex h-5 min-w-5 items-center justify-center rounded-md px-1 font-body text-xs font-bold ${
                       tab === t
-                        ? 'bg-primary text-primary-foreground'
+                        ? 'bg-secondary-foreground/20 text-secondary-foreground'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
@@ -218,6 +240,7 @@ export default function DemandesPage() {
                   responding={respondingId === r.id}
                   onAccept={() => respond(r.id, 'ACCEPT')}
                   onDecline={() => respond(r.id, 'DECLINE')}
+                  onWithdraw={tab === 'sent' ? () => withdraw(r.id, r.otherUser.userId) : undefined}
                 />
               ))}
           </div>

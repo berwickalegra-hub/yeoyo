@@ -11,8 +11,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { createLogger } from '@/lib/server/logger';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
+
+const log = createLogger();
 
 export async function GET(
   req: NextRequest,
@@ -45,15 +48,35 @@ export async function GET(
       );
     }
 
-    const liked = isSelf
-      ? false
-      : !!(await prisma.like.findUnique({
-          where: { likerId_likedId: { likerId: auth.user.sub, likedId: userId } },
-          select: { id: true },
-        }));
+    const [liked, favorited] = isSelf
+      ? [false, false]
+      : await Promise.all([
+          prisma.like
+            .findUnique({
+              where: { likerId_likedId: { likerId: auth.user.sub, likedId: userId } },
+              select: { id: true },
+            })
+            .then((row) => !!row),
+          prisma.favorite
+            .findUnique({
+              where: { userId_targetId: { userId: auth.user.sub, targetId: userId } },
+              select: { id: true },
+            })
+            .then((row) => !!row),
+        ]);
+
+    // Best-effort: powers the "Visiteurs" screen. Never blocks the response
+    // — a failed write here shouldn't turn a profile view into an error page.
+    if (!isSelf) {
+      try {
+        await prisma.profileView.create({ data: { viewerId: auth.user.sub, viewedId: userId } });
+      } catch (err) {
+        log.warn('Failed to record profile view', { error: err, viewedId: userId });
+      }
+    }
 
     return NextResponse.json(
-      { profile: toProfileCard(profile), liked, isSelf },
+      { profile: toProfileCard(profile), liked, favorited, isSelf },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });

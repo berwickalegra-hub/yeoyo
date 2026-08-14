@@ -26,6 +26,11 @@ const securityHeaders = [
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // The floating black "N" badge some testers spot in a corner during
+  // `pnpm dev` is Next.js's own dev-mode indicator — not app UI, and never
+  // present in a production build. Disabled here so dev screenshots match
+  // what a real visitor sees.
+  devIndicators: false,
   // Standalone output bundles a self-contained server.js + minimal node_modules
   // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
   // Has no impact on `next dev` / `next start` workflows.
@@ -41,6 +46,15 @@ const config: NextConfig = {
         protocol: 'https',
         hostname: 'storage.googleapis.com',
         pathname: '/banani-avatars/**',
+      },
+      // Landing-page hero photo — Banani's own AI-generated image pipeline
+      // (`<Image prompt="…">` in the Banani source), not a real person's
+      // photo, resolved to its stable GCS URL rather than the redirecting
+      // app.banani.co endpoint.
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/banani-generated-images/**',
       },
       // Illustrative fixture photos only (scripts/seed-yeoyo-women.ts) —
       // randomuser.me portraits, chosen deliberately over scraping arbitrary

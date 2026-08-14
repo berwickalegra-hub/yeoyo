@@ -73,7 +73,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       !process.env.CLOUDINARY_API_SECRET
     ) {
       return NextResponse.json(
-        { code: 'STORAGE_NOT_CONFIGURED', message: 'Storage not configured' },
+        {
+          code: 'STORAGE_NOT_CONFIGURED',
+          message: "L'envoi de photo n'est pas encore disponible.",
+        },
         { status: 503, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -82,21 +85,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const file = form.get('file');
     if (!(file instanceof File)) {
       return NextResponse.json(
-        { code: 'UPLOAD_MISSING_FILE', message: 'file field is required' },
+        { code: 'UPLOAD_MISSING_FILE', message: 'Merci de sélectionner une photo.' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 
     if (file.size > maxBytes) {
       return NextResponse.json(
-        { code: 'FILE_TOO_LARGE', message: `Max ${maxBytes} bytes` },
+        {
+          code: 'FILE_TOO_LARGE',
+          message: `Cette photo est trop lourde (max ${Math.floor(maxBytes / 1_000_000)} Mo).`,
+        },
         { status: 413, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 
     if (!allowedMime.includes(file.type)) {
       return NextResponse.json(
-        { code: 'INVALID_MIME', message: `MIME ${file.type} not allowed` },
+        {
+          code: 'INVALID_MIME',
+          message: "Ce format de photo n'est pas accepté (JPEG, PNG ou WebP uniquement).",
+        },
         { status: 415, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -108,7 +117,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { match, sniffed } = verifyMagicBytes(buf, file.type);
     if (sniffed && !match) {
       return NextResponse.json(
-        { code: 'MAGIC_BYTE_MISMATCH', message: 'File bytes do not match declared MIME' },
+        { code: 'MAGIC_BYTE_MISMATCH', message: 'Ce fichier ne semble pas être une image valide.' },
         { status: 415, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -133,7 +142,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         storedFilename = storedFilename.replace(/\.(heic|heif)$/i, '.jpg');
       } catch {
         return NextResponse.json(
-          { code: 'HEIC_CONVERSION_FAILED', message: 'HEIC conversion failed' },
+          {
+            code: 'HEIC_CONVERSION_FAILED',
+            message: 'La conversion de cette photo a échoué. Essaie un format JPEG ou PNG.',
+          },
           { status: 502, headers: { 'x-request-id': ctx.requestId } },
         );
       }
@@ -150,12 +162,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } catch (e) {
       if (e instanceof StorageNotConfiguredError) {
         return NextResponse.json(
-          { code: 'STORAGE_NOT_CONFIGURED', message: 'Storage not configured' },
+          {
+            code: 'STORAGE_NOT_CONFIGURED',
+            message: "L'envoi de photo n'est pas encore disponible.",
+          },
           { status: 503, headers: { 'x-request-id': ctx.requestId } },
         );
       }
       return NextResponse.json(
-        { code: 'UPLOAD_FAILED', message: 'Storage write failed' },
+        { code: 'UPLOAD_FAILED', message: "L'envoi de la photo a échoué. Réessaie." },
         { status: 502, headers: { 'x-request-id': ctx.requestId } },
       );
     }

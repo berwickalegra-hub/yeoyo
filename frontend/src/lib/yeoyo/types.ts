@@ -22,6 +22,12 @@ export interface ProfileCard {
   // it server-side (currently /api/profiles/explorer and /api/profiles/[userId]
   // via a sibling field) — undefined elsewhere, treat as "not liked".
   liked?: boolean;
+  // Personal bookmark (POST/DELETE /api/favorites) — distinct from `liked`,
+  // no side effect on ContactRequest. Only populated by /api/profiles/explorer.
+  favorited?: boolean;
+  // True while Profile.boostedUntil is in the future — only populated by
+  // /api/profiles/explorer (see its boost tie-break ordering).
+  boosted?: boolean;
 }
 
 export const INTENT_LABELS: Record<string, string> = {

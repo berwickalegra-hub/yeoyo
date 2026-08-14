@@ -1,6 +1,9 @@
-// Covers the `liked` field added to each returned profile card (2026-08-12)
-// — grid/deck cards need to know whether the caller already liked a profile
-// so the heart can render filled on load, not just right after a click.
+// Covers Explorer's exclusion of already-liked profiles (2026-08-13) —
+// a profile the caller already sent a like/request to must never appear
+// in Explorer/Découvrir again: showing a toggleable heart on a pending
+// request reads as "can I take this back from here", which now only lives
+// on Demandes → Envoyées (DELETE /api/likes). `liked` on every returned
+// card is therefore always false by construction.
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -60,41 +63,39 @@ beforeEach(() => {
   mockRequireAuth.mockResolvedValue(authedCtx);
   prismaMock.profile.findUnique.mockResolvedValue(makeProfile({ userId: 'me-1', gender: 'HOMME' }));
   prismaMock.blockedUser.findMany.mockResolvedValue([]);
+  prismaMock.like.findMany.mockResolvedValue([] as never);
+  prismaMock.favorite.findMany.mockResolvedValue([] as never);
 });
 
-describe('GET /api/profiles/explorer — liked field', () => {
-  it('Test 1: marks a profile as liked when a Like row exists for the caller', async () => {
-    const candidateA = { ...makeProfile({ userId: 'user-a' }), photos: [] };
-    const candidateB = { ...makeProfile({ userId: 'user-b' }), photos: [] };
-    prismaMock.profile.count.mockResolvedValue(2 as never);
-    prismaMock.profile.findMany.mockResolvedValue([candidateA, candidateB] as never);
+describe('GET /api/profiles/explorer — already-liked exclusion', () => {
+  it('Test 1: excludes already-liked userIds from the profile query', async () => {
     prismaMock.like.findMany.mockResolvedValue([{ likedId: 'user-a' }] as never);
-
-    const res = await GET(makeGet());
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.profiles.find((p: { userId: string }) => p.userId === 'user-a').liked).toBe(true);
-    expect(body.profiles.find((p: { userId: string }) => p.userId === 'user-b').liked).toBe(false);
-  });
-
-  it('Test 2: skips the Like lookup when the page has no profiles', async () => {
     prismaMock.profile.count.mockResolvedValue(0 as never);
     prismaMock.profile.findMany.mockResolvedValue([] as never);
 
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    const notIn = (args?.where?.userId as { notIn: string[] } | undefined)?.notIn ?? [];
+    expect(notIn).toContain('user-a');
+    expect(notIn).toContain('me-1');
+  });
+
+  it('Test 2: every returned profile has liked: false (already-liked ones never reach this point)', async () => {
+    const candidateB = { ...makeProfile({ userId: 'user-b' }), photos: [] };
+    prismaMock.profile.count.mockResolvedValue(1 as never);
+    prismaMock.profile.findMany.mockResolvedValue([candidateB] as never);
+
     const res = await GET(makeGet());
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.profiles).toEqual([]);
-    expect(prismaMock.like.findMany).not.toHaveBeenCalled();
+    expect(body.profiles.find((p: { userId: string }) => p.userId === 'user-b').liked).toBe(false);
   });
 
   it('Test 3: scopes the Like lookup to the caller as likerId', async () => {
-    const candidateA = { ...makeProfile({ userId: 'user-a' }), photos: [] };
-    prismaMock.profile.count.mockResolvedValue(1 as never);
-    prismaMock.profile.findMany.mockResolvedValue([candidateA] as never);
-    prismaMock.like.findMany.mockResolvedValue([] as never);
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
 
     await GET(makeGet());
 

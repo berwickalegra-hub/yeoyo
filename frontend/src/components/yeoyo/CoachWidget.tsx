@@ -119,20 +119,27 @@ export function CoachWidget() {
 
   return (
     <>
+      {/* Icon is pinned to white rather than `text-primary-foreground`: a few
+          accent themes (dark-gold/dark-rose/dark-emerald) set that token to
+          near-black for text-on-button contrast, which read as a literal
+          black icon on the FAB. White stays legible against every theme's
+          `--color-primary` (all medium-to-high saturation), so the bubble
+          still reads as "the current theme's color" — just with a
+          consistently white glyph instead of a token meant for text. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ouvrir le Coach"
-        className={`fixed bottom-36 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-90 md:bottom-6 md:right-6 ${open ? 'hidden' : 'flex'}`}
+        className={`fixed bottom-36 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform active:scale-90 md:bottom-6 md:right-6 ${open ? 'hidden' : 'flex'}`}
       >
         <Icon name="bot" size={24} />
       </button>
 
       {open && (
         <div className="animate-fade-in-up fixed inset-x-0 bottom-0 z-50 flex h-[75vh] flex-col rounded-t-2xl border border-border bg-surface shadow-2xl md:inset-x-auto md:bottom-6 md:right-6 md:h-[32rem] md:w-96 md:rounded-2xl md:animate-scale-in">
-          <div className="flex items-center justify-between rounded-t-2xl bg-primary px-4 py-3 text-primary-foreground">
+          <div className="flex items-center justify-between rounded-t-2xl bg-primary px-4 py-3 text-white">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-foreground/20">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
                 <Icon name="bot" size={18} />
               </div>
               <div>
@@ -144,7 +151,7 @@ export function CoachWidget() {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Fermer le Coach"
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-foreground/20"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20"
             >
               <Icon name="x" size={15} />
             </button>

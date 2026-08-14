@@ -5,30 +5,61 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 // Color templates the user can pick from Paramètres → Apparence. Each swaps
 // the same set of CSS custom properties (defined in globals.css under
 // `[data-theme="…"]`) — the `@theme` block's default values ARE the
-// 'dark-gold' template, so no override is needed for it.
+// 'terracotta' template (Banani "Rencontres Sérieuses Congo" flow,
+// promoted to app-wide default 2026-08-13), so no override is needed for it.
 export const THEMES = [
+  {
+    id: 'terracotta',
+    label: 'Chaleureux & Terracotta',
+    description: "L'apparence par défaut de YeOyo.",
+    swatch: { background: '#fdfbf8', primary: '#c17a4e', surface: '#ffffff' },
+  },
+  {
+    id: 'light-blue',
+    label: 'Clair & Bleu',
+    description: "L'ancienne apparence par défaut de YeOyo.",
+    swatch: { background: '#fafaf9', primary: '#277eff', surface: '#ffffff' },
+  },
   {
     id: 'dark-gold',
     label: 'Sombre & Or',
-    description: "L'apparence par défaut de YeOyo.",
+    description: "L'ancienne apparence par défaut de YeOyo.",
     swatch: { background: '#0d0d0d', primary: '#c9a84c', surface: '#161616' },
   },
   {
     id: 'light',
-    label: 'Clair',
-    description: 'Fond clair, meilleure lisibilité en plein jour.',
+    label: 'Clair & Or',
+    description: 'Fond clair, accent or.',
     swatch: { background: '#faf8f2', primary: '#b8862f', surface: '#ffffff' },
+  },
+  {
+    id: 'light-purple',
+    label: 'Clair & Violet',
+    description: 'Même thème clair, accent violet.',
+    swatch: { background: '#fafaf9', primary: '#7c3aed', surface: '#ffffff' },
+  },
+  {
+    id: 'light-emerald',
+    label: 'Clair & Émeraude',
+    description: 'Même thème clair, accent émeraude.',
+    swatch: { background: '#fafaf9', primary: '#059669', surface: '#ffffff' },
+  },
+  {
+    id: 'light-rose',
+    label: 'Clair & Rose',
+    description: 'Même thème clair, accent rose.',
+    swatch: { background: '#fafaf9', primary: '#e11d6f', surface: '#ffffff' },
   },
   {
     id: 'dark-rose',
     label: 'Sombre & Rose',
-    description: 'Même thème sombre, accent rose.',
+    description: 'Thème sombre, accent rose.',
     swatch: { background: '#0d0d0d', primary: '#d1668a', surface: '#161616' },
   },
   {
     id: 'dark-emerald',
     label: 'Sombre & Émeraude',
-    description: 'Même thème sombre, accent émeraude.',
+    description: 'Thème sombre, accent émeraude.',
     swatch: { background: '#0d0d0d', primary: '#3fae74', surface: '#161616' },
   },
 ] as const;
@@ -36,7 +67,7 @@ export const THEMES = [
 export type ThemeId = (typeof THEMES)[number]['id'];
 
 const STORAGE_KEY = 'yeoyo-theme';
-const DEFAULT_THEME: ThemeId = 'dark-gold';
+const DEFAULT_THEME: ThemeId = 'terracotta';
 
 function isThemeId(value: string | null): value is ThemeId {
   return THEMES.some((t) => t.id === value);

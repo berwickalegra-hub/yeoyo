@@ -60,10 +60,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // `gender` override via the filter panel.
     const defaultGender =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
-    const blocked = await blockedUserIds(auth.user.sub);
+    const [blocked, alreadyLiked] = await Promise.all([
+      blockedUserIds(auth.user.sub),
+      prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
+    ]);
+    const excluded = [auth.user.sub, ...blocked, ...alreadyLiked.map((l) => l.likedId)];
 
     const where: Prisma.ProfileWhereInput = {
-      userId: { notIn: [auth.user.sub, ...blocked] },
+      userId: { notIn: excluded },
       ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
       onboardingCompletedAt: { not: null },
@@ -87,32 +91,67 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       };
     }
 
-    const [total, profiles] = await Promise.all([
-      prisma.profile.count({ where }),
-      prisma.profile.findMany({
-        where,
-        include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
-        orderBy: { createdAt: 'desc' },
-        skip: (q.page - 1) * q.pageSize,
-        take: q.pageSize,
-      }),
-    ]);
-
-    // "liked" lets grid/deck cards render a filled heart for profiles the
-    // caller already liked in a previous session — explorer (unlike
-    // discover) does not exclude already-liked profiles from the pool.
-    const likedRows =
-      profiles.length > 0
-        ? await prisma.like.findMany({
-            where: { likerId: auth.user.sub, likedId: { in: profiles.map((p) => p.userId) } },
-            select: { likedId: true },
+    // Boosted profiles (Profile.boostedUntil in the future) float to the top
+    // of page 1. `boostedIds` is resolved on every page (cheap — capped at
+    // 3 ids) and excluded from the plain query on every page too, so a
+    // boosted profile shown at the top of page 1 never reappears, and
+    // page 2+'s skip/take math stays correct relative to the shrunk
+    // "non-boosted" ordering rather than the original one.
+    const now = new Date();
+    const boostedIds = (
+      await prisma.profile.findMany({
+        where: { ...where, boostedUntil: { gt: now } },
+        select: { userId: true },
+        orderBy: { boostedUntil: 'desc' },
+        take: 3,
+      })
+    ).map((p) => p.userId);
+    const boostedProfiles =
+      q.page === 1 && boostedIds.length > 0
+        ? await prisma.profile.findMany({
+            where: { userId: { in: boostedIds } },
+            include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
+            orderBy: { boostedUntil: 'desc' },
           })
         : [];
-    const likedSet = new Set(likedRows.map((r) => r.likedId));
+    const restWhere: Prisma.ProfileWhereInput =
+      boostedIds.length > 0 ? { ...where, userId: { notIn: [...excluded, ...boostedIds] } } : where;
+    const restTake = q.pageSize - (q.page === 1 ? boostedProfiles.length : 0);
+    const restSkip = q.page === 1 ? 0 : (q.page - 1) * q.pageSize - boostedIds.length;
+
+    const [total, restProfiles] = await Promise.all([
+      prisma.profile.count({ where }),
+      prisma.profile.findMany({
+        where: restWhere,
+        include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: Math.max(0, restSkip),
+        take: restTake,
+      }),
+    ]);
+    const profiles = [...boostedProfiles, ...restProfiles];
+
+    const favorited = new Set(
+      (
+        await prisma.favorite.findMany({
+          where: { userId: auth.user.sub, targetId: { in: profiles.map((p) => p.userId) } },
+          select: { targetId: true },
+        })
+      ).map((f) => f.targetId),
+    );
 
     return NextResponse.json(
       {
-        profiles: profiles.map((p) => ({ ...toProfileCard(p), liked: likedSet.has(p.userId) })),
+        // Already-liked profiles are excluded from `where` above, so every
+        // card here is genuinely un-actioned — `liked` is always false.
+        // Keeping the field (rather than dropping it) avoids a breaking
+        // change to ProfileCard consumers that still read it.
+        profiles: profiles.map((p) => ({
+          ...toProfileCard(p),
+          liked: false,
+          favorited: favorited.has(p.userId),
+          boosted: p.boostedUntil ? p.boostedUntil > now : false,
+        })),
         page: q.page,
         pageSize: q.pageSize,
         total,

@@ -1,7 +1,93 @@
 @import 'tailwindcss';
 
-/* YeOyo design tokens — sourced from Banani flow `alMLvZczLcpt`, dark theme. */
+/* YeOyo design tokens — default is the "terracotta" template (Banani
+   "Rencontres Sérieuses Congo" flow, `l_YkRVFXx5e9`), promoted to the
+   app-wide default per explicit user request 2026-08-13. The former default
+   ("light-blue", flow `alMLvZczLcpt`) is preserved as a selectable alternate
+   under `[data-theme='light-blue']` below, same demotion pattern used when
+   light-blue itself replaced dark-gold earlier the same day — every theme
+   block stays fully self-contained (background through verified) so none of
+   them inherit the wrong values. `--color-gold`/`--color-gold-foreground` are
+   new (Premium-highlight badges only — never a button/page background, see
+   PricingCard's "Offre de lancement" pill and the TopNav crown tab) —
+   declared once here since fonts and these two extra colors aren't
+   re-declared per `[data-theme]` block; CSS custom-property cascade means
+   every other theme still resolves them to this default unless a block
+   explicitly overrides it. Note: this project uses `--color-surface` (not
+   `--color-card`) as its "white card surface" token — Banani's own exported
+   JSX sometimes uses `bg-card`/`border-card` class names, but those aren't
+   registered here, so always translate them to `bg-surface`/`border-surface`
+   when reproducing a Banani screen (silently falls back to a black default
+   border/bg otherwise — this caused a real black-border bug around the
+   landing hero photo, fixed 2026-08-13). */
 @theme {
+  --color-background: #fdfbf8;
+  --color-foreground: #1a1208;
+  --color-border: #e8dfd6;
+  --color-input: #f3ede0;
+  --color-primary: #c17a4e;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1f3a2e;
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #f1eae2;
+  --color-muted-foreground: #7a6b52;
+  --color-accent: #f3e4d9;
+  --color-accent-foreground: #8a4a28;
+  --color-surface: #ffffff;
+  --color-verified: #2d6a4f;
+  --color-verified-foreground: #ffffff;
+  --color-gold: #c8932a;
+  --color-gold-foreground: #1a1208;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
+  --radius: var(--radius-sm);
+
+  --font-body: var(--font-dm-sans);
+  --font-headings: var(--font-pt-serif);
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-4xl: 44px;
+  --text-5xl: 58px;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Appearance templates (Paramètres → Apparence) — override the same custom
+   properties the `@theme` block above defines. Applied once ThemeContext
+   puts `data-theme="…"` on <html>. Utilities like `bg-background` compile
+   to `background-color: var(--color-background)`, so overriding the
+   variable here is enough — no per-component changes needed anywhere else
+   in the app. Each block below is fully self-contained (background through
+   verified) since they no longer share an implicit default base. */
+[data-theme='light-blue'] {
+  --color-background: #fafaf9;
+  --color-foreground: #0d0d0d;
+  --color-border: #e8e8e8;
+  --color-input: #ffffff;
+  --color-primary: #277eff;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e8f0ff;
+  --color-secondary-foreground: #277eff;
+  --color-muted: #f0efec;
+  --color-muted-foreground: #666666;
+  --color-accent: #f5f3ff;
+  --color-surface: #ffffff;
+  --color-verified: #2f9e5c;
+}
+
+[data-theme='dark-gold'] {
   --color-background: #0d0d0d;
   --color-foreground: #f5f0e8;
   --color-border: #2a2a2a;
@@ -15,38 +101,8 @@
   --color-accent: #e8d5a3;
   --color-surface: #161616;
   --color-verified: #4caf72;
-
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 28px;
-  --radius: var(--radius-sm);
-
-  --font-body: var(--font-dm-sans);
-  --font-headings: var(--font-dm-sans);
-
-  --text-xs: 11px;
-  --text-sm: 13px;
-  --text-base: 15px;
-  --text-lg: 17px;
-  --text-xl: 20px;
-  --text-2xl: 26px;
-  --text-3xl: 32px;
-  --text-4xl: 40px;
 }
 
-body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-}
-
-/* Appearance templates (Paramètres → Apparence) — override the same custom
-   properties the `@theme` block above defines. The `@theme` values ARE the
-   default "dark-gold" template, so it needs no block of its own; these
-   apply once ThemeContext puts `data-theme="…"` on <html>. Utilities like
-   `bg-background` compile to `background-color: var(--color-background)`,
-   so overriding the variable here is enough — no per-component changes
-   needed anywhere else in the app. */
 [data-theme='light'] {
   --color-background: #faf8f2;
   --color-foreground: #211c12;
@@ -64,17 +120,88 @@ body {
 }
 
 [data-theme='dark-rose'] {
+  --color-background: #0d0d0d;
+  --color-foreground: #f5f0e8;
+  --color-border: #2a2a2a;
+  --color-input: #1a1a1a;
   --color-primary: #d1668a;
   --color-primary-foreground: #0d0d0d;
+  --color-secondary: #1a1a1a;
   --color-secondary-foreground: #d1668a;
+  --color-muted: #2a2a2a;
+  --color-muted-foreground: #7a7060;
   --color-accent: #e6a3bb;
+  --color-surface: #161616;
+  --color-verified: #4caf72;
 }
 
 [data-theme='dark-emerald'] {
+  --color-background: #0d0d0d;
+  --color-foreground: #f5f0e8;
+  --color-border: #2a2a2a;
+  --color-input: #1a1a1a;
   --color-primary: #3fae74;
   --color-primary-foreground: #0d0d0d;
+  --color-secondary: #1a1a1a;
   --color-secondary-foreground: #3fae74;
+  --color-muted: #2a2a2a;
+  --color-muted-foreground: #7a7060;
   --color-accent: #82cca4;
+  --color-surface: #161616;
+  --color-verified: #4caf72;
+}
+
+/* Light-family variants (2026-08-13) — same neutrals as the default
+   "light-blue" template (background/foreground/border/surface), only the
+   accent hue changes, mirroring how dark-rose/dark-emerald above only vary
+   dark-gold's accent. Added alongside light-blue per explicit user request
+   for more color choices within the new light theme family. */
+[data-theme='light-purple'] {
+  --color-background: #fafaf9;
+  --color-foreground: #0d0d0d;
+  --color-border: #e8e8e8;
+  --color-input: #ffffff;
+  --color-primary: #7c3aed;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1e8fe;
+  --color-secondary-foreground: #7c3aed;
+  --color-muted: #f0efec;
+  --color-muted-foreground: #666666;
+  --color-accent: #f3eefd;
+  --color-surface: #ffffff;
+  --color-verified: #2f9e5c;
+}
+
+[data-theme='light-emerald'] {
+  --color-background: #fafaf9;
+  --color-foreground: #0d0d0d;
+  --color-border: #e8e8e8;
+  --color-input: #ffffff;
+  --color-primary: #059669;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e3f7ef;
+  --color-secondary-foreground: #059669;
+  --color-muted: #f0efec;
+  --color-muted-foreground: #666666;
+  --color-accent: #ecfdf5;
+  --color-surface: #ffffff;
+  --color-verified: #2f9e5c;
+}
+
+[data-theme='light-rose'] {
+  --color-background: #fafaf9;
+  --color-foreground: #0d0d0d;
+  --color-border: #e8e8e8;
+  --color-input: #ffffff;
+  --color-primary: #e11d6f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #fce7f2;
+  --color-secondary-foreground: #e11d6f;
+  --color-muted: #f0efec;
+  --color-muted-foreground: #666666;
+  --color-accent: #fdf2f8;
+  --color-surface: #ffffff;
+  --color-verified: #2f9e5c;
 }
 
 /* Small, tasteful entrance animations (2026-08-10) — opacity/transform only

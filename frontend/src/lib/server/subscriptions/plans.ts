@@ -1,89 +1,81 @@
-// Static plan catalog for Premium Checkout. Not a DB table — Banani shows a
-// fixed 3-plan catalog and nothing in the mockup implies admin-editable
-// pricing; promote to a `SubscriptionPlan` table if that ever changes.
+// Static plan catalog for Premium Checkout. Not a DB table — nothing in
+// the mockup implies admin-editable pricing; promote to a
+// `SubscriptionPlan` table if that ever changes.
 //
-// Pricing decision (flagged, not from the mockup): Banani prices in "FC"
-// (2 500 / 12 500 / 20 000 FC for Mensuel/6 Mois/Annuel) but per
-// IMPLEMENTATION-PLAN.md §4 the actual charge currency is USD (Stripe is
-// USD-native; Moneroo's DRC/CDF settlement is still unconfirmed) — CDF is
-// display-only. The USD prices below are a placeholder chosen to match the
-// mockup's discount shape (6-month ≈ 25% off monthly, annual ≈ 40% off)
-// rather than a real pricing decision — revisit once real billing is wired.
+// Pricing decision (2026-08-13): adopted verbatim from the Banani
+// "Rencontres Sérieuses Congo" PremiumScreen mock (`l_YkRVFXx5e9`) per
+// explicit user confirmation — CDF-native (Congolese Franc has no
+// meaningful sub-unit, same "integer, smallest unit" convention as FCFA
+// elsewhere in this kit), 4 tiers (was 3: Mensuel/6 Mois/Annuel in USD
+// cents with a display-only CDF conversion — that USD layer and the old
+// annual/monthly/semiannual ids are gone). `originalPriceCdfTotal` powers
+// the struck-through "old price" the checkout UI shows next to each row.
 import 'server-only';
 
 export interface SubscriptionPlan {
-  id: 'monthly' | 'semiannual' | 'annual';
+  id: '15j' | '1m' | '3m' | '6m';
   name: string;
-  /** Total charge for the whole period, in USD cents. */
-  priceCentsTotal: number;
-  /** Effective per-month price, in USD cents — what the pricing card shows. */
-  priceCentsPerMonth: number;
-  billingMonths: number;
-  badge?: string;
-  features: string[];
+  durationLabel: string;
+  /** Total charge for the whole period, in CDF (whole francs, no decimals). */
+  priceCdfTotal: number;
+  originalPriceCdfTotal: number;
+  /** Effective per-month price, in CDF — what the plan row's price line shows. */
+  priceCdfPerMonth: number;
+  discountPct: number;
+  /** Period length in days — used to compute Subscription.currentPeriodEnd. */
+  billingDays: number;
+  boosts: number;
+  popular?: boolean;
 }
 
 export const PLANS: readonly SubscriptionPlan[] = [
   {
-    id: 'monthly',
-    name: 'Plan Mensuel',
-    priceCentsTotal: 499,
-    priceCentsPerMonth: 499,
-    billingMonths: 1,
-    features: [
-      '+20 demandes de contact',
-      'Voir les likes reçus',
-      'Filtres avancés',
-      'Chat illimité',
-      'Pas de publicités',
-    ],
+    id: '15j',
+    name: 'Premium 15 Jours',
+    durationLabel: '15 jours',
+    priceCdfTotal: 16_000,
+    originalPriceCdfTotal: 20_000,
+    priceCdfPerMonth: 15_000,
+    discountPct: 20,
+    billingDays: 15,
+    boosts: 1,
   },
   {
-    id: 'semiannual',
-    name: 'Plan 6 Mois',
-    priceCentsTotal: 2250,
-    priceCentsPerMonth: 375,
-    billingMonths: 6,
-    badge: 'Meilleure valeur',
-    features: [
-      '+20 demandes de contact',
-      'Voir les likes reçus',
-      'Filtres avancés',
-      'Chat illimité',
-      'Pas de publicités',
-      'Badge Premium visible',
-      'Support prioritaire',
-    ],
+    id: '1m',
+    name: 'Premium 1 Mois',
+    durationLabel: '1 mois',
+    priceCdfTotal: 11_000,
+    originalPriceCdfTotal: 18_000,
+    priceCdfPerMonth: 11_000,
+    discountPct: 40,
+    billingDays: 30,
+    boosts: 3,
+    popular: true,
   },
   {
-    id: 'annual',
-    name: 'Plan Annuel',
-    priceCentsTotal: 3588,
-    priceCentsPerMonth: 299,
-    billingMonths: 12,
-    badge: 'Meilleure offre',
-    features: [
-      '+20 demandes de contact',
-      'Voir les likes reçus',
-      'Filtres avancés',
-      'Chat illimité',
-      'Pas de publicités',
-      'Badge Premium visible',
-      'Support prioritaire',
-      'Reboost mensuel gratuit',
-    ],
+    id: '3m',
+    name: 'Premium 3 Mois',
+    durationLabel: '3 mois',
+    priceCdfTotal: 24_000,
+    originalPriceCdfTotal: 36_000,
+    priceCdfPerMonth: 8_000,
+    discountPct: 33,
+    billingDays: 90,
+    boosts: 3,
+  },
+  {
+    id: '6m',
+    name: 'Premium 6 Mois',
+    durationLabel: '6 mois',
+    priceCdfTotal: 33_000,
+    originalPriceCdfTotal: 72_000,
+    priceCdfPerMonth: 5_500,
+    discountPct: 49,
+    billingDays: 180,
+    boosts: 6,
   },
 ] as const;
 
 export function getPlan(planId: string): SubscriptionPlan | undefined {
   return PLANS.find((p) => p.id === planId);
-}
-
-// Illustrative display-only rate — NOT used for any charge math, NOT a
-// live FX rate. Remove once Moneroo's actual DRC settlement currency is
-// confirmed (IMPLEMENTATION-PLAN.md §4 open risk).
-export const USD_TO_CDF_DISPLAY_RATE = 2500;
-
-export function usdCentsToCdfDisplay(cents: number): number {
-  return Math.round((cents / 100) * USD_TO_CDF_DISPLAY_RATE);
 }

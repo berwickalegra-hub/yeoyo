@@ -45,7 +45,7 @@ export async function POST(
 
     const plan = getPlan(order.subscription.planId);
     const currentPeriodEnd = new Date();
-    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + (plan?.billingMonths ?? 1));
+    currentPeriodEnd.setDate(currentPeriodEnd.getDate() + (plan?.billingDays ?? 30));
 
     await prisma.$transaction([
       prisma.order.update({ where: { id }, data: { status: 'PAID', paidAt: new Date() } }),

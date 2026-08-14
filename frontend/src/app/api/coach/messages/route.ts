@@ -17,19 +17,10 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { askCoach, isCoachConfigured } from '@/lib/server/coach/anthropic';
+import { startOfUtcDay, nextUtcMidnight } from '@/lib/server/daily-quota';
 
 const FREE_DAILY_MESSAGE_LIMIT = 3;
 const HISTORY_LIMIT = 50;
-
-function startOfUtcDay(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
-function nextUtcMidnight(): Date {
-  const start = startOfUtcDay();
-  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
-}
 
 async function quotaStatus(
   userId: string,

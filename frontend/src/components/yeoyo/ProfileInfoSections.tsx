@@ -9,6 +9,8 @@ import {
   INTENT_LABELS,
   WANTS_CHILDREN_LABELS,
   RELOCATE_LABELS,
+  RELIGION_LABELS,
+  MARITAL_STATUS_LABELS,
   type ProfileCard,
 } from '@/lib/yeoyo/types';
 
@@ -27,7 +29,12 @@ export function ProfileInfoSections({ profile }: { profile: ProfileCard }) {
         </div>
       )}
 
-      {(profile.job || profile.intent || profile.wantsChildren || profile.relocateOpen) && (
+      {(profile.job ||
+        profile.intent ||
+        profile.religion ||
+        profile.maritalStatus ||
+        profile.wantsChildren ||
+        profile.relocateOpen) && (
         <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
           {profile.job && (
             <div>
@@ -45,6 +52,26 @@ export function ProfileInfoSections({ profile }: { profile: ProfileCard }) {
               {INTENT_LABELS[profile.intent] ?? profile.intent}
             </p>
           </div>
+          {profile.religion && (
+            <div>
+              <p className="font-body text-xs uppercase tracking-widest text-muted-foreground">
+                Religion
+              </p>
+              <p className="mt-0.5 font-body text-sm text-foreground">
+                {RELIGION_LABELS[profile.religion] ?? profile.religion}
+              </p>
+            </div>
+          )}
+          {profile.maritalStatus && (
+            <div>
+              <p className="font-body text-xs uppercase tracking-widest text-muted-foreground">
+                Statut marital
+              </p>
+              <p className="mt-0.5 font-body text-sm text-foreground">
+                {MARITAL_STATUS_LABELS[profile.maritalStatus] ?? profile.maritalStatus}
+              </p>
+            </div>
+          )}
           {profile.wantsChildren && (
             <div>
               <p className="font-body text-xs uppercase tracking-widest text-muted-foreground">

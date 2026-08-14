@@ -25,6 +25,11 @@ import type { ProfileCard } from '@/lib/yeoyo/types';
 
 type ViewMode = 'swipe' | 'grid';
 
+interface StatsToday {
+  likesToday: number;
+  messages: { remaining: number | null; limit: number | null };
+}
+
 interface Filters {
   gender?: 'HOMME' | 'FEMME' | undefined;
   religion?: string[] | undefined;
@@ -81,6 +86,8 @@ export default function ExplorerPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [favoritingUserId, setFavoritingUserId] = useState<string | null>(null);
+  const [stats, setStats] = useState<StatsToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
@@ -111,6 +118,36 @@ export default function ExplorerPage() {
   useEffect(() => {
     if (user) void loadDeck(filters);
   }, [user, filters, loadDeck]);
+
+  useEffect(() => {
+    if (!user) return;
+    api<StatsToday>('/api/profile/stats-today')
+      .then(setStats)
+      .catch(() => {
+        /* side-panel stat, non-critical */
+      });
+  }, [user]);
+
+  async function onFavorite(targetUserId: string) {
+    setFavoritingUserId(targetUserId);
+    const alreadyFavorited = deck.find((p) => p.userId === targetUserId)?.favorited ?? false;
+    try {
+      if (alreadyFavorited) {
+        await api('/api/favorites', { method: 'DELETE', body: { targetUserId } });
+        toast('Retiré des favoris', 'success');
+      } else {
+        await api('/api/favorites', { method: 'POST', body: { targetUserId } });
+        toast('Ajouté aux favoris', 'success');
+      }
+      setDeck((prev) =>
+        prev.map((p) => (p.userId === targetUserId ? { ...p, favorited: !alreadyFavorited } : p)),
+      );
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setFavoritingUserId(null);
+    }
+  }
 
   async function loadMore() {
     if (!hasMore) return;
@@ -180,7 +217,10 @@ export default function ExplorerPage() {
     setBusyUserId(targetUserId);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
-      setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
+      // Grid mode shows every card at once (unlike swipe mode, which
+      // advances past the liked card automatically) — remove it so a
+      // pending request never sits there with a toggleable heart.
+      setDeck((prev) => prev.filter((p) => p.userId !== targetUserId));
       toast('Profil aimé — une demande de contact a été envoyée', 'success');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
@@ -229,9 +269,9 @@ export default function ExplorerPage() {
   const current = deck[index];
 
   return (
-    <AppShell active="explorer" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell active="decouvrir" user={{ name: user.email }} badgeCounts={badgeCounts}>
       <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
-        <div className="border-b border-border px-5 py-4 text-center lg:px-8">
+        <div className="relative border-b border-border px-5 py-4 text-center lg:px-8">
           <h1 className="font-headings text-lg font-bold text-foreground">Explorer</h1>
         </div>
 
@@ -239,18 +279,18 @@ export default function ExplorerPage() {
           <button
             type="button"
             onClick={openFilterPanel}
-            className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 transition-transform active:scale-95"
+            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 transition-transform active:scale-95"
           >
             <Icon name="sliders-horizontal" size={15} />
             <span className="font-body text-sm font-medium text-foreground">Filtres</span>
           </button>
-          <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+          <div className="flex items-center overflow-hidden rounded-lg border border-border">
             <button
               type="button"
               onClick={() => setViewMode('swipe')}
               aria-label="Vue par cartes"
               aria-pressed={viewMode === 'swipe'}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${viewMode === 'swipe' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+              className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'swipe' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
             >
               <Icon name="layers" size={15} />
             </button>
@@ -259,7 +299,7 @@ export default function ExplorerPage() {
               onClick={() => setViewMode('grid')}
               aria-label="Vue en grille"
               aria-pressed={viewMode === 'grid'}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+              className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
             >
               <Icon name="layout-grid" size={15} />
             </button>
@@ -396,14 +436,99 @@ export default function ExplorerPage() {
         )}
 
         {!loading && !error && viewMode === 'swipe' && current && (
-          <SwipeCard
-            key={current.userId}
-            profile={current}
-            onDismiss={onDismiss}
-            onMessage={onMessage}
-            onLike={onLike}
-            busy={busyUserId === current.userId}
-          />
+          <div className="mx-auto flex max-w-4xl items-start justify-center gap-8">
+            <SwipeCard
+              key={current.userId}
+              profile={current}
+              onDismiss={onDismiss}
+              onMessage={onMessage}
+              onLike={onLike}
+              onFavorite={onFavorite}
+              favoriteBusy={favoritingUserId === current.userId}
+              busy={busyUserId === current.userId}
+            />
+
+            {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
+                only (Banani's DiscoverScreen own layout), no equivalent on
+                a phone-width swipe deck. */}
+            <div className="hidden w-56 flex-shrink-0 flex-col gap-4 lg:flex">
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="mb-3 font-headings text-sm font-semibold text-foreground">
+                  Filtres actifs
+                </p>
+                <div className="flex flex-col gap-2 font-body text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>Âge</span>
+                    <span className="text-foreground">
+                      {filters.ageMin ?? 18} – {filters.ageMax ?? '∞'} ans
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Genre</span>
+                    <span className="text-foreground">
+                      {filters.gender === 'FEMME'
+                        ? 'Femmes'
+                        : filters.gender === 'HOMME'
+                          ? 'Hommes'
+                          : 'Tous'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Sans enfant</span>
+                    <span className="text-foreground">
+                      {filters.childrenCount === '0' ? 'Oui' : 'Non'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openFilterPanel}
+                  className="mt-3 w-full rounded-lg border border-border py-2 font-body text-xs font-medium text-foreground"
+                >
+                  Modifier les filtres
+                </button>
+              </div>
+
+              {stats && (
+                <div className="rounded-lg border border-border bg-surface p-4">
+                  <p className="mb-3 font-headings text-sm font-semibold text-foreground">
+                    Mes stats du jour
+                  </p>
+                  <div className="flex flex-col gap-2 font-body text-xs">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-secondary/10">
+                        <Icon name="heart" size={13} className="text-secondary" />
+                      </div>
+                      <span>Ajouts</span>
+                      <span className="ml-auto font-semibold text-foreground">
+                        {stats.likesToday}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-primary/10">
+                        <Icon name="message-circle" size={13} className="text-primary" />
+                      </div>
+                      <span>Messages envoyés</span>
+                      <span className="ml-auto font-semibold text-foreground">
+                        {stats.messages.limit === null
+                          ? 'Illimité'
+                          : `${stats.messages.limit - (stats.messages.remaining ?? 0)} / ${stats.messages.limit}`}
+                      </span>
+                    </div>
+                  </div>
+                  {stats.messages.limit !== null && (
+                    <Link
+                      href="/app/premium"
+                      className="mt-3 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 font-body text-xs font-medium text-gold"
+                    >
+                      <Icon name="crown" size={13} />
+                      Premium = messages illimités
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {!loading && !error && viewMode === 'swipe' && !current && (
@@ -434,6 +559,8 @@ export default function ExplorerPage() {
                   onLike={onLikeGrid}
                   onMessage={onMessageGrid}
                   onDismiss={onDismissGrid}
+                  onFavorite={onFavorite}
+                  favoriteBusy={favoritingUserId === p.userId}
                   busy={busyUserId === p.userId}
                 />
               ))}

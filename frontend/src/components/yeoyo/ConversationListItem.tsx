@@ -15,17 +15,20 @@ function timeLabel(iso: string): string {
   return `${Math.floor(hours / 24)} j`;
 }
 
-// Renders the last-message line — a plain string for text, or a small
-// camera glyph + "Photo" for an image-only message (matches how WhatsApp's
-// own list previews an attachment without a caption).
-function previewLine(lastMessage: { body: string; hasImage: boolean; fromSelf: boolean } | null): {
-  icon: boolean;
-  text: string;
-} {
-  if (!lastMessage) return { icon: false, text: 'Conversation démarrée' };
+// Renders the last-message line — a plain string for text, a small camera
+// glyph + "Photo" for an image-only message (matches how WhatsApp's own
+// list previews an attachment without a caption), or an italic "Message
+// supprimé" once the sender has unsent it.
+function previewLine(
+  lastMessage: { body: string; hasImage: boolean; deleted: boolean; fromSelf: boolean } | null,
+): { icon: boolean; text: string; italic: boolean } {
+  if (!lastMessage) return { icon: false, text: 'Conversation démarrée', italic: false };
   const prefix = lastMessage.fromSelf ? 'Toi : ' : '';
-  if (!lastMessage.body && lastMessage.hasImage) return { icon: true, text: `${prefix}Photo` };
-  return { icon: false, text: `${prefix}${lastMessage.body}` };
+  if (lastMessage.deleted) return { icon: false, text: `${prefix}Message supprimé`, italic: true };
+  if (!lastMessage.body && lastMessage.hasImage) {
+    return { icon: true, text: `${prefix}Photo`, italic: false };
+  }
+  return { icon: false, text: `${prefix}${lastMessage.body}`, italic: false };
 }
 
 export function ConversationListItem({
@@ -33,12 +36,20 @@ export function ConversationListItem({
   otherUser,
   lastMessage,
   unreadCount,
+  muted,
   active,
 }: {
   id: string;
   otherUser: ProfileCard;
-  lastMessage: { body: string; hasImage: boolean; createdAt: string; fromSelf: boolean } | null;
+  lastMessage: {
+    body: string;
+    hasImage: boolean;
+    deleted: boolean;
+    createdAt: string;
+    fromSelf: boolean;
+  } | null;
   unreadCount: number;
+  muted?: boolean;
   active?: boolean;
 }) {
   const preview = previewLine(lastMessage);
@@ -54,8 +65,18 @@ export function ConversationListItem({
       <UserAvatar name={otherUser.firstName} avatarUrl={otherUser.photoUrl} size={50} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate font-headings text-sm font-semibold text-foreground">
-            {otherUser.firstName}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-headings text-sm font-semibold text-foreground">
+              {otherUser.firstName}
+            </span>
+            {muted && (
+              <Icon
+                name="bell-off"
+                size={11}
+                className="flex-shrink-0 text-muted-foreground"
+                aria-label="Conversation en sourdine"
+              />
+            )}
           </span>
           {lastMessage && (
             <span
@@ -70,7 +91,7 @@ export function ConversationListItem({
             <Icon name="image" size={12} className="flex-shrink-0 text-muted-foreground" />
           )}
           <p
-            className={`truncate font-body text-xs ${
+            className={`truncate font-body text-xs ${preview.italic ? 'italic' : ''} ${
               unread ? 'font-semibold text-foreground' : 'text-muted-foreground'
             }`}
           >

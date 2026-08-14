@@ -10,7 +10,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
-import { otherParticipant } from '@/lib/server/conversations/lib';
+import { otherParticipant, isMutedBy } from '@/lib/server/conversations/lib';
 
 const profileInclude = {
   profile: {
@@ -63,13 +63,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           otherUser: toProfileCard(other.profile),
           lastMessage: lastMessage
             ? {
-                body: lastMessage.body,
-                hasImage: !!lastMessage.imageUpload,
+                body: lastMessage.deletedAt ? '' : lastMessage.body,
+                hasImage: !lastMessage.deletedAt && !!lastMessage.imageUpload,
+                deleted: !!lastMessage.deletedAt,
                 createdAt: lastMessage.createdAt.toISOString(),
                 fromSelf: lastMessage.senderId === selfId,
               }
             : null,
           unreadCount: unreadByConversation.get(c.id) ?? 0,
+          muted: isMutedBy(c, selfId),
         };
       })
       .filter((c): c is NonNullable<typeof c> => c !== null);

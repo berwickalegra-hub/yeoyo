@@ -20,3 +20,19 @@ export function isParticipant(
 ): boolean {
   return conversation.userAId === userId || conversation.userBId === userId;
 }
+
+// Which of the two flat `mutedByUserA`/`mutedByUserB` booleans belongs to
+// `userId` — same 1:1-only pattern as the rest of this file, no join table.
+export function mutedFieldFor(
+  conversation: { userAId: string; userBId: string },
+  userId: string,
+): 'mutedByUserA' | 'mutedByUserB' {
+  return conversation.userAId === userId ? 'mutedByUserA' : 'mutedByUserB';
+}
+
+export function isMutedBy(
+  conversation: { userAId: string; userBId: string; mutedByUserA: boolean; mutedByUserB: boolean },
+  userId: string,
+): boolean {
+  return conversation[mutedFieldFor(conversation, userId)];
+}

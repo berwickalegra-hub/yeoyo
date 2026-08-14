@@ -1,14 +1,17 @@
 'use client';
 
 import { useUser } from '@/contexts/AuthContext';
+import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { SettingsSubHeader } from '@/components/yeoyo/SettingsSubHeader';
 import { SettingsSection } from '@/components/yeoyo/SettingsSection';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { usePwaInstall } from '@/lib/yeoyo/usePwaInstall';
 
 export default function AProposPage() {
   const user = useUser();
   const badgeCounts = useNavCounts();
+  const { canInstall, install, iosHint, installed } = usePwaInstall();
 
   if (!user) return null;
 
@@ -24,6 +27,34 @@ export default function AProposPage() {
             Nous contacter
           </a>
         </SettingsSection>
+
+        {!installed && (
+          <SettingsSection title="Application mobile">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-secondary">
+                <Icon name="smartphone" size={18} className="text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-body text-sm text-foreground">
+                  {canInstall
+                    ? 'Installe YeOyo sur ton téléphone'
+                    : iosHint
+                      ? 'Appuie sur Partager, puis « Sur l’écran d’accueil »'
+                      : 'Bientôt disponible sur ce navigateur'}
+                </p>
+              </div>
+              {canInstall && (
+                <button
+                  type="button"
+                  onClick={() => void install()}
+                  className="flex-shrink-0 rounded-full bg-primary px-4 py-2 font-body text-xs font-semibold text-primary-foreground"
+                >
+                  Installer
+                </button>
+              )}
+            </div>
+          </SettingsSection>
+        )}
       </div>
     </AppShell>
   );

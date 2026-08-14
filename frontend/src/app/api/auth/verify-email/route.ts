@@ -38,7 +38,7 @@ const limiter = createEmailLimiter(redis ? { redis } : {}, {
   windowMs: 15 * 60 * 1000, // 15 min (D-08)
   max: Number(process.env.AUTH_VERIFY_RATE_LIMIT_MAX ?? 5),
   code: 'TOO_MANY_VERIFY_ATTEMPTS',
-  message: 'Too many verification attempts. Try again later.',
+  message: 'Trop de tentatives. Réessaie dans quelques minutes.',
 });
 
 function formatIssues(err: z.ZodError) {
@@ -52,7 +52,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     const parsed = Body.safeParse(json);
     if (!parsed.success) {
       const res = NextResponse.json(
-        { error: 'VALIDATION_FAILED', issues: formatIssues(parsed.error) },
+        {
+          error: 'VALIDATION_FAILED',
+          message: 'Merci de saisir le code à 8 caractères reçu par email.',
+          issues: formatIssues(parsed.error),
+        },
         { status: 400 },
       );
       res.headers.set('x-request-id', ctx.requestId);
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       const res = NextResponse.json(
         {
           error: 'VERIFICATION_CODE_INVALID',
-          message: 'Verification code is invalid.',
+          message: 'Ce code de vérification est invalide.',
         },
         { status: 400 },
       );
@@ -94,7 +98,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       const res = NextResponse.json(
         {
           error: 'VERIFICATION_CODE_INVALID',
-          message: 'Verification code is invalid.',
+          message: 'Ce code de vérification est invalide.',
         },
         { status: 400 },
       );
@@ -105,7 +109,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       const res = NextResponse.json(
         {
           error: 'VERIFICATION_CODE_EXPIRED',
-          message: 'Verification code has expired.',
+          message: 'Ce code de vérification a expiré. Demande-en un nouveau.',
         },
         { status: 400 },
       );
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       const res = NextResponse.json(
         {
           error: 'VERIFICATION_CODE_INVALID',
-          message: 'Verification code is invalid.',
+          message: 'Ce code de vérification est invalide.',
         },
         { status: 400 },
       );
