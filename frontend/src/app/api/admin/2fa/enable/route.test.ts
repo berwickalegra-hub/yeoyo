@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/server/middleware', () => ({ requireSuperadmin: vi.fn() }));
+vi.mock('@/lib/server/middleware/rate-limit-by-userid', () => ({
+  enforceAdminRateLimit: vi.fn(),
+}));
 vi.mock('@/lib/server/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/server/auth')>('@/lib/server/auth');
   return { ...actual, verifyCsrf: vi.fn().mockReturnValue(null) };
@@ -10,11 +13,13 @@ vi.mock('@/lib/server/auth', async () => {
 vi.mock('@/lib/server/admin/two-factor', () => ({ verifyTotpCode: vi.fn() }));
 
 import { requireSuperadmin } from '@/lib/server/middleware';
+import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { verifyTotpCode } from '@/lib/server/admin/two-factor';
 import { POST } from './route';
 import { seedSuperadmin } from '@/test-utils/admin-fixtures';
 
 const mockRequireSuperadmin = vi.mocked(requireSuperadmin);
+const mockRateLimit = vi.mocked(enforceAdminRateLimit);
 const mockVerifyTotp = vi.mocked(verifyTotpCode);
 
 function makePost(body: unknown): NextRequest {
@@ -25,7 +30,10 @@ function makePost(body: unknown): NextRequest {
   });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockRateLimit.mockResolvedValue(null);
+});
 
 describe('POST /api/admin/2fa/enable', () => {
   it('enables 2FA when the confirmation code is valid', async () => {

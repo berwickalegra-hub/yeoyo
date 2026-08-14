@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireSuperadmin } from '@/lib/server/middleware';
+import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { verifyTotpCode } from '@/lib/server/admin/two-factor';
 import { prisma } from '@/lib/server/prisma';
 import { logAdminAction } from '@/lib/server/admin/audit';
@@ -22,6 +23,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const auth = await requireSuperadmin();
     if (auth instanceof NextResponse) return auth;
+
+    const limited = await enforceAdminRateLimit(auth.admin.id);
+    if (limited) return limited;
 
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
