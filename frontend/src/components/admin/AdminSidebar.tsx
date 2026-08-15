@@ -33,12 +33,14 @@ interface NavGroup {
 
 export function AdminSidebar({
   adminEmail,
+  role,
   reportsCount,
   verificationCount,
   open,
   onClose,
 }: {
   adminEmail: string;
+  role: 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
   reportsCount?: number | undefined;
   verificationCount?: number | undefined;
   open: boolean;
@@ -51,11 +53,14 @@ export function AdminSidebar({
     {
       label: 'Utilisateurs',
       items: [
-        { href: '/admin/membres', label: 'Membres' },
+        ...(role !== 'MODERATOR' ? [{ href: '/admin/membres', label: 'Membres' }] : []),
         { href: '/admin/verification', label: 'Vérification IA', badge: verificationCount },
         { href: '/admin/signalements', label: 'Signalements', badge: reportsCount },
       ],
     },
+    ...(role === 'SUPERADMIN'
+      ? [{ label: 'Administration', items: [{ href: '/admin/roles', label: 'Rôles admin' }] }]
+      : []),
   ];
 
   const inertGroups = [

@@ -16,7 +16,7 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Icon } from '@/components/ui/Icon';
 
 interface AdminMe {
-  admin: { id: string; email: string; role: 'ADMIN' | 'SUPERADMIN' };
+  admin: { id: string; email: string; role: 'MODERATOR' | 'ADMIN' | 'SUPERADMIN' };
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -68,6 +68,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-background font-body">
       <AdminSidebar
         adminEmail={admin.email}
+        role={admin.role as 'MODERATOR' | 'ADMIN' | 'SUPERADMIN'}
         reportsCount={reportsCount}
         verificationCount={verificationCount}
         open={drawerOpen}
