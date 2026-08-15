@@ -17,14 +17,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const subscription = await prisma.subscription.findFirst({
-      where: { userId: auth.user.sub, status: { in: ['PENDING', 'ACTIVE'] } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [subscription, profile] = await Promise.all([
+      prisma.subscription.findFirst({
+        where: { userId: auth.user.sub, status: { in: ['PENDING', 'ACTIVE'] } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.profile.findUnique({
+        where: { userId: auth.user.sub },
+        select: { phone: true, phoneCountry: true },
+      }),
+    ]);
+
+    const savedPhone =
+      profile?.phone && profile.phoneCountry
+        ? { phone: profile.phone, phoneCountry: profile.phoneCountry }
+        : null;
 
     if (!subscription) {
       return NextResponse.json(
-        { subscription: null },
+        { subscription: null, savedPhone },
         { status: 200, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -41,6 +52,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         },
+        savedPhone,
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
