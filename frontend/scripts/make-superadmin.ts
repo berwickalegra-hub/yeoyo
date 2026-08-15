@@ -16,6 +16,8 @@
 
 import { PrismaClient } from '@prisma/client';
 import { pathToFileURL } from 'node:url';
+import { randomBytes } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { logAdminAction } from '../src/lib/server/admin/audit';
 
 // Lazy-construct the client so tests can substitute the prisma module via
@@ -32,6 +34,12 @@ interface RunDeps {
   prisma?: Pick<PrismaClient, 'user' | '$transaction' | '$disconnect'>;
 }
 
+function generateTempPassword(): string {
+  // 24 chars of base64url — well above AUTH_PASSWORD_MIN_LENGTH (default 10),
+  // printed once, never logged or stored anywhere but the bcrypt hash.
+  return randomBytes(18).toString('base64url');
+}
+
 export async function main(
   args: string[] = process.argv.slice(2),
   deps: RunDeps = {},
@@ -45,9 +53,32 @@ export async function main(
   const prisma = deps.prisma ?? getPrisma();
   try {
     const user = await prisma.user.findUnique({ where: { email } });
+
     if (!user) {
-      console.error(`Error: user ${email} not found. Sign up first.`);
-      return 1;
+      const tempPassword = generateTempPassword();
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
+      const created = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            role: 'SUPERADMIN',
+            emailVerifiedAt: new Date(),
+          },
+        });
+        await logAdminAction(tx, {
+          actorId: newUser.id,
+          action: 'BOOTSTRAP_SUPERADMIN',
+          targetType: 'User',
+          targetId: newUser.id,
+          metadata: { via: 'cli-script', previousRole: null, created: true },
+        });
+        return newUser;
+      });
+      console.log(`✓ Created SUPERADMIN ${email} (id=${created.id}).`);
+      console.log(`  Temporary password (shown once): ${tempPassword}`);
+      console.log('  Log in at /admin/login and change it immediately.');
+      return 0;
     }
 
     if (user.role === 'SUPERADMIN') {
