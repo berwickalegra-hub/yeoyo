@@ -1,19 +1,18 @@
 // Premium Checkout — rebuilt from the "Rencontres Sérieuses Congo" Banani
-// flow's PremiumScreen.jsx (2026-08-13, premium-nouveau-theme.md). Adopts
-// Banani's 4-tier CDF-native plan catalog (15j/1m/3m/6m) per explicit user
-// confirmation, replacing the old 3-tier USD-with-CDF-display catalog —
-// see lib/server/subscriptions/plans.ts. Checkout is still wired to a
-// STUB payment provider on purpose (separate, earlier user decision: build
-// this UI now, wire a real Stripe/Moneroo charge later) — the CTA creates
-// an Order+Subscription server-side and routes to /app/premium/pending.
+// flow's PremiumScreen.jsx (2026-08-13, premium-nouveau-theme.md), then
+// rewired for the Chariow payment integration: the 4-tier plan catalog
+// (15j/1m/3m/6m, see lib/server/subscriptions/plans.ts) is priced in USD
+// cents, and checkout collects a phone/country (Chariow needs it to open
+// its hosted page) then redirects the browser externally to the
+// `paymentUrl` Chariow returns. Mobile Money and card are both handled on
+// Chariow's own hosted page — there's no separate in-app card UI here.
 //
 // Flagged departures from the mock: "J'ai un code promo" (no promo-code
 // backend exists) and the testimonial carousel (static dots, no real
 // rotation, redundant with the landing page's own testimonials) are
-// omitted rather than shipped as fake affordances. "Carte bancaire" is
-// shown but disabled ("Bientôt disponible") — no card provider is wired,
-// only Mobile Money actually charges. The existing free-vs-premium
-// comparison table (real, useful content, not in Banani's mock) is kept.
+// omitted rather than shipped as fake affordances. The existing
+// free-vs-premium comparison table (real, useful content, not in Banani's
+// mock) is kept.
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
@@ -103,7 +102,7 @@ const COMPARISON_ROWS: { feature: string; free: string | boolean; premium: strin
 const FAQ = [
   {
     q: 'Quels modes de paiement sont acceptés ?',
-    a: 'Mobile Money (Airtel Money, Orange Money, M-Pesa) et carte bancaire, via notre partenaire de paiement sécurisé Chariow. Tu choisis ton mode de paiement sur la page suivante.',
+    a: 'Mobile Money et carte bancaire, via notre partenaire de paiement sécurisé Chariow — tu choisis ton opérateur (Airtel Money, Orange Money, M-Pesa, etc. selon disponibilité) sur la page de paiement.',
   },
   {
     q: 'Mon paiement est-il sécurisé ?',
@@ -142,11 +141,11 @@ export default function PremiumPage() {
       const popular = plansRes.plans.find((p) => p.popular);
       if (popular) setSelectedPlanId(popular.id);
       setSubscription(subRes.subscription);
-      if (subRes.savedPhone) {
-        setPhoneCountry(
-          subRes.savedPhone.phoneCountry as (typeof PHONE_COUNTRIES)[number]['value'],
-        );
-        setPhoneLocal(subRes.savedPhone.phone);
+      const savedPhone = subRes.savedPhone;
+      if (savedPhone) {
+        const knownCountry = PHONE_COUNTRIES.find((c) => c.value === savedPhone.phoneCountry);
+        if (knownCountry) setPhoneCountry(knownCountry.value);
+        setPhoneLocal(savedPhone.phone);
       }
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
@@ -299,8 +298,8 @@ export default function PremiumPage() {
                 Ton numéro Mobile Money
               </h2>
               <p className="mt-0.5 font-body text-xs text-muted-foreground">
-                Tu choisiras Airtel Money, Orange Money, M-Pesa ou la carte bancaire sur la page de
-                paiement sécurisée suivante.
+                Sur la page de paiement sécurisée suivante, tu choisiras Mobile Money (Airtel Money,
+                Orange Money, M-Pesa, etc. selon disponibilité) ou la carte bancaire.
               </p>
               <div className="mt-4 flex gap-2">
                 <select
