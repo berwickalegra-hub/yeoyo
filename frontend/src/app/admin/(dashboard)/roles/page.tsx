@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { useToast } from '@/contexts/ToastContext';
 
 interface AdminInviteRow {
   id: string;
@@ -20,52 +21,78 @@ interface AdminUserRow {
 }
 
 export default function AdminRolesPage() {
+  const { toast } = useToast();
   const [invites, setInvites] = useState<AdminInviteRow[]>([]);
   const [admins, setAdmins] = useState<AdminUserRow[]>([]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('MODERATOR');
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
 
-  async function load() {
-    const [invitesRes, usersRes] = await Promise.all([
-      api<{ items: AdminInviteRow[] }>('/api/admin/invites?limit=50'),
-      api<{ items: AdminUserRow[] }>('/api/admin/users?role=MODERATOR&limit=50'),
-    ]);
-    setInvites(invitesRes.items);
-    setAdmins(usersRes.items);
-  }
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [invitesRes, usersRes] = await Promise.all([
+        api<{ items: AdminInviteRow[] }>('/api/admin/invites?limit=50'),
+        api<{ items: AdminUserRow[] }>('/api/admin/users?role=MODERATOR&limit=50'),
+      ]);
+      setInvites(invitesRes.items);
+      setAdmins(usersRes.items);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   async function sendInvite(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     setBusy(true);
     try {
-      await api('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, role }) });
+      await api('/api/admin/invites', { method: 'POST', body: { email, role } });
       setEmail('');
       await load();
+      toast('Invitation envoyée', 'success');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Échec de l'invitation.");
+      toast(err instanceof ApiError ? err.message : "Échec de l'invitation.", 'error');
     } finally {
       setBusy(false);
     }
   }
 
   async function revoke(id: string) {
-    await api(`/api/admin/invites/${id}/revoke`, { method: 'POST' });
-    await load();
+    setRevokingId(id);
+    try {
+      await api(`/api/admin/invites/${id}/revoke`, { method: 'POST' });
+      await load();
+      toast('Invitation révoquée', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setRevokingId(null);
+    }
   }
 
   async function changeRole(userId: string, newRole: string) {
-    await api(`/api/admin/users/${userId}/role`, {
-      method: 'PATCH',
-      body: JSON.stringify({ role: newRole }),
-    });
-    await load();
+    setChangingRoleId(userId);
+    try {
+      await api(`/api/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        body: { role: newRole },
+      });
+      await load();
+      toast('Rôle mis à jour', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setChangingRoleId(null);
+    }
   }
 
   return (
@@ -105,11 +132,11 @@ export default function AdminRolesPage() {
         >
           Inviter
         </button>
-        {error && <p className="font-body text-sm text-destructive">{error}</p>}
       </form>
 
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-3 font-headings text-sm font-bold text-foreground">Invitations</h2>
+        {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
         <div className="flex flex-col gap-2">
           {invites.map((inv) => (
             <div key={inv.id} className="flex items-center justify-between font-body text-xs">
@@ -119,13 +146,17 @@ export default function AdminRolesPage() {
                 {inv.acceptedAt ? 'Acceptée' : inv.revokedAt ? 'Révoquée' : 'En attente'}
               </span>
               {!inv.acceptedAt && !inv.revokedAt && (
-                <button onClick={() => void revoke(inv.id)} className="text-destructive underline">
+                <button
+                  onClick={() => void revoke(inv.id)}
+                  disabled={revokingId === inv.id}
+                  className="text-destructive underline disabled:opacity-50"
+                >
                   Révoquer
                 </button>
               )}
             </div>
           ))}
-          {invites.length === 0 && (
+          {!loading && invites.length === 0 && (
             <p className="font-body text-xs text-muted-foreground">Aucune invitation.</p>
           )}
         </div>
@@ -133,6 +164,7 @@ export default function AdminRolesPage() {
 
       <div className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-3 font-headings text-sm font-bold text-foreground">Modérateurs</h2>
+        {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
         <div className="flex flex-col gap-2">
           {admins.map((a) => (
             <div key={a.id} className="flex items-center justify-between font-body text-xs">
@@ -140,7 +172,8 @@ export default function AdminRolesPage() {
               <select
                 defaultValue={a.role}
                 onChange={(e) => void changeRole(a.id, e.target.value)}
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                disabled={changingRoleId === a.id}
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
               >
                 <option value="USER">Utilisateur</option>
                 <option value="MODERATOR">Modérateur</option>
@@ -149,7 +182,7 @@ export default function AdminRolesPage() {
               </select>
             </div>
           ))}
-          {admins.length === 0 && (
+          {!loading && admins.length === 0 && (
             <p className="font-body text-xs text-muted-foreground">Aucun modérateur.</p>
           )}
         </div>
