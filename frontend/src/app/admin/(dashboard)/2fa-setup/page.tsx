@@ -55,6 +55,8 @@ export default function TwoFactorSetupPage() {
         Authentification à deux facteurs
       </h1>
 
+      {error && <p className="font-body text-sm text-destructive">{error}</p>}
+
       {!setup && (
         <button
           onClick={() => void startSetup()}
@@ -95,7 +97,6 @@ export default function TwoFactorSetupPage() {
               className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
               placeholder="123456"
             />
-            {error && <p className="font-body text-sm text-destructive">{error}</p>}
             <button
               type="submit"
               disabled={busy}
