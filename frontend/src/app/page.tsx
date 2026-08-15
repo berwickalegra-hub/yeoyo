@@ -316,7 +316,7 @@ export default function LandingPage() {
             title="Gratuit"
             subtitle="Découvre la plateforme à ton rythme"
             price="0"
-            priceSuffix="CDF · Pour toujours"
+            priceSuffix="Pour toujours"
             includedFeatures={[
               'Création de profil complet',
               '3 photos de profil',
@@ -341,10 +341,10 @@ export default function LandingPage() {
             badge="Offre de lancement"
             title="Premium"
             subtitle="Maximise tes chances de trouver ta moitié"
-            originalPrice="18 000 CDF"
-            price="11 000"
-            priceSuffix="CDF / mois"
-            paymentMethods="Airtel Money · Orange Money · M-Pesa"
+            originalPrice="6,99 $"
+            price="3,99"
+            priceSuffix="$ / mois"
+            paymentMethods="Mobile Money · Carte bancaire"
             includedFeatures={[
               'Demandes de contact illimitées',
               "Voir qui t'a mis en favori ★",
@@ -360,7 +360,7 @@ export default function LandingPage() {
             ]}
             ctaLabel="Commencer"
             ctaHref="/onboarding"
-            footnote="* Tarif de lancement limité. Prix normal : 18 000 CDF / mois"
+            footnote="* Tarif de lancement limité. Prix normal : 6,99 $ / mois"
           />
         </div>
       </section>
