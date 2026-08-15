@@ -5,6 +5,7 @@
     { "path": "/api/cron/verification-cleanup", "schedule": "10 0 * * *" },
     { "path": "/api/cron/order-expiration", "schedule": "15 0 * * *" },
     { "path": "/api/cron/webhook-log-purge", "schedule": "0 1 * * *" },
-    { "path": "/api/cron/email-job-purge", "schedule": "5 1 * * *" }
+    { "path": "/api/cron/email-job-purge", "schedule": "5 1 * * *" },
+    { "path": "/api/cron/chariow-reconcile", "schedule": "20 0 * * *" }
   ]
 }
