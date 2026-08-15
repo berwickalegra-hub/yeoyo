@@ -314,6 +314,12 @@ model Profile {
   // filtering is unaffected). See IMPLEMENTATION-PLAN-v2.md for the
   // cooldown rule (free: 1/24h, Premium: unlimited).
   boostedUntil          DateTime?
+  // Set by POST /api/subscriptions/checkout on first successful submit —
+  // reused to pre-fill the phone step on future Premium checkouts. Chariow
+  // requires { national number, ISO2 country } per checkout, not stored
+  // anywhere else on the user.
+  phone                 String?
+  phoneCountry          String? // ISO2, e.g. "CD", "SN" — paired with `phone`
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
