@@ -18,7 +18,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -30,13 +29,17 @@ interface Plan {
   id: '15j' | '1m' | '3m' | '6m';
   name: string;
   durationLabel: string;
-  priceCdfTotal: number;
-  originalPriceCdfTotal: number;
-  priceCdfPerMonth: number;
+  priceUsdCentsTotal: number;
+  originalPriceUsdCentsTotal: number;
+  priceUsdCentsPerMonth: number;
   discountPct: number;
   billingDays: number;
   boosts: number;
   popular?: boolean;
+}
+
+function formatUsd(cents: number): string {
+  return `${(cents / 100).toFixed(2)} $`;
 }
 
 interface SubscriptionInfo {
@@ -44,10 +47,13 @@ interface SubscriptionInfo {
   status: string;
 }
 
-const PAYMENT_METHODS = [
-  { value: 'M_PESA', label: 'M-Pesa' },
-  { value: 'AIRTEL_MONEY', label: 'Airtel Money' },
-  { value: 'ORANGE_MONEY', label: 'Orange Money' },
+const PHONE_COUNTRIES = [
+  { value: 'CD', label: 'RD Congo (+243)' },
+  { value: 'SN', label: 'Sénégal (+221)' },
+  { value: 'CI', label: "Côte d'Ivoire (+225)" },
+  { value: 'BJ', label: 'Bénin (+229)' },
+  { value: 'TG', label: 'Togo (+228)' },
+  { value: 'CM', label: 'Cameroun (+237)' },
 ] as const;
 
 const FEATURES: { icon: IconName; title: string; desc: string; badge?: string }[] = [
@@ -97,7 +103,7 @@ const COMPARISON_ROWS: { feature: string; free: string | boolean; premium: strin
 const FAQ = [
   {
     q: 'Quels modes de paiement sont acceptés ?',
-    a: 'Airtel Money, Orange Money et M-Pesa. Le paiement par carte bancaire arrive bientôt.',
+    a: 'Mobile Money (Airtel Money, Orange Money, M-Pesa) et carte bancaire, via notre partenaire de paiement sécurisé Chariow. Tu choisis ton mode de paiement sur la page suivante.',
   },
   {
     q: 'Mon paiement est-il sécurisé ?',
@@ -112,14 +118,13 @@ const FAQ = [
 export default function PremiumPage() {
   const user = useUser();
   const { toast } = useToast();
-  const router = useRouter();
   const badgeCounts = useNavCounts();
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<Plan['id']>('1m');
-  const [paymentMethod, setPaymentMethod] =
-    useState<(typeof PAYMENT_METHODS)[number]['value']>('AIRTEL_MONEY');
+  const [phoneCountry, setPhoneCountry] = useState<(typeof PHONE_COUNTRIES)[number]['value']>('CD');
+  const [phoneLocal, setPhoneLocal] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -128,12 +133,21 @@ export default function PremiumPage() {
     try {
       const [plansRes, subRes] = await Promise.all([
         api<{ plans: Plan[] }>('/api/subscriptions/plans'),
-        api<{ subscription: SubscriptionInfo | null }>('/api/subscriptions/me'),
+        api<{
+          subscription: SubscriptionInfo | null;
+          savedPhone: { phone: string; phoneCountry: string } | null;
+        }>('/api/subscriptions/me'),
       ]);
       setPlans(plansRes.plans);
       const popular = plansRes.plans.find((p) => p.popular);
       if (popular) setSelectedPlanId(popular.id);
       setSubscription(subRes.subscription);
+      if (subRes.savedPhone) {
+        setPhoneCountry(
+          subRes.savedPhone.phoneCountry as (typeof PHONE_COUNTRIES)[number]['value'],
+        );
+        setPhoneLocal(subRes.savedPhone.phone);
+      }
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -148,11 +162,14 @@ export default function PremiumPage() {
   async function checkout() {
     setSubmitting(true);
     try {
-      const res = await api<{ orderId: string }>('/api/subscriptions/checkout', {
-        method: 'POST',
-        body: { planId: selectedPlanId, paymentMethod },
-      });
-      router.push(`/app/premium/pending?orderId=${res.orderId}`);
+      const res = await api<{ orderId: string; paymentUrl: string }>(
+        '/api/subscriptions/checkout',
+        {
+          method: 'POST',
+          body: { planId: selectedPlanId, phoneCountry, phoneLocal },
+        },
+      );
+      window.location.href = res.paymentUrl;
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -256,18 +273,18 @@ export default function PremiumPage() {
                           </span>
                         </div>
                         <p className="mt-0.5 font-body text-xs text-muted-foreground">
-                          {plan.priceCdfPerMonth.toLocaleString('fr-FR')} CDF/mois · +{plan.boosts}{' '}
-                          boost{plan.boosts > 1 ? 's' : ''}
+                          {formatUsd(plan.priceUsdCentsPerMonth)}/mois · +{plan.boosts} boost
+                          {plan.boosts > 1 ? 's' : ''}
                         </p>
                       </div>
                       <div className="flex-shrink-0 text-right">
                         <p className="font-body text-xs text-muted-foreground line-through">
-                          {plan.originalPriceCdfTotal.toLocaleString('fr-FR')}
+                          {formatUsd(plan.originalPriceUsdCentsTotal)}
                         </p>
                         <p
                           className={`font-headings text-base font-bold ${active ? 'text-primary' : 'text-foreground'}`}
                         >
-                          {plan.priceCdfTotal.toLocaleString('fr-FR')} CDF
+                          {formatUsd(plan.priceUsdCentsTotal)}
                         </p>
                       </div>
                     </button>
@@ -276,62 +293,36 @@ export default function PremiumPage() {
               </div>
             </div>
 
-            {/* Payment method */}
+            {/* Phone — required by Chariow to open the hosted checkout */}
             <div className="rounded-xl border border-border bg-surface p-5">
               <h2 className="font-headings text-base font-bold text-foreground">
-                Comment veux-tu payer ?
+                Ton numéro Mobile Money
               </h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border-2 border-primary bg-primary/5 p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                    <Icon name="smartphone" size={20} />
-                  </div>
-                  <p className="mt-2 font-body text-sm font-semibold text-foreground">
-                    Mobile Money
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {PAYMENT_METHODS.map((m) => (
-                      <span
-                        key={m.value}
-                        className={`rounded px-1.5 py-0.5 font-body text-[10px] font-bold text-white ${
-                          m.value === 'AIRTEL_MONEY'
-                            ? 'bg-red-500'
-                            : m.value === 'ORANGE_MONEY'
-                              ? 'bg-orange-500'
-                              : 'bg-green-600'
-                        }`}
-                      >
-                        {m.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border-2 border-border bg-background p-4 opacity-50">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                    <Icon name="credit-card" size={20} className="text-muted-foreground" />
-                  </div>
-                  <p className="mt-2 font-body text-sm font-semibold text-foreground">
-                    Carte bancaire
-                  </p>
-                  <p className="mt-2 font-body text-[10px] text-muted-foreground">
-                    Bientôt disponible
-                  </p>
-                </div>
-              </div>
-              <label className="mt-4 flex flex-col gap-1.5">
-                <span className="font-body text-xs font-medium text-foreground">Opérateur</span>
+              <p className="mt-0.5 font-body text-xs text-muted-foreground">
+                Tu choisiras Airtel Money, Orange Money, M-Pesa ou la carte bancaire sur la page de
+                paiement sécurisée suivante.
+              </p>
+              <div className="mt-4 flex gap-2">
                 <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                  value={phoneCountry}
+                  onChange={(e) => setPhoneCountry(e.target.value as typeof phoneCountry)}
                   className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
                 >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
+                  {PHONE_COUNTRIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
                     </option>
                   ))}
                 </select>
-              </label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={phoneLocal}
+                  onChange={(e) => setPhoneLocal(e.target.value)}
+                  placeholder="810 000 000"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
+                />
+              </div>
             </div>
 
             {/* Total + CTA */}
@@ -342,13 +333,13 @@ export default function PremiumPage() {
                     Total à payer
                   </span>
                   <span className="font-headings text-xl font-bold text-foreground">
-                    {selectedPlan.priceCdfTotal.toLocaleString('fr-FR')} CDF
+                    {formatUsd(selectedPlan.priceUsdCentsTotal)}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={checkout}
-                  disabled={submitting}
+                  disabled={submitting || phoneLocal.trim().length < 4}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-headings text-sm font-bold text-primary-foreground disabled:opacity-50"
                 >
                   <Icon name="crown" size={18} />
@@ -461,7 +452,7 @@ export default function PremiumPage() {
                     Paiement 100% sécurisé
                   </p>
                   <p className="font-body text-xs text-muted-foreground">
-                    YeOyo & PayTech certifiés
+                    YeOyo & Chariow certifiés
                   </p>
                 </div>
               </div>
