@@ -42,6 +42,7 @@ import { createHash } from 'node:crypto';
 import { hashPassword } from '@/lib/server/auth';
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
+import { logAdminAction } from '@/lib/server/admin/audit';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
@@ -163,17 +164,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           throw new Error('INVITE_RACE');
         }
 
+        let userId: string;
         if (existing) {
+          // Overwriting a live password + elevating role: bump tokenVersion
+          // so every pre-existing session for this account is invalidated,
+          // same as AUTH-09 change-password — otherwise a session opened
+          // before the invite existed keeps working with the old
+          // credentials/role after this write.
           await tx.user.update({
             where: { id: existing.id },
             data: {
               role: invite.role,
               passwordHash,
               emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+              tokenVersion: { increment: 1 },
             },
           });
+          userId = existing.id;
         } else {
-          await tx.user.create({
+          const created = await tx.user.create({
             data: {
               email: invite.email,
               passwordHash,
@@ -181,7 +190,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               emailVerifiedAt: new Date(),
             },
           });
+          userId = created.id;
         }
+
+        // Birth (or promotion) of an admin account is the most privileged
+        // mutation this feature performs — must be auditable like every
+        // other admin mutation. No authenticated actor exists yet (this is
+        // a pre-session route), so the new/promoted account is its own
+        // actor, mirroring the bootstrap script's BOOTSTRAP_SUPERADMIN
+        // pattern (scripts/make-superadmin.ts).
+        await logAdminAction(tx, {
+          actorId: userId,
+          action: 'admin.invite_accepted',
+          targetType: 'User',
+          targetId: userId,
+          metadata: { inviteId: invite.id, role: invite.role, viaExistingUser: !!existing },
+        });
       });
     } catch (err) {
       if (err instanceof Error && err.message === 'INVITE_RACE') {

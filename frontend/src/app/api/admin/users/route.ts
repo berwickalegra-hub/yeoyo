@@ -51,7 +51,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const limit = clampLimit(url.searchParams.get('limit'));
     const q = (url.searchParams.get('q') ?? '').slice(0, Q_MAX).trim();
     const status = url.searchParams.get('status');
-    const role = url.searchParams.get('role');
+    // Comma-separated list of roles ("MODERATOR,ADMIN,SUPERADMIN") in
+    // addition to the original single-role exact match — the /admin/roles
+    // page needs "every admin-capable account", not one exact role, and a
+    // list is the minimal addition that doesn't change behavior for any
+    // existing single-value caller.
+    const roleParam = url.searchParams.get('role');
+    const roles = roleParam
+      ? roleParam
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean)
+      : [];
     const cursor = decodeCursor(url.searchParams.get('cursor'));
 
     const where: Prisma.UserWhereInput = {
@@ -64,7 +75,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           }
         : {}),
       ...(status ? { status } : {}),
-      ...(role ? { role } : {}),
+      // `{ in: [x] }` and `{ role: x }` are equivalent for a single value,
+      // so one branch covers both the pre-existing single-role callers and
+      // the new multi-role case (/admin/roles needs MODERATOR+ADMIN+SUPERADMIN).
+      ...(roles.length > 0 ? { role: { in: roles } } : {}),
       ...cursorWhere(cursor),
     };
 

@@ -137,8 +137,10 @@ model AdminInvite {
 
 // ───────────────────────────────────────────────────────────────────────
 // Bridges password-verified → TOTP-verified during SUPERADMIN login. A row
-// exists only while the second factor is pending; consumed (deleted) on
-// successful verify, or left to expire (short TTL) otherwise.
+// exists only while the second factor is pending; `consumedAt` is set (not
+// deleted) on successful verify, or the row is left to expire (short TTL)
+// otherwise. No cleanup cron yet — see the admin-backoffice-auth-foundation
+// SDD ledger's deferred-minor list.
 // ───────────────────────────────────────────────────────────────────────
 model AdminTwoFactorChallenge {
   id         String    @id @default(cuid())

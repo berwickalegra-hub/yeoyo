@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
     try {
       const res = await api<{ ok?: boolean; twoFactorRequired?: boolean; challengeId?: string }>(
         '/api/admin/login',
-        { method: 'POST', body: JSON.stringify({ email, password }) },
+        { method: 'POST', body: { email, password } },
       );
       if (res.twoFactorRequired && res.challengeId) {
         setStep({ kind: 'twoFactor', challengeId: res.challengeId });
@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
     try {
       await api('/api/admin/2fa/verify', {
         method: 'POST',
-        body: JSON.stringify({ challengeId: step.challengeId, code }),
+        body: { challengeId: step.challengeId, code },
       });
       router.push('/admin');
     } catch (err) {

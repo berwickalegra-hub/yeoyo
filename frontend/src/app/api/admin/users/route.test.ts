@@ -165,7 +165,10 @@ describe('/api/admin/users [Wave 1] — list', () => {
     const args = prismaMock.user.findMany.mock.calls[0]?.[0];
     const where = args?.where as Record<string, unknown> | undefined;
     expect(where?.['status']).toBe('SUSPENDED');
-    expect(where?.['role']).toBe('USER');
+    // Single-value role filter now goes through the `{ in: [...] }` path
+    // (shared with the new comma-separated multi-role case) — equivalent
+    // query result to an exact match, different where-clause shape.
+    expect(where?.['role']).toEqual({ in: ['USER'] });
   });
 
   it('GET clamps limit to MAX_LIMIT=50 and emits nextCursor when hasMore', async () => {

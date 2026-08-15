@@ -59,7 +59,15 @@ export function AdminSidebar({
       ],
     },
     ...(role === 'SUPERADMIN'
-      ? [{ label: 'Administration', items: [{ href: '/admin/roles', label: 'Rôles admin' }] }]
+      ? [
+          {
+            label: 'Administration',
+            items: [
+              { href: '/admin/roles', label: 'Rôles admin' },
+              { href: '/admin/2fa-setup', label: 'Authentification à deux facteurs' },
+            ],
+          },
+        ]
       : []),
   ];
 

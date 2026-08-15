@@ -36,7 +36,7 @@ export default function AdminRolesPage() {
     try {
       const [invitesRes, usersRes] = await Promise.all([
         api<{ items: AdminInviteRow[] }>('/api/admin/invites?limit=50'),
-        api<{ items: AdminUserRow[] }>('/api/admin/users?role=MODERATOR&limit=50'),
+        api<{ items: AdminUserRow[] }>('/api/admin/users?role=MODERATOR,ADMIN,SUPERADMIN&limit=50'),
       ]);
       setInvites(invitesRes.items);
       setAdmins(usersRes.items);
@@ -163,7 +163,7 @@ export default function AdminRolesPage() {
       </div>
 
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-3 font-headings text-sm font-bold text-foreground">Modérateurs</h2>
+        <h2 className="mb-3 font-headings text-sm font-bold text-foreground">Administrateurs</h2>
         {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
         <div className="flex flex-col gap-2">
           {admins.map((a) => (
@@ -183,7 +183,7 @@ export default function AdminRolesPage() {
             </div>
           ))}
           {!loading && admins.length === 0 && (
-            <p className="font-body text-xs text-muted-foreground">Aucun modérateur.</p>
+            <p className="font-body text-xs text-muted-foreground">Aucun administrateur.</p>
           )}
         </div>
       </div>

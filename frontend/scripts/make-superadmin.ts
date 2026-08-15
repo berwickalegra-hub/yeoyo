@@ -10,9 +10,9 @@
 //     SUPERADMIN signs their own promotion — appropriate for the bootstrap
 //     case (T-03-07-07 — accepted threat: shell access required).
 //
-// Role hierarchy: USER < ADMIN < SUPERADMIN. Only SUPERADMINs can promote
-// others via the admin back-office, so this script exists to bootstrap the
-// very first one.
+// Role hierarchy: USER < MODERATOR < ADMIN < SUPERADMIN. Only SUPERADMINs
+// can promote others via the admin back-office, so this script exists to
+// bootstrap the very first one.
 
 import { PrismaClient } from '@prisma/client';
 import { pathToFileURL } from 'node:url';

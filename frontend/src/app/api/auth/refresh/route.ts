@@ -99,12 +99,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     try {
+      // Carry the session's 2FA-verified state forward across rotation —
+      // otherwise a 2FA'd admin would get silently kicked back to
+      // TWO_FACTOR_REQUIRED every 15 minutes as the access token expires.
       const accessToken = await createAccessToken({
         sub: user.id,
         email: user.email,
         tokenVersion: user.tokenVersion,
+        twoFactorVerified: payload.twoFactorVerified,
       });
-      const refreshToken = await createRefreshToken(user.id, user.tokenVersion);
+      const refreshToken = await createRefreshToken(
+        user.id,
+        user.tokenVersion,
+        payload.twoFactorVerified,
+      );
       await setAuthCookies(accessToken, refreshToken);
       await setCsrfCookie();
       return NextResponse.json(

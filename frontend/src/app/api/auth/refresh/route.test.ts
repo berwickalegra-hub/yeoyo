@@ -18,8 +18,9 @@ vi.mock('@/lib/server/auth', async () => {
   };
 });
 
+import { decodeJwt } from 'jose';
 import { acquireRefreshLock } from '@/lib/server/auth/refresh-lock';
-import { verifyRefreshToken, REFRESH_COOKIE_NAME } from '@/lib/server/auth';
+import { verifyRefreshToken, REFRESH_COOKIE_NAME, COOKIE_NAME } from '@/lib/server/auth';
 import { POST } from './route';
 import { NextRequest } from 'next/server';
 
@@ -46,7 +47,11 @@ beforeEach(() => {
 
 describe('POST /api/auth/refresh', () => {
   it('Test 1: happy path — issues new cookies and releases lock', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u1', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
@@ -79,7 +84,11 @@ describe('POST /api/auth/refresh', () => {
   });
 
   it('Test 4: tokenVersion mismatch — 401 INVALID_REFRESH', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u1', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
@@ -93,7 +102,11 @@ describe('POST /api/auth/refresh', () => {
   });
 
   it('Test 5: single-flight contention — 409 CONFLICT with retry hint', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u1', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
@@ -109,7 +122,11 @@ describe('POST /api/auth/refresh', () => {
   });
 
   it('Test 6: release called even if setAuthCookies throws', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u1', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
@@ -138,7 +155,11 @@ describe('POST /api/auth/refresh', () => {
   });
 
   it('Test 7: user deleted — 401 INVALID_REFRESH', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u1', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
     const res = await POST(makeReq('valid'));
@@ -148,7 +169,11 @@ describe('POST /api/auth/refresh', () => {
   });
 
   it('Test 8 (D-ADMIN-02): SUSPENDED user — 403 ACCOUNT_SUSPENDED, no rotation, no lock acquired', async () => {
-    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u_susp', tokenVersion: 0 });
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u_susp',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u_susp',
       email: 'suspended@b.com',
@@ -168,5 +193,47 @@ describe('POST /api/auth/refresh', () => {
     // Refresh-lock never acquired (we 403 before D-20).
     expect(acquireRefreshLock).not.toHaveBeenCalled();
     expect(releaseSpy).not.toHaveBeenCalled();
+  });
+
+  it('Test 9: carries twoFactorVerified=true forward into the rotated access token', async () => {
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: true,
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+    } as never);
+
+    const res = await POST(makeReq('valid-2fa-session'));
+    expect(res.status).toBe(200);
+
+    const accessCookie = __cookieStore.get(COOKIE_NAME);
+    expect(accessCookie).toBeDefined();
+    const claims = decodeJwt(accessCookie!.value);
+    expect(claims.twoFactorVerified).toBe(true);
+  });
+
+  it('Test 10: does NOT upgrade a non-2FA session to twoFactorVerified=true on rotation', async () => {
+    vi.mocked(verifyRefreshToken).mockResolvedValue({
+      sub: 'u1',
+      tokenVersion: 0,
+      twoFactorVerified: false,
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+    } as never);
+
+    const res = await POST(makeReq('valid-non-2fa-session'));
+    expect(res.status).toBe(200);
+
+    const accessCookie = __cookieStore.get(COOKIE_NAME);
+    expect(accessCookie).toBeDefined();
+    const claims = decodeJwt(accessCookie!.value);
+    expect(claims.twoFactorVerified).toBe(false);
   });
 });

@@ -131,8 +131,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     await recordSuccess(email);
 
-    // SUPERADMIN + 2FA enabled: hold cookies, hand back a challenge instead.
-    if (role === 'SUPERADMIN' && user.twoFactorEnabled) {
+    // 2FA enabled (any admin role, not just SUPERADMIN — twoFactorEnabled
+    // is never cleared on a role change, so gating on the flag alone keeps
+    // a demoted SUPERADMIN's 2FA requirement intact): hold cookies, hand
+    // back a challenge instead.
+    if (user.twoFactorEnabled) {
       const challenge = await prisma.adminTwoFactorChallenge.create({
         data: {
           userId: user.id,
@@ -145,12 +148,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // No 2FA challenge needed for this account — this session is trusted
+    // for admin access (twoFactorVerified: true) regardless of whether the
+    // account happens to have 2FA enabled right now, since it came through
+    // the dedicated admin-login path rather than the consumer one.
     const accessToken = await createAccessToken({
       sub: user.id,
       email: user.email,
       tokenVersion: user.tokenVersion,
+      twoFactorVerified: true,
     });
-    const refreshToken = await createRefreshToken(user.id, user.tokenVersion);
+    const refreshToken = await createRefreshToken(user.id, user.tokenVersion, true);
     await setAuthCookies(accessToken, refreshToken);
     await setCsrfCookie();
 

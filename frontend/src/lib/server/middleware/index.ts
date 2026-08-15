@@ -29,6 +29,17 @@ import { ORG_ROLE_RANK } from './require-org-role';
 
 export interface AuthContext {
   user: { sub: string; email: string };
+  /**
+   * True only when this session's token was minted by a flow that satisfies
+   * 2FA (admin login's non-challenge branch, or a successful
+   * /api/admin/2fa/verify) — never by the consumer login, OAuth, or
+   * account-recovery flows. requireAdmin() below is what enforces it.
+   * Optional (not required) so the many pre-existing tests across the
+   * codebase that hand-build an AuthContext literal don't all need
+   * updating — absent is treated identically to `false` everywhere this
+   * is read.
+   */
+  twoFactorVerified?: boolean;
 }
 
 export interface AdminContext extends AuthContext {
@@ -73,7 +84,10 @@ export async function requireAuth(authHeader?: string | null): Promise<AuthConte
   if (user.tokenVersion !== payloadVersion) {
     return NextResponse.json({ error: 'Session expired' }, { status: 401 });
   }
-  return { user: { sub: user.id, email: user.email } };
+  return {
+    user: { sub: user.id, email: user.email },
+    twoFactorVerified: payload.twoFactorVerified ?? false,
+  };
 }
 
 /**
@@ -100,7 +114,10 @@ export async function optionalAuth(authHeader?: string | null): Promise<AuthCont
     })
     .catch(() => null);
   if (!user || user.tokenVersion !== payloadVersion) return null;
-  return { user: { sub: user.id, email: user.email } };
+  return {
+    user: { sub: user.id, email: user.email },
+    twoFactorVerified: payload.twoFactorVerified ?? false,
+  };
 }
 
 /**
@@ -117,7 +134,7 @@ export async function requireAdmin(
 
   const user = await prisma.user.findUnique({
     where: { id: auth.user.sub },
-    select: { id: true, email: true, role: true },
+    select: { id: true, email: true, role: true, twoFactorEnabled: true },
   });
   if (!user) {
     return NextResponse.json({ error: 'Account not found' }, { status: 401 });
@@ -126,6 +143,22 @@ export async function requireAdmin(
   if (roleRank(role) < roleRank(minRole)) {
     return NextResponse.json(
       { error: 'ADMIN_REQUIRED', message: 'Admin access required' },
+      { status: 403 },
+    );
+  }
+  // A 2FA-enabled account must have proved 2FA for THIS session. Sessions
+  // minted by the consumer login, Google OAuth, or any password-recovery
+  // flow never carry twoFactorVerified — only /api/admin/login (no
+  // challenge needed) and /api/admin/2fa/verify (challenge passed) do. This
+  // is what actually closes the gap: without it, a stolen password (or a
+  // linked Google account) reaches every /api/admin/* route through the
+  // ordinary consumer session, 2FA never in the loop.
+  if (user.twoFactorEnabled && !auth.twoFactorVerified) {
+    return NextResponse.json(
+      {
+        error: 'TWO_FACTOR_REQUIRED',
+        message: 'This session has not completed two-factor authentication.',
+      },
       { status: 403 },
     );
   }

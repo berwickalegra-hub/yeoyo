@@ -118,12 +118,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
     }
 
+    // The challenge just passed — this session has satisfied 2FA.
     const accessToken = await createAccessToken({
       sub: user.id,
       email: user.email,
       tokenVersion: user.tokenVersion,
+      twoFactorVerified: true,
     });
-    const refreshToken = await createRefreshToken(user.id, user.tokenVersion);
+    const refreshToken = await createRefreshToken(user.id, user.tokenVersion, true);
     await setAuthCookies(accessToken, refreshToken);
     await setCsrfCookie();
 

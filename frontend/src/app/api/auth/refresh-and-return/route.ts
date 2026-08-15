@@ -80,12 +80,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     try {
+      // Carry the session's 2FA-verified state forward across rotation —
+      // same reasoning as POST /api/auth/refresh.
       const accessToken = await createAccessToken({
         sub: user.id,
         email: user.email,
         tokenVersion: user.tokenVersion,
+        twoFactorVerified: payload.twoFactorVerified,
       });
-      const refreshToken = await createRefreshToken(user.id, user.tokenVersion);
+      const refreshToken = await createRefreshToken(
+        user.id,
+        user.tokenVersion,
+        payload.twoFactorVerified,
+      );
       await setAuthCookies(accessToken, refreshToken);
       await setCsrfCookie();
     } finally {

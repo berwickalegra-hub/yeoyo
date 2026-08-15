@@ -131,6 +131,15 @@ export interface TokenPayload {
   email: string;
   /** Bumped on password change so old tokens are rejected. */
   tokenVersion?: number;
+  /**
+   * True only for sessions minted by a flow that satisfied 2FA when the
+   * account requires it (admin login's non-challenge branch, and
+   * /api/admin/2fa/verify on success). Never set by the consumer login,
+   * OAuth, or account-recovery flows — those must stay unable to grant
+   * admin-panel access to a 2FA-enabled account. requireAdmin() in
+   * middleware/index.ts is what actually enforces this.
+   */
+  twoFactorVerified?: boolean;
 }
 
 export async function hashPassword(plain: string): Promise<string> {
@@ -149,8 +158,12 @@ export async function createAccessToken(payload: TokenPayload): Promise<string> 
     .sign(JWT_SECRET_BYTES);
 }
 
-export async function createRefreshToken(sub: string, tokenVersion: number = 0): Promise<string> {
-  return new SignJWT({ sub, type: 'refresh', tokenVersion })
+export async function createRefreshToken(
+  sub: string,
+  tokenVersion: number = 0,
+  twoFactorVerified: boolean = false,
+): Promise<string> {
+  return new SignJWT({ sub, type: 'refresh', tokenVersion, twoFactorVerified })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(REFRESH_TOKEN_EXPIRY)
@@ -170,7 +183,7 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
 
 export async function verifyRefreshToken(
   token: string,
-): Promise<{ sub: string; tokenVersion: number } | null> {
+): Promise<{ sub: string; tokenVersion: number; twoFactorVerified: boolean } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET_BYTES);
     const tokenType = (payload as Record<string, unknown>).type;
@@ -178,7 +191,10 @@ export async function verifyRefreshToken(
     const sub = payload.sub as string | undefined;
     if (!sub) return null;
     const tokenVersion = (payload as Record<string, unknown>).tokenVersion as number | undefined;
-    return { sub, tokenVersion: tokenVersion ?? 0 };
+    const twoFactorVerified = (payload as Record<string, unknown>).twoFactorVerified as
+      | boolean
+      | undefined;
+    return { sub, tokenVersion: tokenVersion ?? 0, twoFactorVerified: twoFactorVerified ?? false };
   } catch {
     return null;
   }
