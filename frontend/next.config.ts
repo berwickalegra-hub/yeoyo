@@ -26,6 +26,25 @@ const securityHeaders = [
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Pins the workspace root explicitly, per Next's own recommendation for
+  // monorepos with more than one lockfile in the ancestor chain (relevant
+  // here because a git worktree under `.claude/worktrees/<name>/` sits
+  // nested inside the main repo, which has its own pnpm-workspace.yaml).
+  // `outputFileTracingRoot` covers the webpack builder; `turbopack.root` is
+  // its Turbopack (default since Next 16) equivalent. NOTE: in this nested
+  // worktree specifically, `turbopack.root` does not resolve `next build`'s
+  // Turbopack failure ("couldn't find the Next.js package (next/package.json)
+  // from the project directory: .../src/app") — that error comes from a
+  // native-binary package-resolution check that doesn't appear to honor this
+  // setting. Confirmed via `next build --webpack`, which succeeds cleanly and
+  // produces the correct route manifest, that this is an environment
+  // artifact of the nested-worktree layout, not a defect in the app code.
+  // Use `next build --webpack` in this worktree; plain `next build` is
+  // expected to work normally once merged into a non-nested checkout.
+  outputFileTracingRoot: __dirname,
+  turbopack: {
+    root: __dirname,
+  },
   // The floating black "N" badge some testers spot in a corner during
   // `pnpm dev` is Next.js's own dev-mode indicator — not app UI, and never
   // present in a production build. Disabled here so dev screenshots match
