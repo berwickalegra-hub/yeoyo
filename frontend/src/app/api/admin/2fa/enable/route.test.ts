@@ -1,6 +1,9 @@
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { mockNextCookies, __cookieStore } from '@/test-utils/mock-cookies';
+
+mockNextCookies();
 
 vi.mock('@/lib/server/middleware', () => ({ requireSuperadmin: vi.fn() }));
 vi.mock('@/lib/server/middleware/rate-limit-by-userid', () => ({
@@ -32,6 +35,7 @@ function makePost(body: unknown): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __cookieStore.clear();
   mockRateLimit.mockResolvedValue(null);
 });
 
@@ -44,15 +48,26 @@ describe('POST /api/admin/2fa/enable', () => {
     });
     prismaMock.user.findUnique.mockResolvedValueOnce(superadmin as never);
     mockVerifyTotp.mockReturnValueOnce(true);
-    prismaMock.user.update.mockResolvedValueOnce({} as never);
+    prismaMock.user.update.mockResolvedValueOnce({
+      id: superadmin.id,
+      email: superadmin.email,
+      tokenVersion: 1,
+    } as never);
     prismaMock.adminAction.create.mockResolvedValueOnce({} as never);
 
     const res = await POST(makePost({ code: '123456' }));
     expect(res.status).toBe(200);
     expect(prismaMock.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { twoFactorEnabled: true } }),
+      expect.objectContaining({
+        data: expect.objectContaining({ twoFactorEnabled: true, tokenVersion: { increment: 1 } }),
+      }),
     );
     expect(prismaMock.adminAction.create).toHaveBeenCalled();
+    // Fresh cookies for the CURRENT session, bumped tokenVersion + trusted
+    // (this request just proved a TOTP code) — same Pitfall-9-style reissue
+    // as change-password/route.ts, so OTHER pre-existing sessions (still
+    // holding the old tokenVersion) get invalidated on their next request.
+    expect(__cookieStore.has('app-token')).toBe(true);
   });
 
   it('rejects an invalid confirmation code and does not enable', async () => {

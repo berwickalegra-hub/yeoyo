@@ -85,6 +85,54 @@ describe('POST /api/admin/invites/accept', () => {
         data: expect.objectContaining({ email: 'new-mod@test.local', role: 'MODERATOR' }),
       }),
     );
+    // Birth of an admin account is the most privileged mutation this route
+    // performs — must be auditable, same as every other admin mutation.
+    expect(prismaMock.adminAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorId: 'new_user_1',
+          action: 'admin.invite_accepted',
+          targetId: 'new_user_1',
+        }),
+      }),
+    );
+  });
+
+  it('bumps tokenVersion when an invite is accepted by an email that already has a User row (invalidates pre-existing sessions)', async () => {
+    const invite = seedAdminInvite({
+      email: 'already-a-user@test.local',
+      role: 'ADMIN',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'existing_user_1',
+      email: 'already-a-user@test.local',
+      emailVerifiedAt: new Date(),
+    } as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.update.mockResolvedValueOnce({ id: 'existing_user_1' } as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'existing_user_1' },
+        data: expect.objectContaining({
+          role: 'ADMIN',
+          tokenVersion: { increment: 1 },
+        }),
+      }),
+    );
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
   it('rejects an expired invite', async () => {

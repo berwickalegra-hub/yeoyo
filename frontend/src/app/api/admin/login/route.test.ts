@@ -85,6 +85,30 @@ describe('POST /api/admin/login', () => {
     expect(__cookieStore.has('app-token')).toBe(false);
   });
 
+  it('returns twoFactorRequired for a plain ADMIN with 2FA enabled, not just SUPERADMIN (regression: twoFactorEnabled is never cleared on demotion)', async () => {
+    const admin = seedAdmin({
+      passwordHash: await bcrypt.hash('correct-horse', 12),
+      twoFactorEnabled: true,
+      twoFactorSecret: 'iv:tag:data',
+    });
+    prismaMock.user.findUnique.mockResolvedValueOnce(admin as never);
+    prismaMock.adminTwoFactorChallenge.create.mockResolvedValueOnce({
+      id: 'challenge_2',
+      userId: admin.id,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      attempts: 0,
+      consumedAt: null,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(makePost({ email: admin.email, password: 'correct-horse' }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { twoFactorRequired: boolean; challengeId: string };
+    expect(body.twoFactorRequired).toBe(true);
+    expect(body.challengeId).toBe('challenge_2');
+    expect(__cookieStore.has('app-token')).toBe(false);
+  });
+
   it('rejects a wrong password with INVALID_CREDENTIALS', async () => {
     const admin = seedAdmin({ passwordHash: await bcrypt.hash('correct-horse', 12) });
     prismaMock.user.findUnique.mockResolvedValueOnce(admin as never);

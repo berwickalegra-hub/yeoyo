@@ -165,6 +165,7 @@ export async function requireAdmin(
   return {
     user: { sub: user.id, email: user.email },
     admin: { id: user.id, email: user.email, role },
+    twoFactorVerified: auth.twoFactorVerified ?? false,
   };
 }
 
@@ -204,5 +205,6 @@ export async function requireOrgRole(
   return {
     user: auth.user,
     orgMember: { organizationId: membership.organizationId, userId: membership.userId, role },
+    twoFactorVerified: auth.twoFactorVerified ?? false,
   };
 }
