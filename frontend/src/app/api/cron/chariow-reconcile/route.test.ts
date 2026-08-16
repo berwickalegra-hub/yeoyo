@@ -37,7 +37,7 @@ describe('POST /api/cron/chariow-reconcile', () => {
     expect(res.status).toBe(401);
   });
 
-  it('reconciles every PENDING chariow Order and reports how many it processed', async () => {
+  it('reconciles every PENDING *and* EXPIRED chariow Order and reports how many it processed', async () => {
     orderFindMany.mockResolvedValueOnce([{ id: 'o1' }, { id: 'o2' }]);
     reconcileMock.mockResolvedValue({ orderStatus: 'PENDING', subscriptionStatus: 'PENDING' });
 
@@ -48,10 +48,37 @@ describe('POST /api/cron/chariow-reconcile', () => {
     expect(await res.json()).toEqual({ ok: true, processed: 2 });
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: 'PENDING', provider: 'chariow' }),
+        where: expect.objectContaining({
+          status: { in: ['PENDING', 'EXPIRED'] },
+          provider: 'chariow',
+        }),
       }),
     );
     expect(reconcileMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT filter on a live expiresAt (that would exclude the rows it exists to rescue)', async () => {
+    orderFindMany.mockResolvedValueOnce([]);
+
+    const { POST } = await import('./route');
+    await POST(req('Bearer cron-secret'));
+
+    const where = orderFindMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where).not.toHaveProperty('expiresAt');
+  });
+
+  it('bounds the scan to a 14-day createdAt lookback so it does not grow unbounded', async () => {
+    orderFindMany.mockResolvedValueOnce([]);
+    const before = Date.now();
+
+    const { POST } = await import('./route');
+    await POST(req('Bearer cron-secret'));
+
+    const where = orderFindMany.mock.calls[0]?.[0]?.where as { createdAt: { gt: Date } };
+    const cutoff = where.createdAt.gt.getTime();
+    const expected = before - 14 * 24 * 60 * 60 * 1000;
+    // within a few seconds of "now minus 14 days"
+    expect(Math.abs(cutoff - expected)).toBeLessThan(5_000);
   });
 
   it('keeps going and does not count a row whose reconcile call throws', async () => {

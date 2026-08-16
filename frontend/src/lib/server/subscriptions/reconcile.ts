@@ -1,8 +1,11 @@
-// The single credit point for Chariow payments. Called by three triggers
-// (user-return poll, webhook, 5-minute cron — see
-// docs/superpowers/specs/2026-08-16-chariow-payment-integration-design.md)
+// The single credit point for Chariow payments. Called by four triggers
+// (user-return poll, webhook, safety-net cron, and a re-checkout attempt —
+// see docs/superpowers/specs/2026-08-16-chariow-payment-integration-design.md)
 // and NONE of them trust their own trigger source: this function always
 // re-pulls the real sale status from Chariow before crediting anything.
+//
+// It recovers Orders in EITHER `PENDING` or `EXPIRED` state — see
+// RECONCILABLE_STATUSES below for why EXPIRED must stay recoverable.
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 import { getChariowEnv, chariowBreaker } from '@/lib/server/payments/chariow-singleton';
@@ -13,8 +16,25 @@ import { createLogger } from '@/lib/server/logger';
 
 const logger = createLogger();
 
-/** Anti-fraud tolerance between Order.amount and what Chariow actually reports (Chariow.md §5.4). */
+/**
+ * Anti-fraud tolerance between the plan's EXPECTED price and what Chariow
+ * actually reports (Chariow.md §5.4). The reference is deliberately
+ * `plan.priceUsdCentsTotal` and NOT `Order.amount`: the checkout route
+ * overwrites `Order.amount` with Chariow's own checkout-time figure, so
+ * comparing against it would be checking Chariow's number against itself
+ * and a misconfigured Chariow product price would sail through undetected.
+ */
 const AMOUNT_TOLERANCE = 0.05;
+
+/**
+ * Order states this function is allowed to move. EXPIRED is included on
+ * purpose: the `order-expiration` cron flips stale PENDING orders to
+ * EXPIRED after 30 minutes, but Mobile Money can settle later than that,
+ * so an EXPIRED order must stay recoverable if Chariow reports it settled
+ * after the fact (mirrors Chariow.md's own "re-verify ≤ 14 days" catch-up
+ * philosophy). Anything else (PAID/FAILED/CANCELLED) is terminal.
+ */
+const RECONCILABLE_STATUSES = ['PENDING', 'EXPIRED'] as const;
 
 export interface ReconcileResult {
   orderStatus: string;
@@ -37,7 +57,7 @@ export async function reconcileChariowOrder(
     subscriptionStatus: subscription?.status ?? null,
   };
 
-  if (order.status !== 'PENDING') return idleResult;
+  if (!(RECONCILABLE_STATUSES as readonly string[]).includes(order.status)) return idleResult;
 
   const providerChargeId = order.providerChargeId;
   if (!providerChargeId) return idleResult;
@@ -47,7 +67,7 @@ export async function reconcileChariowOrder(
 
   if (remote.status === 'failed' || remote.status === 'abandoned') {
     const cas = await prisma.order.updateMany({
-      where: { id: order.id, status: 'PENDING' },
+      where: { id: order.id, status: { in: [...RECONCILABLE_STATUSES] } },
       data: { status: 'FAILED' },
     });
     if (cas.count > 0 && subscription) {
@@ -62,30 +82,42 @@ export async function reconcileChariowOrder(
 
   if (remote.status !== 'succeeded') return idleResult;
 
-  const drift = order.amount === 0 ? 0 : Math.abs(remote.amount - order.amount) / order.amount;
+  if (!subscription) {
+    logger.warn('[Chariow] Order payé sans Subscription liée', { orderId: order.id });
+    return idleResult;
+  }
+
+  // Resolved BEFORE the anti-fraud check on purpose — the plan's catalog
+  // price is the reference the remote amount is judged against.
+  const plan = getPlan(subscription.planId);
+  if (!plan) {
+    logger.warn('[Chariow] planId inconnu — NON crédité', {
+      orderId: order.id,
+      planId: subscription.planId,
+    });
+    return idleResult;
+  }
+
+  const expectedAmount = plan.priceUsdCentsTotal;
+  const drift =
+    expectedAmount === 0 ? 0 : Math.abs(remote.amount - expectedAmount) / expectedAmount;
   if (drift > AMOUNT_TOLERANCE) {
     logger.warn('[Chariow] ANOMALIE montant — NON crédité', {
       orderId: order.id,
-      expected: order.amount,
+      expected: expectedAmount,
       actual: remote.amount,
       currency: remote.currency,
     });
     return idleResult;
   }
 
-  if (!subscription) {
-    logger.warn('[Chariow] Order payé sans Subscription liée', { orderId: order.id });
-    return idleResult;
-  }
-
-  const plan = getPlan(subscription.planId);
-  const billingDays = plan?.billingDays ?? 30;
+  const billingDays = plan.billingDays;
   const paidAt = remote.settledAt ?? order.createdAt; // NEVER new Date() on a late catch-up — see spec pitfall list.
   const currentPeriodEnd = new Date(paidAt.getTime() + billingDays * 24 * 60 * 60 * 1000);
 
   return prisma.$transaction(async (tx) => {
     const cas = await tx.order.updateMany({
-      where: { id: order.id, status: 'PENDING' },
+      where: { id: order.id, status: { in: [...RECONCILABLE_STATUSES] } },
       data: { status: 'PAID', paidAt },
     });
 

@@ -49,13 +49,82 @@ afterEach(() => {
 });
 
 describe('reconcileChariowOrder', () => {
-  it('is a no-op (returns current state) when the Order is not PENDING', async () => {
-    const { prisma } = makePrisma({
-      order: { id: 'o1', status: 'PAID', subscription: { status: 'ACTIVE' } },
+  it.each(['PAID', 'FAILED', 'CANCELLED'])(
+    'is a no-op (returns current state) when the Order is terminal (%s)',
+    async (status) => {
+      const { prisma } = makePrisma({
+        order: { id: 'o1', status, subscription: { status: 'ACTIVE' } },
+      });
+      const result = await reconcileChariowOrder(prisma, 'o1');
+      expect(result).toEqual({ orderStatus: status, subscriptionStatus: 'ACTIVE' });
+      expect(getSaleStatusMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does NOT no-op on an EXPIRED Order — it still re-pulls Chariow and credits a late settlement', async () => {
+    const settledAt = new Date('2026-08-10T12:00:00.000Z');
+    getSaleStatusMock.mockResolvedValueOnce({
+      status: 'succeeded',
+      amount: 399,
+      currency: 'USD',
+      settledAt,
     });
+    const { prisma, orderUpdateMany, subscriptionUpdate } = makePrisma({
+      order: {
+        id: 'o1',
+        status: 'EXPIRED', // order-expiration cron already flipped it
+        providerChargeId: 'sale_1',
+        amount: 399,
+        currency: 'USD',
+        userId: 'u1',
+        customerEmail: 'a@b.com',
+        createdAt: new Date('2026-08-09T00:00:00.000Z'),
+        subscription: { id: 'sub1', status: 'PENDING', planId: '1m' },
+      },
+    });
+
     const result = await reconcileChariowOrder(prisma, 'o1');
+
+    expect(getSaleStatusMock).toHaveBeenCalled();
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
+      data: { status: 'PAID', paidAt: settledAt },
+    });
+    expect(subscriptionUpdate).toHaveBeenCalledWith({
+      where: { id: 'sub1' },
+      data: {
+        status: 'ACTIVE',
+        currentPeriodEnd: new Date(settledAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
     expect(result).toEqual({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
-    expect(getSaleStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('marks an EXPIRED Order FAILED when Chariow reports the sale actually failed', async () => {
+    getSaleStatusMock.mockResolvedValueOnce({
+      status: 'abandoned',
+      amount: 399,
+      currency: 'USD',
+      settledAt: null,
+    });
+    const { prisma, orderUpdateMany } = makePrisma({
+      order: {
+        id: 'o1',
+        status: 'EXPIRED',
+        providerChargeId: 'sale_1',
+        amount: 399,
+        currency: 'USD',
+        createdAt: new Date(),
+        subscription: { id: 'sub1', status: 'PENDING', planId: '1m' },
+      },
+    });
+
+    await reconcileChariowOrder(prisma, 'o1');
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
+      data: { status: 'FAILED' },
+    });
   });
 
   it('marks Order FAILED and Subscription CANCELLED when Chariow reports failed', async () => {
@@ -80,7 +149,7 @@ describe('reconcileChariowOrder', () => {
     });
     const result = await reconcileChariowOrder(prisma, 'o1');
     expect(orderUpdateMany).toHaveBeenCalledWith({
-      where: { id: 'o1', status: 'PENDING' },
+      where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
       data: { status: 'FAILED' },
     });
     expect(subscriptionUpdate).toHaveBeenCalledWith({
@@ -112,21 +181,47 @@ describe('reconcileChariowOrder', () => {
     expect(result).toEqual({ orderStatus: 'PENDING', subscriptionStatus: 'PENDING' });
   });
 
-  it('does NOT credit when the remote amount drifts more than 5% from Order.amount (anti-fraud)', async () => {
+  it("judges the remote amount against the PLAN price, not against Order.amount (which is Chariow's own figure)", async () => {
+    // Chariow reports 200 cents and Order.amount was ALSO overwritten with
+    // Chariow's own 200 at checkout time. Comparing the two would show zero
+    // drift and credit a mispriced product. The plan ("1m" = 399 cents) is
+    // the only trustworthy reference, and 200 vs 399 is far past 5%.
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
       amount: 200,
       currency: 'USD',
       settledAt: null,
-    }); // Order expects 599
+    });
     const { prisma, orderUpdateMany } = makePrisma({
       order: {
         id: 'o1',
         status: 'PENDING',
         providerChargeId: 'sale_1',
-        amount: 599,
+        amount: 200, // identical to the remote figure — self-consistent, still fraudulent
         currency: 'USD',
         subscription: { id: 'sub1', status: 'PENDING', planId: '1m' },
+      },
+    });
+    const result = await reconcileChariowOrder(prisma, 'o1');
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(result).toEqual({ orderStatus: 'PENDING', subscriptionStatus: 'PENDING' });
+  });
+
+  it('does NOT credit when the Subscription references an unknown planId (no price to compare against)', async () => {
+    getSaleStatusMock.mockResolvedValueOnce({
+      status: 'succeeded',
+      amount: 399,
+      currency: 'USD',
+      settledAt: null,
+    });
+    const { prisma, orderUpdateMany } = makePrisma({
+      order: {
+        id: 'o1',
+        status: 'PENDING',
+        providerChargeId: 'sale_1',
+        amount: 399,
+        currency: 'USD',
+        subscription: { id: 'sub1', status: 'PENDING', planId: 'legacy-plan-gone' },
       },
     });
     const result = await reconcileChariowOrder(prisma, 'o1');
@@ -138,7 +233,7 @@ describe('reconcileChariowOrder', () => {
     const settledAt = new Date('2026-08-10T12:00:00.000Z');
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 599,
+      amount: 399,
       currency: 'USD',
       settledAt,
     });
@@ -147,7 +242,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'PENDING',
         providerChargeId: 'sale_1',
-        amount: 599,
+        amount: 399,
         currency: 'USD',
         userId: 'u1',
         customerEmail: 'a@b.com',
@@ -159,7 +254,7 @@ describe('reconcileChariowOrder', () => {
     const result = await reconcileChariowOrder(prisma, 'o1');
 
     expect(orderUpdateMany).toHaveBeenCalledWith({
-      where: { id: 'o1', status: 'PENDING' },
+      where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
       data: { status: 'PAID', paidAt: settledAt },
     });
     expect(subscriptionUpdate).toHaveBeenCalledWith({
@@ -176,7 +271,7 @@ describe('reconcileChariowOrder', () => {
   it('is idempotent: a lost compare-and-swap race (another writer already credited) does not double-activate', async () => {
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 599,
+      amount: 399,
       currency: 'USD',
       settledAt: new Date(),
     });
@@ -185,7 +280,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'PENDING',
         providerChargeId: 'sale_1',
-        amount: 599,
+        amount: 399,
         currency: 'USD',
         createdAt: new Date(),
         subscription: { id: 'sub1', status: 'ACTIVE', planId: '1m' },
@@ -196,7 +291,7 @@ describe('reconcileChariowOrder', () => {
       id: 'o1',
       status: 'PENDING',
       providerChargeId: 'sale_1',
-      amount: 599,
+      amount: 399,
       currency: 'USD',
       createdAt: new Date(),
       subscription: { id: 'sub1', status: 'ACTIVE', planId: '1m' },
