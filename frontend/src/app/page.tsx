@@ -438,14 +438,13 @@ export default function LandingPage() {
                 moitié.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {['Airtel Money', 'Orange Money', 'M-Pesa'].map((m) => (
-                  <span
-                    key={m}
-                    className="rounded-md border border-background/20 px-2 py-1 font-body text-[10px] text-background/60"
-                  >
-                    {m}
-                  </span>
-                ))}
+                {/* Generic on purpose: the payment page is hosted by the
+                    provider, which decides which operators it actually
+                    offers — naming specific ones here would be a promise
+                    this app cannot keep. */}
+                <span className="rounded-md border border-background/20 px-2 py-1 font-body text-[10px] text-background/60">
+                  Mobile Money
+                </span>
               </div>
             </div>
             <div>

@@ -116,7 +116,9 @@ const TRUST_ITEMS = [
   {
     icon: 'smartphone' as const,
     title: 'Paiement Mobile Money',
-    desc: 'Airtel Money · Orange Money · M-Pesa',
+    // Generic on purpose — the hosted payment page decides which operators
+    // are actually offered (same framing as /app/premium).
+    desc: 'Mobile Money · Carte bancaire',
     // Banani uses text-accent here, but this project's accent token has no
     // usable foreground pair (see premium/page.tsx's bg-accent/10
     // text-primary icon tile for the same substitution).
