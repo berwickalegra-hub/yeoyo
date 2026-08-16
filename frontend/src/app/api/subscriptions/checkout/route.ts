@@ -5,6 +5,10 @@
 // — it happens in reconcileChariowOrder (lib/server/subscriptions/reconcile.ts),
 // triggered by the user-return poll, the webhook, or the safety-net cron.
 export const runtime = 'nodejs';
+// chariow.ts's own outbound HTTP timeout is 30s; the function must outlive
+// it, otherwise a slow-but-successful Chariow call gets killed mid-flight
+// AFTER Chariow already created a real charge and we never record the sale id.
+export const maxDuration = 40;
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -14,12 +18,16 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { getPlan } from '@/lib/server/subscriptions/plans';
+import { reconcileChariowOrder } from '@/lib/server/subscriptions/reconcile';
 import { charge, resolveChariowPhone, getChariowProductId } from '@/lib/server/payments/chariow';
 import {
   getChariowEnv,
   chariowBreaker,
   ChariowProviderUnconfiguredError,
 } from '@/lib/server/payments/chariow-singleton';
+import { createLogger } from '@/lib/server/logger';
+
+const log = createLogger();
 
 // No cross-field `.refine()` here on purpose: whether phone info is present
 // enough to resolve is entirely `resolveChariowPhone`'s call, so an absent
@@ -119,11 +127,55 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 409, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    if (existing?.status === 'PENDING' && existing.order?.paymentUrl) {
-      return NextResponse.json(
-        { orderId: existing.order.id, paymentUrl: existing.order.paymentUrl, status: 'PENDING' },
-        { status: 200, headers: { 'x-request-id': ctx.requestId } },
-      );
+    // A PENDING Subscription must NEVER become a permanent lock-out. Nothing
+    // else in the codebase transitions a Subscription out of PENDING except
+    // reconcileChariowOrder, so an abandoned checkout would otherwise leave
+    // the user replaying a dead paymentUrl forever — for any plan they pick.
+    if (existing?.status === 'PENDING' && existing.order) {
+      const staleOrder = existing.order;
+
+      // Force a fresh pull from Chariow. This doubles as a fourth,
+      // synchronous confirmation opportunity: if the abandoned attempt did
+      // settle, the user gets ALREADY_SUBSCRIBED instead of paying twice.
+      let reconciledOrderStatus = staleOrder.status;
+      try {
+        const reconciled = await reconcileChariowOrder(prisma, staleOrder.id);
+        if (reconciled.subscriptionStatus === 'ACTIVE') {
+          return NextResponse.json(
+            { code: 'ALREADY_SUBSCRIBED', message: 'You already have an active subscription' },
+            { status: 409, headers: { 'x-request-id': ctx.requestId } },
+          );
+        }
+        reconciledOrderStatus = reconciled.orderStatus;
+      } catch (err) {
+        // Chariow unreachable / unconfigured — fall back to locally-known
+        // state rather than 500-ing the whole checkout. The cron will retry.
+        log.warn('checkout: reconcile of the previous PENDING attempt failed', {
+          orderId: staleOrder.id,
+          err: String(err),
+        });
+      }
+
+      const stillLive =
+        reconciledOrderStatus === 'PENDING' &&
+        !!staleOrder.paymentUrl &&
+        !!staleOrder.expiresAt &&
+        staleOrder.expiresAt > new Date();
+
+      if (stillLive && existing.planId === parsed.data.planId) {
+        return NextResponse.json(
+          { orderId: staleOrder.id, paymentUrl: staleOrder.paymentUrl, status: 'PENDING' },
+          { status: 200, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+
+      // Stale, expired, or the user picked a different plan — supersede the
+      // dangling Subscription (compare-and-swap guarded, same idempotency
+      // pattern used elsewhere) and fall through to a brand-new checkout.
+      await prisma.subscription.updateMany({
+        where: { id: existing.id, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
     }
 
     const publicUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
@@ -165,16 +217,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Persist the sale id FIRST, on its own, before anything else. Chariow
+    // has already created a real charge at this point; if this write were
+    // bundled with the two below, a failure in either would lose the
+    // providerChargeId and with it every chance of ever reconciling the
+    // payment. `amount`/`currency` are overwritten with Chariow's own
+    // checkout-time figures on purpose (never hardcode the local currency —
+    // Chariow.md §3.1); the anti-fraud reference stays the plan price, which
+    // reconcile.ts reads from getPlan(), not from this row.
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        providerChargeId: chargeResult.saleId,
+        paymentUrl: chargeResult.checkoutUrl,
+        amount: chargeResult.amount,
+        currency: chargeResult.currency,
+      },
+    });
+
     await prisma.$transaction([
-      prisma.order.update({
-        where: { id: order.id },
-        data: {
-          providerChargeId: chargeResult.saleId,
-          paymentUrl: chargeResult.checkoutUrl,
-          amount: chargeResult.amount,
-          currency: chargeResult.currency,
-        },
-      }),
       prisma.subscription.create({
         data: {
           userId: auth.user.sub,
