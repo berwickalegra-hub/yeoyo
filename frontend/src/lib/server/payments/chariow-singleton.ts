@@ -10,6 +10,13 @@
 //   The CircuitBreaker is shared at module scope by design (in-memory
 //   state, single-instance only — see CLAUDE.md). Swap for a Redis-backed
 //   variant for multi-pod prod, same as Bictorys's breaker.
+//
+//   It guards ALL outbound Chariow API calls — both `charge()` (checkout
+//   creation) and `getSaleStatus()` (reconciliation reads) — hence the
+//   name `chariow.api` rather than `chariow.charge`. One shared breaker is
+//   intentional: a Chariow outage is a Chariow outage regardless of which
+//   endpoint noticed it first, and tripping open stops the reconcile cron
+//   from hammering a dead API just as it stops new checkouts.
 import 'server-only';
 import type { ChariowEnv } from '@/lib/server/payments/chariow';
 import { CircuitBreaker } from '@/lib/server/payments/circuit-breaker';
@@ -39,7 +46,7 @@ export function getChariowEnv(): ChariowEnv {
 }
 
 export const chariowBreaker = new CircuitBreaker({
-  name: 'chariow.charge',
+  name: 'chariow.api',
   failureThreshold: 5,
   windowMs: 30_000,
   cooldownMs: 60_000,
