@@ -123,6 +123,31 @@ describe('charge', () => {
     });
   });
 
+  it('throws (never silently charges 0) when the amount is missing or non-numeric', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            purchase: { id: 'sale_1', amount: { currency: 'USD' } },
+            payment: { checkout_url: 'https://chariow.test/pay/sale_1' },
+          },
+        }),
+      })),
+    );
+    await expect(
+      charge(ENV, {
+        productId: 'prod_123',
+        email: 'a@b.com',
+        firstName: 'Ruth',
+        lastName: 'Thiala',
+        phone: { number: '810000000', countryCode: 'CD' },
+        redirectUrl: 'https://yeoyo.test/x',
+      }),
+    ).rejects.toThrow(/non-numeric amount/);
+  });
+
   it('throws with the response body on a non-ok response', async () => {
     vi.stubGlobal(
       'fetch',
@@ -167,6 +192,17 @@ describe('getSaleStatus', () => {
       currency: 'USD',
       settledAt: new Date('2026-08-16T10:00:00.000Z'),
     });
+  });
+
+  it('throws when the sale amount is missing or non-numeric', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ data: { status: 'settled', amount: { currency: 'USD' } } }),
+      })),
+    );
+    await expect(getSaleStatus(ENV, 'sale_1')).rejects.toThrow(/non-numeric amount/);
   });
 
   it('returns settledAt: null when no date field is present', async () => {

@@ -151,9 +151,19 @@ export function getChariowProductId(planId: SubscriptionPlan['id']): string | nu
 // Amount conversion — see the ASSUMPTION note at the top of this file.
 // ───────────────────────────────────────────────────────────────────────
 
+/**
+ * Throws rather than falling back to 0 on an unparseable amount. A silent
+ * 0 would be written to `Order.amount`, sail through the anti-fraud
+ * division-guard, and ultimately send the buyer a "$0.00 payment
+ * confirmed" email. Callers (`charge`, `getSaleStatus`) let it surface as
+ * the same PROVIDER_ERROR / reconcile-failure path that already handles
+ * any other unexpected Chariow response shape.
+ */
 function toSmallestUnit(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n)) return 0;
+  if (!Number.isFinite(n)) {
+    throw new Error(`Chariow returned a non-numeric amount: ${String(value)}`);
+  }
   return Math.round(n * 100);
 }
 
