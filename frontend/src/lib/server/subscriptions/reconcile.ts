@@ -134,10 +134,31 @@ export async function reconcileChariowOrder(
       };
     }
 
-    await tx.subscription.update({
-      where: { id: subscription.id },
+    // CAS-guard the Subscription too, not just the Order: it may have been
+    // superseded/cancelled in the meantime (the checkout route cancels a
+    // stale PENDING Subscription when the user re-checks-out on a different
+    // plan while this Order's payment was still settling). Without this
+    // guard, a late settlement on an already-superseded Order would
+    // silently resurrect a Subscription the app already treated as dead.
+    // The Order above is still marked PAID either way — the money did
+    // move, that stays true for accounting — but Premium access is only
+    // ever granted to a Subscription that was still PENDING.
+    const subCas = await tx.subscription.updateMany({
+      where: { id: subscription.id, status: 'PENDING' },
       data: { status: 'ACTIVE', currentPeriodEnd },
     });
+
+    if (subCas.count === 0) {
+      logger.warn(
+        '[Chariow] Order réglé mais Subscription déjà non-PENDING (superseded?) — NON activée',
+        {
+          orderId: order.id,
+          subscriptionId: subscription.id,
+        },
+      );
+      const freshSub = await tx.subscription.findUnique({ where: { id: subscription.id } });
+      return { orderStatus: 'PAID', subscriptionStatus: freshSub?.status ?? subscription.status };
+    }
 
     if (order.userId) {
       await enqueueOutbox(tx, {

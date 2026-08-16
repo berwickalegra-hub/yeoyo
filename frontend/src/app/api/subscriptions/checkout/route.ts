@@ -172,10 +172,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // Stale, expired, or the user picked a different plan — supersede the
       // dangling Subscription (compare-and-swap guarded, same idempotency
       // pattern used elsewhere) and fall through to a brand-new checkout.
-      await prisma.subscription.updateMany({
+      const supersedeCas = await prisma.subscription.updateMany({
         where: { id: existing.id, status: 'PENDING' },
         data: { status: 'CANCELLED' },
       });
+
+      if (supersedeCas.count === 0) {
+        // Lost the race: a concurrent request (double-click, two open tabs)
+        // already resolved this Subscription between our read above and
+        // this write. Falling through here would create a second, real
+        // Chariow charge for the same abandoned attempt. Stop and ask the
+        // client to retry — the next request will see whatever the winning
+        // request left behind and take the correct branch above.
+        return NextResponse.json(
+          {
+            code: 'CHECKOUT_IN_PROGRESS',
+            message: 'Une autre tentative de paiement est déjà en cours, réessaie dans un instant',
+          },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
     }
 
     const publicUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';

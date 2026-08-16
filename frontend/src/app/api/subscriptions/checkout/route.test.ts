@@ -307,6 +307,33 @@ describe('POST /api/subscriptions/checkout', () => {
       );
     });
 
+    it('returns 409 CHECKOUT_IN_PROGRESS and does NOT charge when the supersede CAS loses a concurrent race', async () => {
+      // Simulates a double-click / two-tab race: another concurrent request
+      // already cancelled this Subscription between our read and our own
+      // supersede write, so this request's updateMany matches 0 rows.
+      // Falling through here would create a second, real Chariow charge.
+      subscriptionFindFirst.mockResolvedValueOnce({
+        id: 'sub-1',
+        status: 'PENDING',
+        planId: '1m',
+        order: {
+          id: 'order-old',
+          status: 'PENDING',
+          paymentUrl: 'https://chariow.test/pay/old',
+          expiresAt: PAST(),
+        },
+      });
+      subscriptionUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+      const { POST } = await import('./route');
+      const res = await POST(req({ planId: '1m', phoneCountry: 'CD', phoneLocal: '0810000000' }));
+
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('CHECKOUT_IN_PROGRESS');
+      expect(chargeMock).not.toHaveBeenCalled();
+      expect(orderCreate).not.toHaveBeenCalled();
+    });
+
     it('falls back to local state (does not 500) when the forced reconcile throws', async () => {
       subscriptionFindFirst.mockResolvedValueOnce({
         id: 'sub-1',

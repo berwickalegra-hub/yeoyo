@@ -20,9 +20,13 @@ import { reconcileChariowOrder } from './reconcile';
 function makePrisma(overrides: {
   order: Record<string, unknown> | null;
   updateManyCount?: number;
+  subUpdateManyCount?: number;
+  freshSubStatus?: string;
 }) {
   const orderUpdateMany = vi.fn(async () => ({ count: overrides.updateManyCount ?? 1 }));
   const subscriptionUpdate = vi.fn(async () => ({}));
+  const subscriptionUpdateMany = vi.fn(async () => ({ count: overrides.subUpdateManyCount ?? 1 }));
+  const subscriptionFindUnique = vi.fn(async () => ({ status: overrides.freshSubStatus ?? null }));
   const outboxCreate = vi.fn(async () => ({ id: 'ob1' }));
   const orderFindUnique = vi.fn(async () => overrides.order);
 
@@ -32,13 +36,25 @@ function makePrisma(overrides: {
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         order: { updateMany: orderUpdateMany, findUnique: orderFindUnique },
-        subscription: { update: subscriptionUpdate },
+        subscription: {
+          update: subscriptionUpdate,
+          updateMany: subscriptionUpdateMany,
+          findUnique: subscriptionFindUnique,
+        },
         outboxEvent: { create: outboxCreate },
       }),
     ),
   } as unknown as PrismaClient;
 
-  return { prisma, orderUpdateMany, subscriptionUpdate, outboxCreate, orderFindUnique };
+  return {
+    prisma,
+    orderUpdateMany,
+    subscriptionUpdate,
+    subscriptionUpdateMany,
+    subscriptionFindUnique,
+    outboxCreate,
+    orderFindUnique,
+  };
 }
 
 beforeEach(() => {
@@ -69,7 +85,7 @@ describe('reconcileChariowOrder', () => {
       currency: 'USD',
       settledAt,
     });
-    const { prisma, orderUpdateMany, subscriptionUpdate } = makePrisma({
+    const { prisma, orderUpdateMany, subscriptionUpdateMany } = makePrisma({
       order: {
         id: 'o1',
         status: 'EXPIRED', // order-expiration cron already flipped it
@@ -90,8 +106,8 @@ describe('reconcileChariowOrder', () => {
       where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
       data: { status: 'PAID', paidAt: settledAt },
     });
-    expect(subscriptionUpdate).toHaveBeenCalledWith({
-      where: { id: 'sub1' },
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'sub1', status: 'PENDING' },
       data: {
         status: 'ACTIVE',
         currentPeriodEnd: new Date(settledAt.getTime() + 30 * 24 * 60 * 60 * 1000),
@@ -237,7 +253,7 @@ describe('reconcileChariowOrder', () => {
       currency: 'USD',
       settledAt,
     });
-    const { prisma, orderUpdateMany, subscriptionUpdate, outboxCreate } = makePrisma({
+    const { prisma, orderUpdateMany, subscriptionUpdateMany, outboxCreate } = makePrisma({
       order: {
         id: 'o1',
         status: 'PENDING',
@@ -257,8 +273,8 @@ describe('reconcileChariowOrder', () => {
       where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
       data: { status: 'PAID', paidAt: settledAt },
     });
-    expect(subscriptionUpdate).toHaveBeenCalledWith({
-      where: { id: 'sub1' },
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'sub1', status: 'PENDING' },
       data: {
         status: 'ACTIVE',
         currentPeriodEnd: new Date(settledAt.getTime() + 30 * 24 * 60 * 60 * 1000),
@@ -268,6 +284,59 @@ describe('reconcileChariowOrder', () => {
     expect(result).toEqual({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
   });
 
+  it('does NOT reactivate a Subscription that was superseded (no longer PENDING) even when the settlement is genuine', async () => {
+    // The user abandoned this checkout, re-subscribed on a different plan
+    // (which cancels this Subscription — see checkout route's supersede
+    // branch), and THEN the original Chariow sale settled late. The Order
+    // still gets marked PAID for accounting, but a dead Subscription must
+    // never be silently resurrected to ACTIVE.
+    const settledAt = new Date('2026-08-20T12:00:00.000Z');
+    getSaleStatusMock.mockResolvedValueOnce({
+      status: 'succeeded',
+      amount: 399,
+      currency: 'USD',
+      settledAt,
+    });
+    const {
+      prisma,
+      orderUpdateMany,
+      subscriptionUpdateMany,
+      subscriptionFindUnique,
+      outboxCreate,
+    } = makePrisma({
+      order: {
+        id: 'o1',
+        status: 'EXPIRED',
+        providerChargeId: 'sale_1',
+        amount: 399,
+        currency: 'USD',
+        userId: 'u1',
+        customerEmail: 'a@b.com',
+        createdAt: new Date('2026-08-09T00:00:00.000Z'),
+        subscription: { id: 'sub1', status: 'CANCELLED', planId: '1m' },
+      },
+      subUpdateManyCount: 0, // already superseded — the CAS predicate (status: 'PENDING') matches nothing
+      freshSubStatus: 'CANCELLED',
+    });
+
+    const result = await reconcileChariowOrder(prisma, 'o1');
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'o1', status: { in: ['PENDING', 'EXPIRED'] } },
+      data: { status: 'PAID', paidAt: settledAt },
+    });
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'sub1', status: 'PENDING' },
+      data: {
+        status: 'ACTIVE',
+        currentPeriodEnd: new Date(settledAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    expect(subscriptionFindUnique).toHaveBeenCalledWith({ where: { id: 'sub1' } });
+    expect(outboxCreate).not.toHaveBeenCalled();
+    expect(result).toEqual({ orderStatus: 'PAID', subscriptionStatus: 'CANCELLED' });
+  });
+
   it('is idempotent: a lost compare-and-swap race (another writer already credited) does not double-activate', async () => {
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
@@ -275,7 +344,7 @@ describe('reconcileChariowOrder', () => {
       currency: 'USD',
       settledAt: new Date(),
     });
-    const { prisma, subscriptionUpdate, orderFindUnique } = makePrisma({
+    const { prisma, subscriptionUpdate, subscriptionUpdateMany, orderFindUnique } = makePrisma({
       order: {
         id: 'o1',
         status: 'PENDING',
@@ -304,6 +373,7 @@ describe('reconcileChariowOrder', () => {
 
     const result = await reconcileChariowOrder(prisma, 'o1');
     expect(subscriptionUpdate).not.toHaveBeenCalled();
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
     expect(result).toEqual({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
   });
 });
