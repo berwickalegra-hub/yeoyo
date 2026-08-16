@@ -66,6 +66,41 @@ describe('POST /api/webhooks/chariow', () => {
     expect(reconcileMock).toHaveBeenCalledWith(expect.anything(), 'order-1');
   });
 
+  it.each([
+    ['failed', 'failed.sale'],
+    ['refunded', 'refunded.sale'],
+    ['refunded (cancel)', 'cancelled.sale'],
+  ])('also reconciles on a %s event instead of dropping it', async (_label, event) => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({ id: 'order-1' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'FAILED', subscriptionStatus: 'CANCELLED' });
+
+    const { POST } = await import('./route');
+    const res = await POST(req('test-secret', { event, data: { id: 'sale_1' } }));
+
+    expect(res.status).toBe(200);
+    expect(orderFindFirst).toHaveBeenCalledWith({ where: { providerChargeId: 'sale_1' } });
+    expect(reconcileMock).toHaveBeenCalledWith(expect.anything(), 'order-1');
+  });
+
+  it('never reads the payload status/amount — a forged failed body still defers to reconcile', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({ id: 'order-1' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
+
+    const { POST } = await import('./route');
+    await POST(
+      req('test-secret', {
+        event: 'failed.sale',
+        data: { id: 'sale_1', status: 'settled', amount: { value: 999999, currency: 'USD' } },
+      }),
+    );
+
+    // Only the sale id crossed the boundary; reconcile re-pulls the truth.
+    expect(reconcileMock).toHaveBeenCalledWith(expect.anything(), 'order-1');
+    expect(reconcileMock).toHaveBeenCalledTimes(1);
+  });
+
   it('does not call reconcile when no Order matches the sale id (unknown/dropped)', async () => {
     findUnique.mockResolvedValueOnce(null);
     orderFindFirst.mockResolvedValueOnce(null);
