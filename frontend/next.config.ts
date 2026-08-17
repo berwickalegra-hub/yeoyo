@@ -36,9 +36,22 @@ const securityHeaders = [
 // documented fix for this exact monorepo layout.
 const workspaceRoot = path.join(__dirname, '..');
 
+// Vercel sets VERCEL=1 during its own build. Vercel's builder auto-detects
+// the pnpm workspace root from the lockfile and does its own serverless
+// function file-tracing — it does NOT consume `output: 'standalone'`.
+// Combining `output: 'standalone'` with `outputFileTracingRoot` pointed
+// outside the Vercel Root Directory ("frontend") shifts where Next writes
+// `next-server.js.nft.json`, and Vercel's own onBuildComplete step then
+// fails: "ENOENT ... open '/vercel/path0/frontend/.next/next-server.js.nft.json'".
+// `output: 'standalone'` is only needed for the self-hosted Docker image
+// (frontend/Dockerfile); `outputFileTracingRoot` is only needed for that
+// same standalone/Docker build to bundle the correct pnpm-hoisted
+// node_modules. Skip both on Vercel so its own packaging owns the tracing.
+const isVercelBuild = !!process.env.VERCEL;
+
 const config: NextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: workspaceRoot,
+  ...(isVercelBuild ? {} : { outputFileTracingRoot: workspaceRoot }),
   turbopack: {
     root: workspaceRoot,
   },
@@ -49,8 +62,9 @@ const config: NextConfig = {
   devIndicators: false,
   // Standalone output bundles a self-contained server.js + minimal node_modules
   // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
-  // Has no impact on `next dev` / `next start` workflows.
-  output: 'standalone',
+  // Has no impact on `next dev` / `next start` workflows. Not set on Vercel
+  // (see isVercelBuild comment above).
+  ...(isVercelBuild ? {} : { output: 'standalone' as const }),
   images: {
     remotePatterns: [
       // Cloudinary-hosted profile photos/avatars (frontend/src/lib/server/upload).
