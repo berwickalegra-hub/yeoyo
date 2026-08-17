@@ -153,6 +153,51 @@ function readCsrfToken(): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+// The 15-min access-token JWT can easily expire while someone fills out the
+// 4-step wizard, but this raw multipart fetch bypasses api.ts's auto-refresh
+// (JSON-only bodies) — so a stale token used to surface as a bare 401 with
+// no `message` field, which the catch below silently mislabelled as a
+// generic "upload failed" error. Mirrors api.ts's own refresh-then-retry
+// once, using the same public POST /api/auth/refresh endpoint.
+async function uploadPhotoWithAuthRetry(file: File): Promise<string> {
+  async function attempt(): Promise<Response> {
+    const form = new FormData();
+    form.append('file', file);
+    const csrfToken = readCsrfToken();
+    return fetch('/api/upload', {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+      headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
+    });
+  }
+
+  let res = await attempt();
+  if (res.status === 401) {
+    const refreshRes = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => null);
+    if (refreshRes?.ok) {
+      const refreshBody = (await refreshRes.json().catch(() => ({}))) as {
+        csrfToken?: string;
+      };
+      if (refreshBody.csrfToken) storeCsrfToken(refreshBody.csrfToken);
+      res = await attempt();
+    } else {
+      throw new Error('Ta session a expiré. Reconnecte-toi puis réessaie.');
+    }
+  }
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message ?? "L'envoi de la photo a échoué. Réessaie.");
+  }
+  const uploaded = (await res.json()) as { id: string };
+  return uploaded.id;
+}
+
 function PillOption({
   label,
   active,
@@ -407,21 +452,7 @@ export default function OnboardingPage() {
     try {
       let photoUploadId: string | undefined;
       if (!skipPhoto && photoFile) {
-        const form = new FormData();
-        form.append('file', photoFile);
-        const csrfToken = readCsrfToken();
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: form,
-          credentials: 'include',
-          headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
-        });
-        if (!uploadRes.ok) {
-          const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message ?? "L'envoi de la photo a échoué. Réessaie.");
-        }
-        const uploaded = (await uploadRes.json()) as { id: string };
-        photoUploadId = uploaded.id;
+        photoUploadId = await uploadPhotoWithAuthRetry(photoFile);
       }
 
       await api('/api/profile', {

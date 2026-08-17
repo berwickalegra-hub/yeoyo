@@ -12,5 +12,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only intercept safe, bodyless GETs. Re-issuing fetch(event.request) for
+  // a POST/PUT/PATCH/DELETE (e.g. a multipart photo upload) can fail to
+  // re-read the already-consumed request body stream, surfacing as an
+  // unhandled "Failed to fetch" here instead of the real page-level error
+  // handling further up — 2026-08-18, explicit user report of uploads and
+  // navigation intermittently failing with exactly this signature.
+  if (event.request.method !== 'GET') return;
   event.respondWith(fetch(event.request));
 });

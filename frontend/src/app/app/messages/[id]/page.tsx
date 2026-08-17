@@ -53,7 +53,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import Ably, { type RealtimeChannel } from 'ably';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
@@ -110,6 +110,49 @@ function readCsrfToken(): string | null {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]*)`));
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+// Mirrors onboarding/profil's uploadPhotoWithAuthRetry: this raw multipart
+// fetch bypasses api.ts's auto-refresh (JSON-only bodies), so a stale
+// access-token JWT used to surface as a bare 401 mislabelled as a generic
+// send failure below.
+async function uploadImageWithAuthRetry(file: File): Promise<string> {
+  async function attempt(): Promise<Response> {
+    const form = new FormData();
+    form.append('file', file);
+    const csrfToken = readCsrfToken();
+    return fetch('/api/upload', {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+      headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
+    });
+  }
+
+  let res = await attempt();
+  if (res.status === 401) {
+    const refreshRes = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => null);
+    if (refreshRes?.ok) {
+      const refreshBody = (await refreshRes.json().catch(() => ({}))) as {
+        csrfToken?: string;
+      };
+      if (refreshBody.csrfToken) storeCsrfToken(refreshBody.csrfToken);
+      res = await attempt();
+    } else {
+      throw new Error('Ta session a expiré. Reconnecte-toi puis réessaie.');
+    }
+  }
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message ?? "L'envoi de l'image a échoué. Réessaie.");
+  }
+  const uploaded = (await res.json()) as { id: string };
+  return uploaded.id;
 }
 
 function dayLabel(iso: string): string {
@@ -436,24 +479,11 @@ export default function MessageThreadPage() {
     const caption = draft.trim();
     setDraft('');
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const csrfToken = readCsrfToken();
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        body: form,
-        credentials: 'include',
-        headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
-      });
-      if (!uploadRes.ok) {
-        const errBody = (await uploadRes.json().catch(() => ({}))) as { message?: string };
-        throw new Error(errBody.message ?? "L'envoi de l'image a échoué");
-      }
-      const uploaded = (await uploadRes.json()) as { id: string };
+      const uploadId = await uploadImageWithAuthRetry(file);
 
       const res = await api<ThreadMessage>(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
-        body: { imageUploadId: uploaded.id, ...(caption ? { body: caption } : {}) },
+        body: { imageUploadId: uploadId, ...(caption ? { body: caption } : {}) },
       });
       if (!seenIds.current.has(res.id)) {
         seenIds.current.add(res.id);
