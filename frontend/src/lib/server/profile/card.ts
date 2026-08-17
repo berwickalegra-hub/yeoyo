@@ -59,6 +59,13 @@ export interface ProfileCard {
   // Empty array when the profile has no photo yet (same as photoUrl: null).
   photoUrls: string[];
   verified: boolean;
+  // Whether this profile's owner currently has an ACTIVE subscription.
+  // `toProfileCard` can't compute this itself (lives in a separate
+  // `Subscription` row, not on `Profile`) — defaults to false here; callers
+  // overlay the real value via `getPremiumUserIds()` after batching a
+  // lookup across every userId in the response (same anti-N+1 shape as the
+  // existing `liked`/`favorited` overlays).
+  isPremium: boolean;
   bio: string | null;
   religion: string | null;
   maritalStatus: string | null;
@@ -68,6 +75,7 @@ export interface ProfileCard {
   qualities: string | null;
   flaws: string | null;
   dealbreakers: string | null;
+  interests: string[];
 }
 
 export function toProfileCard(p: ProfileWithPhotos): ProfileCard {
@@ -89,6 +97,7 @@ export function toProfileCard(p: ProfileWithPhotos): ProfileCard {
     photoUrl: primary ? cloudinaryUrlForKey(primary.fileUpload.key) : null,
     photoUrls,
     verified: !!p.verifiedAt,
+    isPremium: false,
     bio: p.bio,
     religion: p.religion,
     maritalStatus: p.maritalStatus,
@@ -98,5 +107,6 @@ export function toProfileCard(p: ProfileWithPhotos): ProfileCard {
     qualities: p.qualities,
     flaws: p.flaws,
     dealbreakers: p.dealbreakers,
+    interests: p.interests,
   };
 }

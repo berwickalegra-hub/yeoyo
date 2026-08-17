@@ -61,14 +61,14 @@ export default function TwoFactorSetupPage() {
         <button
           onClick={() => void startSetup()}
           disabled={busy}
-          className="rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          className="btn-press rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
           Générer un code QR
         </button>
       )}
 
       {setup && (
-        <>
+        <div className="animate-fade-in-up flex flex-col gap-4">
           <img
             src={setup.qrCodeDataUri}
             alt="Code QR d'authentification"
@@ -100,12 +100,12 @@ export default function TwoFactorSetupPage() {
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              className="btn-press rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
               Activer
             </button>
           </form>
-        </>
+        </div>
       )}
     </div>
   );

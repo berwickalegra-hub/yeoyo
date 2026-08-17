@@ -81,7 +81,7 @@ describe('reconcileChariowOrder', () => {
     const settledAt = new Date('2026-08-10T12:00:00.000Z');
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 399,
+      amount: 100,
       currency: 'USD',
       settledAt,
     });
@@ -90,7 +90,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'EXPIRED', // order-expiration cron already flipped it
         providerChargeId: 'sale_1',
-        amount: 399,
+        amount: 100,
         currency: 'USD',
         userId: 'u1',
         customerEmail: 'a@b.com',
@@ -200,8 +200,8 @@ describe('reconcileChariowOrder', () => {
   it("judges the remote amount against the PLAN price, not against Order.amount (which is Chariow's own figure)", async () => {
     // Chariow reports 200 cents and Order.amount was ALSO overwritten with
     // Chariow's own 200 at checkout time. Comparing the two would show zero
-    // drift and credit a mispriced product. The plan ("1m" = 399 cents) is
-    // the only trustworthy reference, and 200 vs 399 is far past 5%.
+    // drift and credit a mispriced product. The plan ("1m" = 100 cents) is
+    // the only trustworthy reference, and 200 vs 100 is far past 5%.
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
       amount: 200,
@@ -249,7 +249,7 @@ describe('reconcileChariowOrder', () => {
     const settledAt = new Date('2026-08-10T12:00:00.000Z');
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 399,
+      amount: 100,
       currency: 'USD',
       settledAt,
     });
@@ -258,7 +258,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'PENDING',
         providerChargeId: 'sale_1',
-        amount: 399,
+        amount: 100,
         currency: 'USD',
         userId: 'u1',
         customerEmail: 'a@b.com',
@@ -293,7 +293,7 @@ describe('reconcileChariowOrder', () => {
     const settledAt = new Date('2026-08-20T12:00:00.000Z');
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 399,
+      amount: 100,
       currency: 'USD',
       settledAt,
     });
@@ -308,7 +308,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'EXPIRED',
         providerChargeId: 'sale_1',
-        amount: 399,
+        amount: 100,
         currency: 'USD',
         userId: 'u1',
         customerEmail: 'a@b.com',
@@ -340,7 +340,7 @@ describe('reconcileChariowOrder', () => {
   it('is idempotent: a lost compare-and-swap race (another writer already credited) does not double-activate', async () => {
     getSaleStatusMock.mockResolvedValueOnce({
       status: 'succeeded',
-      amount: 399,
+      amount: 100,
       currency: 'USD',
       settledAt: new Date(),
     });
@@ -349,7 +349,7 @@ describe('reconcileChariowOrder', () => {
         id: 'o1',
         status: 'PENDING',
         providerChargeId: 'sale_1',
-        amount: 399,
+        amount: 100,
         currency: 'USD',
         createdAt: new Date(),
         subscription: { id: 'sub1', status: 'ACTIVE', planId: '1m' },
@@ -360,7 +360,7 @@ describe('reconcileChariowOrder', () => {
       id: 'o1',
       status: 'PENDING',
       providerChargeId: 'sale_1',
-      amount: 399,
+      amount: 100,
       currency: 'USD',
       createdAt: new Date(),
       subscription: { id: 'sub1', status: 'ACTIVE', planId: '1m' },

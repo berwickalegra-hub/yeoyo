@@ -15,6 +15,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
+import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const MAX_RESULTS = 3;
 
@@ -42,11 +43,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
     });
     const byUserId = new Map(profiles.map((p) => [p.userId, p]));
+    const premiumIds = await getPremiumUserIds(
+      prisma,
+      profiles.map((p) => p.userId),
+    );
 
     const preview = favorites
       .map((f) => byUserId.get(f.userId))
       .filter((p): p is NonNullable<typeof p> => !!p)
-      .map((p) => toProfileCard(p));
+      .map((p) => ({ ...toProfileCard(p), isPremium: premiumIds.has(p.userId) }));
 
     const total = await prisma.favorite.count({
       where: { targetId: auth.user.sub, userId: { notIn: blocked } },

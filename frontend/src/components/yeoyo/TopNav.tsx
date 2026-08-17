@@ -14,11 +14,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePremium } from '@/contexts/PremiumContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Modal } from '@/components/ui/Modal';
 import { BrandMark } from './BrandMark';
 import { NotificationBell } from './NotificationBell';
+import { useIsAdmin } from '@/lib/yeoyo/useIsAdmin';
 import {
   TOPNAV_ITEMS,
   PREMIUM_ITEM,
@@ -94,11 +97,93 @@ function BoostButton() {
   );
 }
 
+// Desktop counterpart to MobileTabBar's ActivityTab (2026-08-17, explicit
+// user ask) — the "Activité" tab opens Messages + Visiteurs in a dropdown
+// instead of linking straight to /app/visiteurs, since desktop already has
+// a dedicated Messages icon in the top-right cluster; this keeps the two
+// screens' navigation structure consistent rather than diverging.
+function ActivityNavItem({
+  active,
+  badgeCounts,
+}: {
+  active: SidebarTab;
+  badgeCounts?: SidebarBadgeCounts | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const isActive = active === 'visiteurs' || active === 'messages';
+  const messagesBadge = badgeFor('messages', badgeCounts);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Activité — Messages et Visiteurs"
+        aria-expanded={open}
+        className={`relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium lg:px-4 ${
+          isActive ? 'text-primary' : 'text-muted-foreground'
+        }`}
+      >
+        <Icon name="menu" size={18} />
+        <span className="hidden lg:inline">Activité</span>
+        {!!messagesBadge && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-[10px] font-bold text-primary-foreground">
+            {messagesBadge > 9 ? '9+' : messagesBadge}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="animate-scale-in absolute left-1/2 top-11 z-50 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+          <Link
+            href="/app/messages"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+          >
+            <Icon name="message-circle" size={16} className="text-muted-foreground" />
+            Messages
+            {!!messagesBadge && (
+              <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-[10px] font-bold text-primary-foreground">
+                {messagesBadge > 9 ? '9+' : messagesBadge}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/app/visiteurs"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 border-t border-border px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+          >
+            <Icon name="eye" size={16} className="text-muted-foreground" />
+            Visiteurs
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountMenu({ user }: { user: SidebarUser }) {
   const router = useRouter();
   const { logout } = useAuth();
   const [open, setOpen] = useState(false);
+  // Logout now asks for confirmation (2026-08-17, explicit user ask) —
+  // a stray tap on "Se déconnecter" used to log the user out immediately.
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Direct shortcut to the back-office for admin/superadmin accounts
+  // (2026-08-17, explicit user ask) — sits next to the avatar itself, not
+  // buried in the dropdown, since the whole point is a one-tap jump.
+  const isAdmin = useIsAdmin();
 
   useEffect(() => {
     if (!open) return;
@@ -110,13 +195,24 @@ function AccountMenu({ user }: { user: SidebarUser }) {
   }, [open]);
 
   const handleLogout = useCallback(async () => {
+    setConfirmingLogout(false);
     setOpen(false);
     await logout();
     router.push('/login');
   }, [logout, router]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative flex items-center gap-2">
+      {isAdmin && (
+        <Link
+          href="/admin"
+          aria-label="Aller au panneau administrateur"
+          title="Panneau administrateur"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-gold/40 text-gold transition-transform active:scale-95"
+        >
+          <Icon name="shield" size={16} />
+        </Link>
+      )}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -124,7 +220,12 @@ function AccountMenu({ user }: { user: SidebarUser }) {
         aria-expanded={open}
         className="flex items-center gap-1.5"
       >
-        <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size={36} />
+        <UserAvatar
+          name={user.name}
+          avatarUrl={user.avatarUrl}
+          size={36}
+          className="avatar-ring border-2 border-transparent"
+        />
         <Icon name="chevron-down" size={14} className="text-muted-foreground" />
       </button>
 
@@ -170,7 +271,10 @@ function AccountMenu({ user }: { user: SidebarUser }) {
           <div className="border-t border-border py-1">
             <button
               type="button"
-              onClick={() => void handleLogout()}
+              onClick={() => {
+                setOpen(false);
+                setConfirmingLogout(true);
+              }}
               className="flex w-full items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
             >
               <Icon name="log-out" size={16} className="text-muted-foreground" />
@@ -179,6 +283,36 @@ function AccountMenu({ user }: { user: SidebarUser }) {
           </div>
         </div>
       )}
+
+      <Modal open={confirmingLogout} onClose={() => setConfirmingLogout(false)}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <Icon name="log-out" size={22} className="text-red-500" />
+          </div>
+          <div>
+            <p className="font-headings text-base font-bold text-foreground">Se déconnecter ?</p>
+            <p className="mt-1.5 font-body text-sm text-muted-foreground">
+              Tu devras te reconnecter pour accéder à ton compte.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              className="flex h-11 items-center justify-center rounded-full bg-red-500 font-body text-sm font-semibold text-white transition-transform active:scale-95"
+            >
+              Se déconnecter
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingLogout(false)}
+              className="flex h-11 items-center justify-center rounded-full border border-border font-body text-sm font-medium text-muted-foreground transition-transform active:scale-95"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -192,6 +326,7 @@ export function TopNav({
   user: SidebarUser;
   badgeCounts?: SidebarBadgeCounts | undefined;
 }) {
+  const { isPremium } = usePremium();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface">
       {/* Desktop / tablet bar (md+) */}
@@ -207,6 +342,29 @@ export function TopNav({
           {TOPNAV_ITEMS.map((item) => {
             const isActive = item.id === active;
             const badge = badgeFor(item.id, badgeCounts);
+
+            // Découvrir is the app's primary action — permanently emphasized
+            // via a filled-primary icon circle (not just on `isActive`),
+            // the desktop counterpart to MobileTabBar's raised FAB circle.
+            if (item.id === 'decouvrir') {
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium text-primary lg:px-4"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary shadow-md shadow-primary/30">
+                    <Icon name={item.icon} size={16} className="text-primary-foreground" />
+                  </span>
+                  <span className="hidden lg:inline">{item.label}</span>
+                </Link>
+              );
+            }
+
+            if (item.id === 'visiteurs') {
+              return <ActivityNavItem key={item.id} active={active} badgeCounts={badgeCounts} />;
+            }
+
             return (
               <Link
                 key={item.id}
@@ -227,10 +385,16 @@ export function TopNav({
           })}
           <Link
             href={PREMIUM_ITEM.href}
-            className="flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium text-gold lg:px-4"
+            className="relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium text-gold lg:px-4"
           >
-            <Icon name={PREMIUM_ITEM.icon} size={18} />
+            <Icon name={PREMIUM_ITEM.icon} size={18} fill={isPremium ? 'currentColor' : 'none'} />
             <span className="hidden lg:inline">{PREMIUM_ITEM.label}</span>
+            {isPremium && (
+              <span
+                aria-label="Membre Premium"
+                className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-gold"
+              />
+            )}
           </Link>
         </nav>
 

@@ -15,13 +15,78 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
+import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { useCardExit } from '@/lib/yeoyo/useCardExit';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
 
 interface FavoriteRow {
   favoriteId: string;
   createdAt: string;
   profile: ProfileCard;
+}
+
+// Row is its own component (not inlined in the map) so each card owns an
+// independent useCardExit instance — same reasoning as ProfileGridCard.
+// The remove button defers to the exit animation before calling the real
+// (async) removeFavorite, which still does its own await-then-filter, so a
+// failed request simply lets the row fade back in via the animation reset
+// rather than leaving a "ghost" row.
+function FavoriteRowCard({
+  row,
+  onRemove,
+  removing,
+  index,
+}: {
+  row: FavoriteRow;
+  onRemove: (row: FavoriteRow) => void;
+  removing: boolean;
+  index: number;
+}) {
+  const { exitClassName, trigger } = useCardExit();
+  return (
+    <div
+      className={`flex items-center gap-4 rounded-xl border border-border bg-surface p-4 animate-fade-in-up ${exitClassName}`}
+      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+    >
+      <Link href={`/app/profils/${row.profile.userId}`} className="flex-shrink-0">
+        <UserAvatar name={row.profile.firstName} avatarUrl={row.profile.photoUrl} size={56} />
+      </Link>
+      <Link href={`/app/profils/${row.profile.userId}`} className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-headings text-base font-bold text-foreground">
+            {row.profile.firstName}
+          </span>
+          <span className="font-body text-sm text-muted-foreground">{row.profile.age} ans</span>
+          {row.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+        </div>
+        <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+          <Icon name="gem" size={11} />
+          <span className="font-body text-xs">
+            {INTENT_LABELS[row.profile.intent] ?? row.profile.intent}
+          </span>
+          {row.profile.commune && (
+            <>
+              <span className="text-border">•</span>
+              <Icon name="map-pin" size={11} />
+              <span className="font-body text-xs">{row.profile.commune}</span>
+            </>
+          )}
+        </div>
+      </Link>
+      <button
+        type="button"
+        onClick={() => trigger('left', () => onRemove(row))}
+        disabled={removing}
+        aria-label="Retirer des favoris"
+        className={`btn-press flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ${
+          removing ? 'opacity-50' : ''
+        }`}
+      >
+        <Icon name="heart" size={16} fill="currentColor" />
+      </button>
+    </div>
+  );
 }
 
 export default function FavorisPage() {
@@ -64,7 +129,11 @@ export default function FavorisPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="favoris" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="favoris"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-5 lg:px-8">
         <div>
           <h1 className="font-headings text-xl font-bold text-foreground">Favoris</h1>
@@ -75,7 +144,7 @@ export default function FavorisPage() {
       </div>
 
       <div className="flex flex-col gap-3 px-5 py-6 lg:mx-auto lg:w-full lg:max-w-2xl lg:px-8">
-        {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
+        {loading && <MessageListSkeleton count={4} />}
         {!loading && favorites.length === 0 && (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-8 text-center">
             <Icon name="heart" size={28} className="text-muted-foreground" />
@@ -84,48 +153,14 @@ export default function FavorisPage() {
             </p>
           </div>
         )}
-        {favorites.map((f) => (
-          <div
+        {favorites.map((f, i) => (
+          <FavoriteRowCard
             key={f.favoriteId}
-            className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
-          >
-            <Link href={`/app/profils/${f.profile.userId}`} className="flex-shrink-0">
-              <UserAvatar name={f.profile.firstName} avatarUrl={f.profile.photoUrl} size={56} />
-            </Link>
-            <Link href={`/app/profils/${f.profile.userId}`} className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-headings text-base font-bold text-foreground">
-                  {f.profile.firstName}
-                </span>
-                <span className="font-body text-sm text-muted-foreground">{f.profile.age} ans</span>
-                {f.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
-              </div>
-              <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-                <Icon name="gem" size={11} />
-                <span className="font-body text-xs">
-                  {INTENT_LABELS[f.profile.intent] ?? f.profile.intent}
-                </span>
-                {f.profile.commune && (
-                  <>
-                    <span className="text-border">•</span>
-                    <Icon name="map-pin" size={11} />
-                    <span className="font-body text-xs">{f.profile.commune}</span>
-                  </>
-                )}
-              </div>
-            </Link>
-            <button
-              type="button"
-              onClick={() => void removeFavorite(f)}
-              disabled={removingId === f.favoriteId}
-              aria-label="Retirer des favoris"
-              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ${
-                removingId === f.favoriteId ? 'opacity-50' : ''
-              }`}
-            >
-              <Icon name="heart" size={16} fill="currentColor" />
-            </button>
-          </div>
+            row={f}
+            index={i}
+            onRemove={(row) => void removeFavorite(row)}
+            removing={removingId === f.favoriteId}
+          />
         ))}
       </div>
     </AppShell>

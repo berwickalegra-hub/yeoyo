@@ -85,6 +85,7 @@ const PatchBody = z
     qualities: z.string().trim().max(300).nullable().optional(),
     flaws: z.string().trim().max(300).nullable().optional(),
     dealbreakers: z.string().trim().max(300).nullable().optional(),
+    interests: z.array(z.string().trim().min(1).max(30)).max(15).optional(),
     // Null = default (opposite of `gender`). "TOUS" = show both genders by
     // default in Découvrir/Explorer. See POST /api/profile/photos for photo
     // management — that moved to its own endpoint once profiles gained a
@@ -245,6 +246,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       flaws,
       dealbreakers,
       interestedIn,
+      interests,
     } = parsed.data;
 
     const profile = await prisma.profile.update({
@@ -264,6 +266,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         ...(flaws !== undefined ? { flaws } : {}),
         ...(dealbreakers !== undefined ? { dealbreakers } : {}),
         ...(interestedIn !== undefined ? { interestedIn } : {}),
+        ...(interests !== undefined ? { interests } : {}),
       },
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
     });

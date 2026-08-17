@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { usePremium } from '@/contexts/PremiumContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 
@@ -29,6 +30,7 @@ const MAX_POLL_ATTEMPTS = 45;
 
 function PendingContent() {
   const user = useUser();
+  const { refresh: refreshPremium } = usePremium();
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -77,13 +79,14 @@ function PendingContent() {
 
   useEffect(() => {
     if (status?.orderStatus === 'PAID') {
+      void refreshPremium();
       toast('Paiement confirmé — bienvenue dans Premium !', 'success');
       router.push('/app/parametres/paiement');
     }
     if (status?.orderStatus === 'FAILED') {
       toast('Le paiement a échoué ou a été annulé.', 'error');
     }
-  }, [status, router, toast]);
+  }, [status, router, toast, refreshPremium]);
 
   if (!user) return null;
 

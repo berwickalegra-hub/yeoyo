@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
+import { AdminTableSkeleton } from '@/components/yeoyo/AdminTableSkeleton';
 
 interface ReportRow {
   id: string;
@@ -69,50 +70,52 @@ export default function AdminSignalementsPage() {
         {reports.length} signalement(s) en attente.
       </p>
 
-      {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
-
-      <div className="flex flex-col gap-2">
-        {reports.map((r) => (
-          <div key={r.id} className="rounded-xl border border-border bg-surface p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-body text-sm text-foreground">
-                  <span className="font-medium">{r.reporter.name ?? r.reporter.email}</span> a
-                  signalé <span className="font-medium">{r.target.name ?? r.target.email}</span>
-                </p>
-                <p className="mt-0.5 font-body text-xs text-muted-foreground">
-                  {REASON_LABELS[r.reason] ?? r.reason} —{' '}
-                  {new Date(r.createdAt).toLocaleString('fr-FR')}
-                </p>
-                {r.details && (
-                  <p className="mt-1 font-body text-xs text-muted-foreground">{r.details}</p>
-                )}
-              </div>
-              <div className="flex flex-shrink-0 gap-2">
-                <button
-                  type="button"
-                  onClick={() => void resolve(r.id, 'DISMISS')}
-                  disabled={resolvingId === r.id}
-                  className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground disabled:opacity-50"
-                >
-                  Classer sans suite
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void resolve(r.id, 'RESOLVE')}
-                  disabled={resolvingId === r.id}
-                  className="rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  Traiter
-                </button>
+      {loading ? (
+        <AdminTableSkeleton rows={4} columns={3} />
+      ) : (
+        <div className="animate-fade-in flex flex-col gap-2">
+          {reports.map((r) => (
+            <div key={r.id} className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-body text-sm text-foreground">
+                    <span className="font-medium">{r.reporter.name ?? r.reporter.email}</span> a
+                    signalé <span className="font-medium">{r.target.name ?? r.target.email}</span>
+                  </p>
+                  <p className="mt-0.5 font-body text-xs text-muted-foreground">
+                    {REASON_LABELS[r.reason] ?? r.reason} —{' '}
+                    {new Date(r.createdAt).toLocaleString('fr-FR')}
+                  </p>
+                  {r.details && (
+                    <p className="mt-1 font-body text-xs text-muted-foreground">{r.details}</p>
+                  )}
+                </div>
+                <div className="flex flex-shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void resolve(r.id, 'DISMISS')}
+                    disabled={resolvingId === r.id}
+                    className="btn-press rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground disabled:opacity-50"
+                  >
+                    Classer sans suite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void resolve(r.id, 'RESOLVE')}
+                    disabled={resolvingId === r.id}
+                    className="btn-press rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                  >
+                    Traiter
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {!loading && reports.length === 0 && (
-          <p className="font-body text-sm text-muted-foreground">Aucun signalement en attente.</p>
-        )}
-      </div>
+          ))}
+          {reports.length === 0 && (
+            <p className="font-body text-sm text-muted-foreground">Aucun signalement en attente.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

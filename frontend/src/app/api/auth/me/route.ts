@@ -23,6 +23,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { cloudinaryUrlForKey } from '@/lib/server/storage';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -45,9 +46,28 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         createdAt: true,
         updatedAt: true,
         passwordHash: true,
+        avatarUrl: true,
         oauthAccounts: { select: { provider: true } },
+        // Primary profile photo, if any (isPrimary first, else lowest
+        // `order`) — mirrors profile/card.ts's `primary` selection so the
+        // nav avatar shows the same photo the discovery cards do.
+        profile: {
+          select: {
+            photos: {
+              orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }],
+              take: 1,
+              select: { fileUpload: { select: { key: true } } },
+            },
+          },
+        },
       },
     });
+
+    // OAuth avatar (set at sign-in) wins over the dating profile's own
+    // photo when both exist — it's the account-level identity image.
+    const primaryPhotoKey = dbUser?.profile?.photos[0]?.fileUpload.key;
+    const profilePhotoUrl = primaryPhotoKey ? cloudinaryUrlForKey(primaryPhotoKey) : null;
+    const avatarUrl = dbUser?.avatarUrl ?? profilePhotoUrl ?? null;
 
     const user = {
       // Keep `sub` for back-compat with the AuthContext payload contract
@@ -72,6 +92,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         : null,
       hasPassword: !!dbUser?.passwordHash,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
+      avatarUrl,
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });

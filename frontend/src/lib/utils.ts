@@ -31,3 +31,13 @@ export function isTikTokBrowser(): boolean {
   const ua = navigator.userAgent || '';
   return /TikTok|musical_ly|BytedanceWebview/i.test(ua);
 }
+
+/**
+ * Simple, permissive email shape check for instant inline feedback before a
+ * round trip to the API — real validation is server-side (zEmail). Shared by
+ * every auth form (login, signup) so the bar for "looks like an email" never
+ * drifts between them.
+ */
+export function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}

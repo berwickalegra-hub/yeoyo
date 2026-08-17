@@ -47,6 +47,7 @@ export function ContactRequestCard({
             </span>
             <span className="font-body text-sm text-muted-foreground">{otherUser.age} ans</span>
             {otherUser.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+            {otherUser.isPremium && <div className="h-1.5 w-1.5 rounded-full bg-gold" />}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
             <Icon name="gem" size={11} />
@@ -70,7 +71,7 @@ export function ContactRequestCard({
             type="button"
             onClick={onDecline}
             disabled={responding}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground disabled:opacity-50"
+            className="btn-press flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground disabled:opacity-50"
             aria-label="Refuser"
           >
             {responding ? (
@@ -83,7 +84,7 @@ export function ContactRequestCard({
             type="button"
             onClick={onAccept}
             disabled={responding}
-            className="btn-success-flash flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-primary-foreground disabled:opacity-50"
+            className="btn-success-flash btn-press flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-primary-foreground disabled:opacity-50"
           >
             {responding ? (
               <Icon name="refresh-cw" size={16} className="animate-spin" />
@@ -106,7 +107,7 @@ export function ContactRequestCard({
           type="button"
           onClick={onWithdraw}
           disabled={responding}
-          className="flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 font-body text-xs font-medium text-muted-foreground transition-colors hover:border-red-400/40 hover:text-red-400 disabled:opacity-50"
+          className="btn-press flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 font-body text-xs font-medium text-muted-foreground transition-colors hover:border-red-400/40 hover:text-red-400 disabled:opacity-50"
         >
           {responding ? (
             <Icon name="refresh-cw" size={14} className="animate-spin" />

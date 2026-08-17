@@ -9,15 +9,14 @@ import type { ProfileCard } from '@/lib/yeoyo/types';
 // (matches Banani's own `filter blur-sm` — the blur itself IS the paywall
 // gate, not a fabricated placeholder), so the count/who is always honest —
 // only the "who" resolution is withheld pre-Premium, matching Banani's own
-// copy exactly ("Passe Premium pour les voir"). Colors match Banani's
-// source verbatim: `bg-accent/10 border-accent`, CTA `bg-accent
-// text-accent-foreground` — NOT primary (re-verified 2026-08-14 against
-// the raw WhoLikedBanner.jsx fetch).
+// copy exactly ("Passe Premium pour les voir"). Restyled gold (2026-08-17,
+// explicit user ask: every Premium-gated button/feature reads gold
+// consistently) — originally matched Banani's `bg-accent` verbatim.
 export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; total: number }) {
   if (total === 0) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-accent bg-accent/10 p-4">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
       <div className="flex items-center gap-3">
         <div className="flex -space-x-2">
           {preview.slice(0, 3).map((p) => (
@@ -38,7 +37,7 @@ export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; tot
       </div>
       <Link
         href="/app/premium"
-        className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-body text-sm font-bold text-accent-foreground"
+        className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-gold px-4 py-2 font-body text-sm font-bold text-gold-foreground"
       >
         <Icon name="crown" size={14} />
         Découvrir

@@ -41,7 +41,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       signupsRaw,
     ] = await Promise.all([
       prisma.user.count(),
-      prisma.subscription.count({ where: { status: 'ACTIVE' } }),
+      // Excludes provider: 'admin-grant' (2026-08-17) — the admin-always-
+      // Premium self-heal (see /api/subscriptions/me) and the admin panel's
+      // own grant toggle both tag their Subscription rows this way
+      // precisely so this KPI keeps meaning "paying subscribers", not
+      // "accounts flagged Premium for any reason".
+      prisma.subscription.count({ where: { status: 'ACTIVE', provider: { not: 'admin-grant' } } }),
       prisma.report.count({ where: { status: 'PENDING' } }),
       prisma.order.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
       prisma.profile.count({ where: { verificationStatus: 'VERIFIED' } }),

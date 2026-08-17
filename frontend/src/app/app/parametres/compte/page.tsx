@@ -53,7 +53,11 @@ export default function ComptePage() {
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <SettingsSubHeader title="Compte" subtitle="Email, vérification et mot de passe" />
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
         <SettingsSection title="Informations">

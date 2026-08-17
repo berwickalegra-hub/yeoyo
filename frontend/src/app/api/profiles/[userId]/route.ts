@@ -14,6 +14,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 import { createLogger } from '@/lib/server/logger';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
+import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const log = createLogger();
 
@@ -75,8 +76,15 @@ export async function GET(
       }
     }
 
+    const premiumIds = await getPremiumUserIds(prisma, [userId]);
+
     return NextResponse.json(
-      { profile: toProfileCard(profile), liked, favorited, isSelf },
+      {
+        profile: { ...toProfileCard(profile), isPremium: premiumIds.has(userId) },
+        liked,
+        favorited,
+        isSelf,
+      },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });

@@ -11,12 +11,16 @@ import { usePwaInstall } from '@/lib/yeoyo/usePwaInstall';
 export default function AProposPage() {
   const user = useUser();
   const badgeCounts = useNavCounts();
-  const { canInstall, install, iosHint, installed } = usePwaInstall();
+  const { canInstall, install, iosHint, inAppBrowser, installed } = usePwaInstall();
 
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <SettingsSubHeader title="À propos" />
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
         <SettingsSection title="YeOyo">
@@ -38,9 +42,11 @@ export default function AProposPage() {
                 <p className="font-body text-sm text-foreground">
                   {canInstall
                     ? 'Installe YeOyo sur ton téléphone'
-                    : iosHint
-                      ? 'Appuie sur Partager, puis « Sur l’écran d’accueil »'
-                      : 'Bientôt disponible sur ce navigateur'}
+                    : inAppBrowser
+                      ? 'Ouvre ce lien dans Safari pour installer l’app'
+                      : iosHint
+                        ? 'Appuie sur Partager, puis « Sur l’écran d’accueil »'
+                        : 'Bientôt disponible sur ce navigateur'}
                 </p>
               </div>
               {canInstall && (

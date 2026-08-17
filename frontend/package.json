@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000 --turbopack",
+    "dev:webpack": "next dev --port 3000 --webpack",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

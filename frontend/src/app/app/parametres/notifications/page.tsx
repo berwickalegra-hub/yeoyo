@@ -66,7 +66,11 @@ export default function NotificationsSettingsPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <SettingsSubHeader title="Notifications" subtitle="Ce que tu veux être averti(e)" />
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
         <SettingsSection title="Notifications">

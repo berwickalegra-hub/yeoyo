@@ -7,7 +7,7 @@ import 'server-only';
 import { prisma } from '@/lib/server/prisma';
 import { startOfUtcDay, nextUtcMidnight } from '@/lib/server/daily-quota';
 
-export const FREE_DAILY_MESSAGE_LIMIT = 20;
+export const FREE_DAILY_MESSAGE_LIMIT = 3;
 
 export async function messageQuotaStatus(
   userId: string,

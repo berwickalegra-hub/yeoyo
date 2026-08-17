@@ -7,24 +7,25 @@
 // its own; profiles with no religion set — or not yet onboarded — get a
 // small set of Congolese/African proverbs about marriage instead). Nothing
 // here is generated or invented; every entry is a real, checkable source.
-// Deterministic day-of-year rotation (not random) so the "quote of the
-// day" is stable for everyone across a single day, and the whole set
-// cycles evenly rather than repeating streaks.
+// Deterministic period-of-time rotation (not random) so the "quote of the
+// day" is stable for everyone across a whole period (e.g. every 12h), and
+// the whole set cycles evenly rather than repeating streaks or reshuffling
+// on every page load/reload within the same period.
 //
 // The tips are generic, evergreen profile advice — deliberately phrased
 // without invented statistics ("gets 3x more replies") since this kit
 // tracks no such metric; see the Profile-completeness widget in
 // decouvrir/page.tsx for the one stat that IS real.
 
-function dayOfYear(date: Date): number {
-  const start = Date.UTC(date.getFullYear(), 0, 0);
-  const diff = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - start;
-  return Math.floor(diff / 86_400_000);
-}
-
-export function dailyPick<T>(list: readonly T[], date: Date = new Date()): T {
-  const item = list[dayOfYear(date) % list.length];
-  if (item === undefined) throw new Error('dailyPick: empty list');
+export function periodicPick<T>(
+  list: readonly T[],
+  periodHours: number,
+  date: Date = new Date(),
+): T {
+  const periodMs = periodHours * 60 * 60 * 1000;
+  const bucket = Math.floor(date.getTime() / periodMs);
+  const item = list[bucket % list.length];
+  if (item === undefined) throw new Error('periodicPick: empty list');
   return item;
 }
 

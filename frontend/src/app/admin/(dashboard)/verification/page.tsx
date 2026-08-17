@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
+import { AdminTableSkeleton } from '@/components/yeoyo/AdminTableSkeleton';
 
 interface QueueItem {
   id: string;
@@ -61,49 +62,51 @@ export default function AdminVerificationPage() {
         {items.length} profil(s) en attente de vérification.
       </p>
 
-      {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
-
-      <div className="flex flex-col gap-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center justify-between rounded-xl border border-border bg-surface p-4"
-          >
-            <div>
-              <p className="font-body text-sm font-medium text-foreground">
-                {item.firstName}, {item.age} ans
-              </p>
-              <p className="font-body text-xs text-muted-foreground">
-                {item.photoCount} photo(s) —{' '}
-                {item.waitingSince
-                  ? `en attente depuis le ${new Date(item.waitingSince).toLocaleDateString('fr-FR')}`
-                  : 'en attente'}
-              </p>
+      {loading ? (
+        <AdminTableSkeleton rows={4} columns={3} />
+      ) : (
+        <div className="animate-fade-in flex flex-col gap-2">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between rounded-xl border border-border bg-surface p-4"
+            >
+              <div>
+                <p className="font-body text-sm font-medium text-foreground">
+                  {item.firstName}, {item.age} ans
+                </p>
+                <p className="font-body text-xs text-muted-foreground">
+                  {item.photoCount} photo(s) —{' '}
+                  {item.waitingSince
+                    ? `en attente depuis le ${new Date(item.waitingSince).toLocaleDateString('fr-FR')}`
+                    : 'en attente'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void process(item.id, 'REJECT')}
+                  disabled={processingId === item.id}
+                  className="btn-press rounded-lg border border-red-500/40 px-3 py-1.5 font-body text-xs text-red-500 disabled:opacity-50"
+                >
+                  Rejeter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void process(item.id, 'APPROVE')}
+                  disabled={processingId === item.id}
+                  className="btn-press rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  Approuver
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void process(item.id, 'REJECT')}
-                disabled={processingId === item.id}
-                className="rounded-lg border border-red-500/40 px-3 py-1.5 font-body text-xs text-red-500 disabled:opacity-50"
-              >
-                Rejeter
-              </button>
-              <button
-                type="button"
-                onClick={() => void process(item.id, 'APPROVE')}
-                disabled={processingId === item.id}
-                className="rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground disabled:opacity-50"
-              >
-                Approuver
-              </button>
-            </div>
-          </div>
-        ))}
-        {!loading && items.length === 0 && (
-          <p className="font-body text-sm text-muted-foreground">Aucun profil en attente.</p>
-        )}
-      </div>
+          ))}
+          {items.length === 0 && (
+            <p className="font-body text-sm text-muted-foreground">Aucun profil en attente.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -15,7 +15,11 @@ export default function ApparencePage() {
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <SettingsSubHeader
         title="Apparence"
         subtitle="Choisis le thème de couleurs de l'application — appliqué immédiatement."

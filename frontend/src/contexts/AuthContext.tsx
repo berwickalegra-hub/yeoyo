@@ -16,6 +16,8 @@ export interface User {
   hasPassword: boolean;
   /** Provider names already linked, e.g. ['google']. Empty for pure email/password accounts. */
   linkedProviders: string[];
+  /** OAuth avatar, else the dating profile's primary photo, else null (nav falls back to initials). */
+  avatarUrl: string | null;
 }
 
 interface AuthContextValue {

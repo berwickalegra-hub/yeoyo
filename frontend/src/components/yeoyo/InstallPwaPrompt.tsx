@@ -14,7 +14,7 @@ const DISMISS_KEY = 'yeoyo-pwa-install-dismissed';
 // À propos, wired to the same usePwaInstall() hook so both trigger the
 // identical native prompt.
 export function InstallPwaPrompt() {
-  const { canInstall, install, iosHint, installed } = usePwaInstall();
+  const { canInstall, install, iosHint, inAppBrowser, installed } = usePwaInstall();
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -50,7 +50,9 @@ export function InstallPwaPrompt() {
         <p className="truncate font-body text-[11px] opacity-90 sm:text-xs">
           {canInstall
             ? 'Plus rapide, notifications incluses'
-            : 'Appuyez sur Partager, puis « Sur l’écran d’accueil »'}
+            : inAppBrowser
+              ? 'Ouvre ce lien dans Safari pour installer l’app'
+              : 'Appuyez sur Partager, puis « Sur l’écran d’accueil »'}
         </p>
       </div>
       {canInstall && (

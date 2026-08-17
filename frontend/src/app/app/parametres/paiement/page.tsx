@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { usePremium } from '@/contexts/PremiumContext';
 import { useToast } from '@/contexts/ToastContext';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { SettingsSubHeader } from '@/components/yeoyo/SettingsSubHeader';
@@ -26,6 +27,7 @@ interface OrderRow {
 
 export default function PaiementPage() {
   const user = useUser();
+  const { isPremium } = usePremium();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -63,8 +65,16 @@ export default function PaiementPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
-      <SettingsSubHeader title="Paiement" subtitle="Ton abonnement et ton historique" />
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
+      <SettingsSubHeader
+        title="Paiement"
+        subtitle="Ton abonnement et ton historique"
+        premium={isPremium}
+      />
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
         <SettingsSection title="Paiement">
           <SettingsRow
@@ -77,9 +87,13 @@ export default function PaiementPage() {
           >
             <Link
               href="/app/premium"
-              className="rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground"
+              className={`rounded-lg px-4 py-2 font-body text-sm font-semibold ${
+                subscription?.status === 'ACTIVE'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-gold text-gold-foreground'
+              }`}
             >
-              {subscription?.status === 'ACTIVE' ? 'Gérer' : 'Passer Premium'}
+              {subscription?.status === 'ACTIVE' ? 'Voir' : 'Passer Premium'}
             </Link>
           </SettingsRow>
           <details onToggle={() => void loadOrders()}>

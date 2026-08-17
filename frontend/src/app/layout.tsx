@@ -3,6 +3,7 @@ import { DM_Sans, PT_Serif } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { PremiumProvider } from '@/contexts/PremiumContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { InstallPwaPrompt } from '@/components/yeoyo/InstallPwaPrompt';
 
@@ -56,14 +57,24 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${dmSans.variable} ${ptSerif.variable}`}>
       <head>
+        {/* Next 16's `metadata.appleWebApp.capable` only emits the newer,
+            unprefixed `mobile-web-app-capable` tag (verified via the
+            rendered HTML) — iOS versions before 17.4 only recognize this
+            Apple-prefixed one, so without it "Add to Home Screen" still
+            works but launches inside Safari's chrome instead of standalone
+            on older iPhones. Added manually since the Metadata API doesn't
+            emit it here. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className={dmSans.className}>
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <InstallPwaPrompt />
-              {children}
+              <PremiumProvider>
+                <InstallPwaPrompt />
+                {children}
+              </PremiumProvider>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>

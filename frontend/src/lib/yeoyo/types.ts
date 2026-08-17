@@ -9,6 +9,10 @@ export interface ProfileCard {
   photoUrl: string | null;
   photoUrls: string[];
   verified: boolean;
+  // Whether this profile's owner currently has an ACTIVE subscription —
+  // always populated (unlike `liked`/`favorited`/`boosted` below), same
+  // shape as `verified`.
+  isPremium: boolean;
   bio: string | null;
   religion: string | null;
   maritalStatus: string | null;
@@ -18,6 +22,7 @@ export interface ProfileCard {
   qualities: string | null;
   flaws: string | null;
   dealbreakers: string | null;
+  interests: string[];
   // Only populated by endpoints that know the caller's identity and compute
   // it server-side (currently /api/profiles/explorer and /api/profiles/[userId]
   // via a sibling field) — undefined elsewhere, treat as "not liked".

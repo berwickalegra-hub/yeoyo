@@ -13,6 +13,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { useConversations } from '@/lib/yeoyo/useConversations';
 
@@ -31,7 +32,11 @@ export default function MessagesPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="messages" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="messages"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="flex flex-1">
         <div className="flex w-full flex-col border-r border-border lg:w-96">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-5">
@@ -52,7 +57,9 @@ export default function MessagesPage() {
           )}
           <div className="flex flex-1 flex-col overflow-y-auto">
             {loading && (
-              <p className="px-5 py-3 font-body text-sm text-muted-foreground">Chargement…</p>
+              <div className="px-4 py-3">
+                <MessageListSkeleton count={4} />
+              </div>
             )}
             {!loading && conversations.length === 0 && (
               <p className="px-5 py-3 font-body text-sm text-muted-foreground">
@@ -64,17 +71,20 @@ export default function MessagesPage() {
                 Aucune conversation ne correspond à « {search} ».
               </p>
             )}
-            {!loading &&
-              filtered.map((c) => (
-                <ConversationListItem
-                  key={c.id}
-                  id={c.id}
-                  otherUser={c.otherUser}
-                  lastMessage={c.lastMessage}
-                  unreadCount={c.unreadCount}
-                  muted={c.muted}
-                />
-              ))}
+            {!loading && filtered.length > 0 && (
+              <div className="animate-fade-in flex flex-col">
+                {filtered.map((c) => (
+                  <ConversationListItem
+                    key={c.id}
+                    id={c.id}
+                    otherUser={c.otherUser}
+                    lastMessage={c.lastMessage}
+                    unreadCount={c.unreadCount}
+                    muted={c.muted}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

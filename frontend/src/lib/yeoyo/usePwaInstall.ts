@@ -9,11 +9,26 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-function isIosSafari(): boolean {
+// Broadened from a Safari-only check (2026-08-14, explicit user report:
+// "the download button does nothing on my iPhone"). No iOS browser has a
+// `beforeinstallprompt` API — Chrome-iOS/Firefox-iOS/Edge-iOS are all
+// WebKit under the hood and equally need the manual Share → "Sur l'écran
+// d'accueil" flow, so gating the hint on the UA literally containing
+// "Safari" silently dropped the hint (and left the button doing nothing
+// visible) for anyone whose default iPhone browser isn't Safari itself.
+function isIos(): boolean {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+}
+
+// In-app browsers (WhatsApp/Instagram/Facebook/Messenger/TikTok/Line
+// webviews) can't add to the home screen at all — their Share sheet either
+// lacks the option or the webview blocks it outright. If the YeOyo link was
+// opened from a shared message (very likely for a link under test), this is
+// the actual reason nothing happens on tap, distinct from "you're on iOS,
+// use Share" — the fix here is "open this link in Safari first."
+function isInAppBrowser(): boolean {
   const ua = window.navigator.userAgent;
-  const isIos = /iphone|ipad|ipod/i.test(ua);
-  const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
-  return isIos && isSafari;
+  return /FBAN|FBAV|Instagram|Line\/|MicroMessenger|Twitter|TikTok|WhatsApp/i.test(ua);
 }
 
 function isStandalone(): boolean {
@@ -35,6 +50,7 @@ export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [iosHint, setIosHint] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -45,7 +61,8 @@ export function usePwaInstall() {
     }
 
     setInstalled(isStandalone());
-    setIosHint(isIosSafari());
+    setIosHint(isIos());
+    setInAppBrowser(isInAppBrowser());
 
     function onBeforeInstallPrompt(e: Event) {
       e.preventDefault();
@@ -78,6 +95,10 @@ export function usePwaInstall() {
     install,
     /** No native prompt API on this browser — show manual "Partager → Sur l'écran d'accueil" steps instead. */
     iosHint,
+    /** Opened from an in-app browser (WhatsApp/Instagram/…) — Add to Home
+     *  Screen isn't available there at all, tell the user to open in Safari
+     *  first instead of showing the (non-functional) share-icon steps. */
+    inAppBrowser,
     /** Already running as an installed/standalone app — nothing to offer. */
     installed,
   };

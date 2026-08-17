@@ -320,6 +320,15 @@ model Profile {
   // anywhere else on the user.
   phone                 String?
   phoneCountry          String? // ISO2, e.g. "CD", "SN" — paired with `phone`
+  // "Message" shortcut on Découvrir's swipe card (POST /api/likes + jump
+  // straight into the conversation, before the request is formally
+  // accepted) — free for the first FREE_FLASH_MESSAGE_LIMIT uses (lifetime,
+  // not daily), then gated behind Premium via PremiumGateModal. Distinct
+  // from the existing daily sent-message cap in
+  // lib/server/conversations/message-quota.ts, which limits messages sent
+  // *inside* an already-open conversation — this counts uses of the
+  // shortcut itself. ACTIVE Premium subscribers never consume this.
+  flashMessagesUsed     Int       @default(0)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

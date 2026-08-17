@@ -1,14 +1,15 @@
 'use client';
 
-// Floating "Coach" chat — app-wide (mounted once in AppShell), inspired by
-// a competitor app's coach bubble (2026-08-10, user-driven). Free tier:
-// 3 questions/day (server-enforced, see /api/coach/messages); ACTIVE
-// subscribers are unlimited. Entirely inert (friendly "not configured"
-// state, no crash) when the backend has no ANTHROPIC_API_KEY — same
-// optional-provider pattern as Cloudinary/Resend/Ably elsewhere in this
-// kit. Positioned high enough (`bottom-36` mobile) to never collide with
-// Explorer's SwipeCard fixed action bar, which also sits above the mobile
-// tab bar on that one screen.
+// Floating "Coach" chat — mounted once in AppShell, on every screen except
+// Découvrir/Explorer (see AppShell's `showCoach` prop — that one screen
+// already stacks a raised nav FAB + the SwipeCard's own action row + swipe
+// gestures, one floating element too many, 2026-08-17 explicit user
+// report). Inspired by a competitor app's coach bubble (2026-08-10,
+// user-driven). Free tier: 3 questions/day (server-enforced, see
+// /api/coach/messages); ACTIVE subscribers are unlimited. Entirely inert
+// (friendly "not configured" state, no crash) when the backend has no
+// ANTHROPIC_API_KEY — same optional-provider pattern as Cloudinary/Resend/
+// Ably elsewhere in this kit.
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
@@ -215,7 +216,7 @@ export function CoachWidget() {
             {quota.configured !== false && limitReached ? (
               <Link
                 href="/app/premium"
-                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary font-headings text-sm font-semibold text-primary-foreground"
+                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-gold font-headings text-sm font-semibold text-gold-foreground"
               >
                 <Icon name="crown" size={16} />
                 Passer Premium pour continuer

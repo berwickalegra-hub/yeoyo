@@ -42,6 +42,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
+import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
@@ -63,6 +64,8 @@ export default function ProfileDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
   );
@@ -172,7 +175,11 @@ export default function ProfileDetailPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="decouvrir" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="decouvrir"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="flex items-center gap-3 border-b border-border px-5 py-4 lg:px-8">
         <button type="button" onClick={() => router.back()} aria-label="Retour">
           <Icon name="chevron-left" size={22} />
@@ -204,20 +211,52 @@ export default function ProfileDetailPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
             {/* Main column — photo + full info sections. */}
             <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface lg:flex-1">
-              <div className="relative">
+              {/* Tapping the photo opens it full-size (2026-08-14, explicit
+                  user ask — this is the page where photo enlargement
+                  belongs, not the Explorer/Découvrir swipe card, where it
+                  conflicted with the favorite star button and the
+                  multi-photo carousel's own tap zones). Those zones
+                  stopPropagate their own click so paging through photos
+                  here doesn't also pop the lightbox. */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Voir la photo en grand"
+                onClick={() => setLightboxOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setLightboxOpen(true);
+                  }
+                }}
+                className="relative cursor-pointer"
+              >
                 <PhotoCarousel
                   photoUrls={profile.photoUrls}
                   name={profile.firstName}
                   heightPx={420}
+                  onIndexChange={setActivePhotoIndex}
                 />
-                {profile.verified && (
+                {(profile.verified || profile.isPremium) && (
                   <div
-                    className={`absolute left-3 flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1 ${profile.photoUrls.length > 1 ? 'top-6' : 'top-3'}`}
+                    className={`absolute left-3 flex flex-col items-start gap-1.5 ${profile.photoUrls.length > 1 ? 'top-6' : 'top-3'}`}
                   >
-                    <div className="h-1.5 w-1.5 rounded-full bg-verified" />
-                    <span className="font-body text-xs font-medium text-foreground">
-                      Vérifié IA
-                    </span>
+                    {profile.verified && (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
+                        <div className="h-1.5 w-1.5 rounded-full bg-verified" />
+                        <span className="font-body text-xs font-medium text-foreground">
+                          Vérifié IA
+                        </span>
+                      </div>
+                    )}
+                    {profile.isPremium && (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
+                        <div className="h-1.5 w-1.5 rounded-full bg-gold" />
+                        <span className="font-body text-xs font-medium text-foreground">
+                          Premium
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14">
@@ -326,6 +365,22 @@ export default function ProfileDetailPage() {
                 </div>
               )}
 
+              {profile.isPremium && (
+                <div className="flex items-start gap-3 rounded-xl border border-gold/30 bg-gold/5 p-4">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+                    <Icon name="crown" size={16} />
+                  </div>
+                  <div>
+                    <p className="font-body text-sm font-semibold text-foreground">
+                      Membre Premium
+                    </p>
+                    <p className="font-body text-xs text-muted-foreground">
+                      {profile.firstName} fait partie des membres Premium de YeOyo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-xl border border-border bg-surface p-4">
                 <p className="mb-3 font-body text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Un problème avec ce profil ?
@@ -408,6 +463,14 @@ export default function ProfileDetailPage() {
           </div>
         )}
       </div>
+
+      {lightboxOpen && profile && (
+        <PhotoLightbox
+          photoUrl={profile.photoUrls[activePhotoIndex] ?? profile.photoUrls[0] ?? null}
+          name={profile.firstName}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </AppShell>
   );
 }

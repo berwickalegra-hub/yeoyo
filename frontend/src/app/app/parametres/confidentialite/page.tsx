@@ -65,7 +65,11 @@ export default function ConfidentialitePage() {
   if (!user) return null;
 
   return (
-    <AppShell active="parametres" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="parametres"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <SettingsSubHeader
         title="Confidentialité"
         subtitle="Utilisateurs bloqués, tes données, ton compte"

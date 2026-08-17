@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
 import { useLikePop } from '@/lib/yeoyo/useLikePop';
+import { useCardExit } from '@/lib/yeoyo/useCardExit';
 
 export function ProfileGridCard({
   profile,
@@ -29,9 +30,12 @@ export function ProfileGridCard({
 }) {
   const liked = profile.liked ?? false;
   const popping = useLikePop(liked);
+  const { exitClassName, trigger } = useCardExit();
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+    <div
+      className={`flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${exitClassName}`}
+    >
       <Link href={`/app/profils/${profile.userId}`} className="block">
         <div className="relative">
           <ProfilePhotoCover photoUrl={profile.photoUrl} name={profile.firstName} heightPx={200} />
@@ -48,6 +52,12 @@ export function ProfileGridCard({
               <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
                 <div className="h-1.5 w-1.5 rounded-full bg-verified" />
                 <span className="font-body text-xs font-medium text-foreground">Vérifié IA</span>
+              </div>
+            )}
+            {profile.isPremium && (
+              <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-gold" />
+                <span className="font-body text-xs font-medium text-foreground">Premium</span>
               </div>
             )}
           </div>
@@ -115,7 +125,7 @@ export function ProfileGridCard({
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => onDismiss(profile.userId)}
+            onClick={() => trigger('left', () => onDismiss(profile.userId))}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground"
             aria-label="Passer ce profil"
           >

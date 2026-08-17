@@ -54,9 +54,12 @@ import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { RecommendedProfileCard } from '@/components/yeoyo/RecommendedProfileCard';
+import { ProfileCardSkeleton } from '@/components/yeoyo/ProfileCardSkeleton';
+import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import { WhoLikedBanner } from '@/components/yeoyo/WhoLikedBanner';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
-import { dailyPick, quotesForReligion, PROFILE_TIPS } from '@/lib/yeoyo/content';
+import { periodicPick, quotesForReligion, PROFILE_TIPS } from '@/lib/yeoyo/content';
+import { useCardExit } from '@/lib/yeoyo/useCardExit';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 interface MyProfile {
@@ -97,6 +100,12 @@ interface FavoritedBy {
   total: number;
 }
 
+interface NewNearbyCount {
+  count: number;
+  scope: 'commune' | 'city';
+  commune: string | null;
+}
+
 const TRUST_ITEMS = [
   {
     icon: 'shield-check' as const,
@@ -126,6 +135,11 @@ const TRUST_ITEMS = [
   },
 ];
 
+// "Pensée du jour" / "Conseil du jour" rotate every 12h (not once a day,
+// not randomly per reload) — stable if the user reopens the app several
+// times within the same 12h window, changes automatically after.
+const QUOTE_ROTATION_HOURS = 12;
+
 const COMPLETENESS_FIELDS = [
   'bio',
   'commune',
@@ -148,7 +162,28 @@ function completeness(p: MyProfile): number {
 // incomplete). localStorage, not the DB: this is a per-device UI snooze,
 // not account state worth a schema field.
 const COMPLETION_BANNER_DISMISS_KEY = 'yeoyo-completion-banner-dismissed-at';
-const COMPLETION_BANNER_SNOOZE_MS = 24 * 60 * 60 * 1000;
+// Shared 24h snooze for every dismissible banner on this page (completion,
+// Premium promo, Boost promo) — closing one hides it until the next day,
+// never permanently and never on an immediate reload.
+const BANNER_SNOOZE_MS = 24 * 60 * 60 * 1000;
+const PREMIUM_BANNER_DISMISS_KEY = 'yeoyo-premium-banner-dismissed-at';
+const BOOST_BANNER_DISMISS_KEY = 'yeoyo-boost-banner-dismissed-at';
+// Cycles the "Pourquoi faire confiance" slot between 3 variants across
+// visits (trust badges / featured profile of the day / a live nearby
+// stat) instead of always showing the same block — one visit = one step,
+// via a small persisted counter (not random, so it doesn't reshuffle on
+// every render within the same visit).
+const HERO_VISIT_COUNT_KEY = 'yeoyo-accueil-hero-visit-count';
+const HERO_VARIANT_COUNT = 3;
+
+function isBannerSnoozed(key: string): boolean {
+  const dismissedAt = Number(localStorage.getItem(key) ?? 0);
+  return Date.now() - dismissedAt < BANNER_SNOOZE_MS;
+}
+
+function snoozeBanner(key: string): void {
+  localStorage.setItem(key, String(Date.now()));
+}
 
 function matchNote(me: MyProfile, p: ProfileCard): string | undefined {
   const reasons: string[] = [];
@@ -169,32 +204,41 @@ export default function DecouvrirPage() {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [favoritedBy, setFavoritedBy] = useState<FavoritedBy>({ preview: [], total: 0 });
+  const [newNearby, setNewNearby] = useState<NewNearbyCount | null>(null);
+  const [heroVariant, setHeroVariant] = useState(0);
   const [boost, setBoost] = useState<BoostStatus | null>(null);
   const [boosting, setBoosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [actingUserId, setActingUserId] = useState<string | null>(null);
   const [completionBannerDismissed, setCompletionBannerDismissed] = useState(false);
+  const [premiumBannerDismissed, setPremiumBannerDismissed] = useState(false);
+  const [boostBannerDismissed, setBoostBannerDismissed] = useState(false);
+  const premiumBannerExit = useCardExit();
+  const boostBannerExit = useCardExit();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const profileRes = await api<{ profile: MyProfile }>('/api/profile');
       setProfile(profileRes.profile);
-      const [recRes, likesRes, subRes, visitorsRes, favoritedByRes, boostRes] = await Promise.all([
-        api<{ profiles: ProfileCard[] }>('/api/profiles/explorer?page=1&pageSize=6'),
-        api<{ likes: LikeRow[] }>('/api/likes/received'),
-        api<{ subscription: SubscriptionInfo | null }>('/api/subscriptions/me'),
-        api<{ total: number }>('/api/profile/visitors'),
-        api<FavoritedBy>('/api/profile/favorited-by'),
-        api<BoostStatus>('/api/profile/boost'),
-      ]);
+      const [recRes, likesRes, subRes, visitorsRes, favoritedByRes, boostRes, newNearbyRes] =
+        await Promise.all([
+          api<{ profiles: ProfileCard[] }>('/api/profiles/explorer?page=1&pageSize=6'),
+          api<{ likes: LikeRow[] }>('/api/likes/received'),
+          api<{ subscription: SubscriptionInfo | null }>('/api/subscriptions/me'),
+          api<{ total: number }>('/api/profile/visitors'),
+          api<FavoritedBy>('/api/profile/favorited-by'),
+          api<BoostStatus>('/api/profile/boost'),
+          api<NewNearbyCount>('/api/profile/new-nearby-count'),
+        ]);
       setRecommended(recRes.profiles);
       setLikes(likesRes.likes);
       setSubscription(subRes.subscription);
       setVisitorsCount(visitorsRes.total);
       setFavoritedBy(favoritedByRes);
       setBoost(boostRes);
+      setNewNearby(newNearbyRes);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PROFILE_NOT_FOUND') {
         setNeedsOnboarding(true);
@@ -211,13 +255,28 @@ export default function DecouvrirPage() {
   }, [user, load]);
 
   useEffect(() => {
-    const dismissedAt = Number(localStorage.getItem(COMPLETION_BANNER_DISMISS_KEY) ?? 0);
-    setCompletionBannerDismissed(Date.now() - dismissedAt < COMPLETION_BANNER_SNOOZE_MS);
+    setCompletionBannerDismissed(isBannerSnoozed(COMPLETION_BANNER_DISMISS_KEY));
+    setPremiumBannerDismissed(isBannerSnoozed(PREMIUM_BANNER_DISMISS_KEY));
+    setBoostBannerDismissed(isBannerSnoozed(BOOST_BANNER_DISMISS_KEY));
+
+    const visitCount = Number(localStorage.getItem(HERO_VISIT_COUNT_KEY) ?? 0);
+    localStorage.setItem(HERO_VISIT_COUNT_KEY, String(visitCount + 1));
+    setHeroVariant(visitCount % HERO_VARIANT_COUNT);
   }, []);
 
   function dismissCompletionBanner() {
-    localStorage.setItem(COMPLETION_BANNER_DISMISS_KEY, String(Date.now()));
+    snoozeBanner(COMPLETION_BANNER_DISMISS_KEY);
     setCompletionBannerDismissed(true);
+  }
+
+  function dismissPremiumBanner() {
+    snoozeBanner(PREMIUM_BANNER_DISMISS_KEY);
+    setPremiumBannerDismissed(true);
+  }
+
+  function dismissBoostBanner() {
+    snoozeBanner(BOOST_BANNER_DISMISS_KEY);
+    setBoostBannerDismissed(true);
   }
 
   async function onLike(targetUserId: string) {
@@ -258,15 +317,21 @@ export default function DecouvrirPage() {
 
   if (!user) return null;
 
-  const quote = dailyPick(quotesForReligion(profile?.religion ?? null));
-  const tip = dailyPick(PROFILE_TIPS);
+  const quote = periodicPick(quotesForReligion(profile?.religion ?? null), QUOTE_ROTATION_HOURS);
+  const tip = periodicPick(PROFILE_TIPS, QUOTE_ROTATION_HOURS);
   const pct = profile ? completeness(profile) : 0;
 
   return (
-    <AppShell active="accueil" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="accueil"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="px-5 py-5 lg:px-8 lg:py-6">
         {loading && (
-          <p className="text-center font-body text-sm text-muted-foreground">Chargement…</p>
+          <div className="animate-fade-in mx-auto grid max-w-7xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <ProfileCardSkeleton count={4} />
+          </div>
         )}
 
         {!loading && needsOnboarding && (
@@ -342,87 +407,166 @@ export default function DecouvrirPage() {
                 )}
               </div>
 
-              {subscription?.status !== 'ACTIVE' && (
-                <Link
-                  href="/app/premium"
-                  className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-gradient-to-r from-primary/15 to-primary/5 px-5 py-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
-                      <Icon name="crown" size={18} />
+              {subscription?.status !== 'ACTIVE' && !premiumBannerDismissed && (
+                <div className={`animate-fade-in-up relative ${premiumBannerExit.exitClassName}`}>
+                  <Link
+                    href="/app/premium"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-gold/30 bg-gradient-to-r from-gold/15 to-gold/5 px-5 py-4 pr-10"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold">
+                        <Icon name="crown" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-headings text-sm font-semibold text-foreground">
+                          Passe Premium
+                        </p>
+                        <p className="font-body text-xs text-muted-foreground">
+                          Demandes illimitées, profil mis en avant
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-headings text-sm font-semibold text-foreground">
-                        Passe Premium
-                      </p>
-                      <p className="font-body text-xs text-muted-foreground">
-                        Demandes illimitées, profil mis en avant
-                      </p>
-                    </div>
-                  </div>
-                  <Icon
-                    name="chevron-right"
-                    size={18}
-                    className="flex-shrink-0 text-muted-foreground"
-                  />
-                </Link>
+                    <Icon
+                      name="chevron-right"
+                      size={18}
+                      className="flex-shrink-0 text-muted-foreground"
+                    />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      premiumBannerExit.trigger('left', dismissPremiumBanner);
+                    }}
+                    aria-label="Fermer — me le rappeler plus tard"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
               )}
 
               {/* Boost card — same /api/profile/boost status TopNav's own
                 Boost button reads. Hidden once boosted (TopNav's pill
                 already communicates the active state everywhere). */}
-              {boost && !boost.active && (
-                <button
-                  type="button"
-                  onClick={() => void activateBoost()}
-                  disabled={boosting || !boost.canBoost}
-                  className={`flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 text-left ${
-                    !boost.canBoost ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold">
-                      <Icon name="zap" size={18} />
-                    </div>
-                    <div>
-                      <p className="font-headings text-sm font-semibold text-foreground">
-                        Booste ton profil
-                      </p>
-                      <p className="font-body text-xs text-muted-foreground">
-                        {boost.canBoost
-                          ? 'Sois plus visible pendant 30 minutes'
-                          : 'Ton prochain boost gratuit revient bientôt'}
-                      </p>
-                    </div>
-                  </div>
-                  {boost.canBoost && (
-                    <span className="flex-shrink-0 font-body text-xs font-semibold text-primary">
-                      {boosting ? '…' : 'Booster'}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Trust badges — static value props, Banani's own sidebar card. */}
-              <div className="rounded-lg border border-border bg-surface p-4">
-                <p className="mb-3 font-body text-sm font-bold text-foreground">
-                  Pourquoi faire confiance à YeOyo ?
-                </p>
-                <div className="flex flex-col gap-3">
-                  {TRUST_ITEMS.map((item) => (
-                    <div key={item.title} className="flex items-start gap-2">
-                      <div
-                        className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${item.tint}`}
-                      >
-                        <Icon name={item.icon} size={14} />
+              {boost && !boost.active && !boostBannerDismissed && (
+                <div className={`animate-fade-in-up relative ${boostBannerExit.exitClassName}`}>
+                  <button
+                    type="button"
+                    onClick={() => void activateBoost()}
+                    disabled={boosting || !boost.canBoost}
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 pr-10 text-left ${
+                      !boost.canBoost ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold">
+                        <Icon name="zap" size={18} />
                       </div>
                       <div>
-                        <p className="font-body text-xs font-bold text-foreground">{item.title}</p>
-                        <p className="font-body text-xs text-muted-foreground">{item.desc}</p>
+                        <p className="font-headings text-sm font-semibold text-foreground">
+                          Booste ton profil
+                        </p>
+                        <p className="font-body text-xs text-muted-foreground">
+                          {boost.canBoost
+                            ? 'Sois plus visible pendant 30 minutes'
+                            : 'Ton prochain boost gratuit revient bientôt'}
+                        </p>
                       </div>
                     </div>
-                  ))}
+                    {boost.canBoost && (
+                      <span className="flex-shrink-0 font-body text-xs font-semibold text-primary">
+                        {boosting ? '…' : 'Booster'}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => boostBannerExit.trigger('left', dismissBoostBanner)}
+                    aria-label="Fermer — me le rappeler plus tard"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
                 </div>
+              )}
+
+              {/* Rotating hero slot — alternates across visits (not every
+                  render) between trust badges, a bigger "coup de cœur du
+                  jour" spotlight, and a live nearby-activity stat, so the
+                  same corner of Accueil doesn't look frozen visit after
+                  visit. See HERO_VISIT_COUNT_KEY above. */}
+              <div key={heroVariant} className="animate-fade-in">
+                {heroVariant === 1 && recommended[0] ? (
+                  <div className="overflow-hidden rounded-lg border border-border bg-surface">
+                    <ProfilePhotoCover
+                      photoUrl={recommended[0].photoUrl}
+                      name={recommended[0].firstName}
+                      heightPx={140}
+                    />
+                    <div className="p-4">
+                      <p className="mb-1 font-body text-xs font-bold uppercase tracking-wide text-primary">
+                        ✨ Coup de cœur du jour
+                      </p>
+                      <p className="font-headings text-base font-bold text-foreground">
+                        {recommended[0].firstName}, {recommended[0].age}
+                      </p>
+                      {(recommended[0].commune || recommended[0].job) && (
+                        <p className="mt-0.5 font-body text-xs text-muted-foreground">
+                          {[recommended[0].commune, recommended[0].job].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      <Link
+                        href={`/app/profils/${recommended[0].userId}`}
+                        className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-primary py-2 font-body text-sm font-semibold text-primary-foreground"
+                      >
+                        Découvrir son profil
+                      </Link>
+                    </div>
+                  </div>
+                ) : heroVariant === 2 && newNearby ? (
+                  <div className="rounded-lg border border-border bg-surface p-4">
+                    <div className="mb-2 flex items-center gap-1.5 text-primary">
+                      <Icon name="trending-up" size={14} />
+                      <span className="font-headings text-xs font-semibold uppercase tracking-widest">
+                        Ça bouge près de toi
+                      </span>
+                    </div>
+                    <p className="font-headings text-2xl font-bold text-foreground">
+                      {newNearby.count}
+                    </p>
+                    <p className="font-body text-xs text-muted-foreground">
+                      nouveau{newNearby.count > 1 ? 'x' : ''} profil{newNearby.count > 1 ? 's' : ''}{' '}
+                      cette semaine{' '}
+                      {newNearby.scope === 'commune' ? `à ${newNearby.commune}` : 'à Kinshasa'}
+                    </p>
+                  </div>
+                ) : (
+                  // Default (variant 0, and the fallback when variant 1/2's
+                  // data isn't available yet) — static value props.
+                  <div className="rounded-lg border border-border bg-surface p-4">
+                    <p className="mb-3 font-body text-sm font-bold text-foreground">
+                      Pourquoi faire confiance à YeOyo ?
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {TRUST_ITEMS.map((item) => (
+                        <div key={item.title} className="flex items-start gap-2">
+                          <div
+                            className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${item.tint}`}
+                          >
+                            <Icon name={item.icon} size={14} />
+                          </div>
+                          <div>
+                            <p className="font-body text-xs font-bold text-foreground">
+                              {item.title}
+                            </p>
+                            <p className="font-body text-xs text-muted-foreground">{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <WhoLikedBanner preview={favoritedBy.preview} total={favoritedBy.total} />
@@ -491,7 +635,7 @@ export default function DecouvrirPage() {
                     </Link>
                   </div>
                   <div
-                    className={`animate-fade-in grid gap-4 ${
+                    className={`grid gap-4 ${
                       recommended.length === 1
                         ? 'grid-cols-1'
                         : recommended.length === 2
@@ -499,14 +643,19 @@ export default function DecouvrirPage() {
                           : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
                     }`}
                   >
-                    {recommended.map((p) => (
-                      <RecommendedProfileCard
+                    {recommended.map((p, i) => (
+                      <div
                         key={p.userId}
-                        profile={p}
-                        onLike={onLike}
-                        liking={actingUserId === p.userId}
-                        note={matchNote(profile, p)}
-                      />
+                        className="animate-fade-in-up"
+                        style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                      >
+                        <RecommendedProfileCard
+                          profile={p}
+                          onLike={onLike}
+                          liking={actingUserId === p.userId}
+                          note={matchNote(profile, p)}
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>

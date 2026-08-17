@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { AdminTableSkeleton } from '@/components/yeoyo/AdminTableSkeleton';
 
 interface Overview {
   kpis: {
@@ -63,7 +65,24 @@ export default function AdminDashboardPage() {
   }, []);
 
   if (!overview) {
-    return <p className="font-body text-sm text-muted-foreground">Chargement…</p>;
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="font-headings text-2xl font-bold text-foreground">Dashboard</h1>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="rounded-xl border border-border bg-surface p-4">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="mt-2 h-6 w-1/2" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-48 w-full rounded-xl" />
+        </div>
+        <AdminTableSkeleton rows={5} columns={3} />
+      </div>
+    );
   }
 
   const { kpis, signupsByMonth, memberBreakdown } = overview;
@@ -90,7 +109,7 @@ export default function AdminDashboardPage() {
     .join(', ');
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="animate-fade-in flex flex-col gap-6">
       <h1 className="font-headings text-2xl font-bold text-foreground">Dashboard</h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -31,16 +31,16 @@ const config: NextConfig = {
   // here because a git worktree under `.claude/worktrees/<name>/` sits
   // nested inside the main repo, which has its own pnpm-workspace.yaml).
   // `outputFileTracingRoot` covers the webpack builder; `turbopack.root` is
-  // its Turbopack (default since Next 16) equivalent. NOTE: in this nested
-  // worktree specifically, `turbopack.root` does not resolve `next build`'s
-  // Turbopack failure ("couldn't find the Next.js package (next/package.json)
-  // from the project directory: .../src/app") — that error comes from a
-  // native-binary package-resolution check that doesn't appear to honor this
-  // setting. Confirmed via `next build --webpack`, which succeeds cleanly and
-  // produces the correct route manifest, that this is an environment
-  // artifact of the nested-worktree layout, not a defect in the app code.
-  // Use `next build --webpack` in this worktree; plain `next build` is
-  // expected to work normally once merged into a non-nested checkout.
+  // its Turbopack (default since Next 16) equivalent. NOTE: `turbopack.root`
+  // does not resolve Turbopack's package-resolution failure ("couldn't find
+  // the Next.js package (next/package.json) from the project directory:
+  // .../src/app") in this environment — confirmed on both `next build` in a
+  // nested worktree AND plain `next dev --turbopack` at the top-level repo
+  // root, so it is not worktree-specific; it reproduces on this Windows
+  // checkout whose path contains spaces (`My Anti-Gravity`, `DELL i7`) and
+  // does not appear to honor this setting. `next build --webpack` /
+  // `next dev --webpack` (see `pnpm dev:webpack`) both work cleanly and
+  // produce the correct route manifest — use those as the substitute here.
   outputFileTracingRoot: __dirname,
   turbopack: {
     root: __dirname,

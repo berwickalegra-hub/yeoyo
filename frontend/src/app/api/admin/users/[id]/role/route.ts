@@ -1,9 +1,13 @@
 // ADMIN-01 (Wave 2) — PATCH /api/admin/users/[id]/role
 //
 // SUPERADMIN-only role mutation. The handler enforces CF-09 (last-SUPERADMIN
-// guard) atomically by performing COUNT + UPDATE inside the same Prisma
-// transaction (Pitfall 1 in 03-RESEARCH.md), preventing the demote-last-
-// SUPERADMIN race.
+// guard) atomically by performing COUNT + UPDATE inside a Serializable
+// Prisma transaction (Pitfall 1 in 03-RESEARCH.md), preventing the demote-
+// last-SUPERADMIN race: under the default Read Committed isolation, two
+// concurrent PATCHes demoting two different SUPERADMINs could each read
+// count=2 before either commits and both proceed, leaving zero SUPERADMINs.
+// Serializable (mirrors withdrawals/route.ts) makes Postgres abort one of
+// them with P2034 instead.
 //
 // Sequence:
 //   makeRequestContext → withRequestContext →
@@ -17,6 +21,7 @@ export const runtime = 'nodejs';
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireSuperadmin } from '@/lib/server/middleware';
@@ -58,38 +63,66 @@ export async function PATCH(
       );
     }
 
-    const result: Discriminator = await prisma.$transaction(async (tx) => {
-      const target = await tx.user.findUnique({
-        where: { id },
-        select: { id: true, role: true },
-      });
-      if (!target) return { kind: 'NOT_FOUND' as const };
+    let result: Discriminator;
+    try {
+      result = await prisma.$transaction(
+        async (tx) => {
+          const target = await tx.user.findUnique({
+            where: { id },
+            select: { id: true, role: true },
+          });
+          if (!target) return { kind: 'NOT_FOUND' as const };
 
-      // CF-09 / Pitfall 1: COUNT + UPDATE in same tx prevents the race where
-      // two concurrent demotions both see count=2 and both succeed.
-      if (target.role === 'SUPERADMIN' && parsed.data.role !== 'SUPERADMIN') {
-        const superadminCount = await tx.user.count({ where: { role: 'SUPERADMIN' } });
-        if (superadminCount <= 1) {
-          return { kind: 'LAST_SUPERADMIN' as const };
-        }
+          // CF-09 / Pitfall 1: COUNT + UPDATE in same tx prevents the race where
+          // two concurrent demotions both see count=2 and both succeed. Only
+          // safe because the tx runs Serializable — under Read Committed the
+          // COUNT below does not lock against a concurrent transaction's
+          // not-yet-committed demotion of a different SUPERADMIN.
+          if (target.role === 'SUPERADMIN' && parsed.data.role !== 'SUPERADMIN') {
+            const superadminCount = await tx.user.count({ where: { role: 'SUPERADMIN' } });
+            if (superadminCount <= 1) {
+              return { kind: 'LAST_SUPERADMIN' as const };
+            }
+          }
+
+          const updated = await tx.user.update({
+            where: { id },
+            data: { role: parsed.data.role },
+            select: { id: true, role: true },
+          });
+
+          await logAdminAction(tx, {
+            actorId: auth.admin.id,
+            action: 'user.role_change',
+            targetType: 'User',
+            targetId: id,
+            metadata: { from: target.role, to: parsed.data.role },
+          });
+
+          return { kind: 'OK' as const, user: updated };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (err) {
+      // P2034 — Serializable isolation aborted due to a concurrent
+      // role-change transaction (mirrors withdrawals/route.ts). Surface as a
+      // transient 409 so the client/admin can just retry the PATCH.
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        (err as { code: unknown }).code === 'P2034'
+      ) {
+        return NextResponse.json(
+          {
+            error: 'CONCURRENT_UPDATE',
+            message: 'This role change conflicted with another update — please retry.',
+          },
+          { status: 409 },
+        );
       }
-
-      const updated = await tx.user.update({
-        where: { id },
-        data: { role: parsed.data.role },
-        select: { id: true, role: true },
-      });
-
-      await logAdminAction(tx, {
-        actorId: auth.admin.id,
-        action: 'user.role_change',
-        targetType: 'User',
-        targetId: id,
-        metadata: { from: target.role, to: parsed.data.role },
-      });
-
-      return { kind: 'OK' as const, user: updated };
-    });
+      throw err;
+    }
 
     if (result.kind === 'NOT_FOUND') {
       return NextResponse.json(

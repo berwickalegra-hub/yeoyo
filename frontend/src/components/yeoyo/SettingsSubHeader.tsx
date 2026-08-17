@@ -7,9 +7,23 @@ import { Icon } from '@/components/ui/Icon';
 // (2026-08-14, second pass, explicit user ask) — Mon Profil's "Paramètres"
 // sidebar card is now the single entry point to these pages, so the back
 // arrow returns there instead.
-export function SettingsSubHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+// `premium` (default false) tints the header with the subtle gold gradient
+// (see globals.css's `.premium-header-gradient`, gated by `data-premium`) —
+// only the Paiement/Abonnement page passes it, driven by the caller's own
+// `usePremium()` status.
+export function SettingsSubHeader({
+  title,
+  subtitle,
+  premium = false,
+}: {
+  title: string;
+  subtitle?: string;
+  premium?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-3 border-b border-border px-5 py-5 lg:px-8">
+    <div
+      className={`flex items-center gap-3 border-b border-border px-5 py-5 lg:px-8 ${premium ? 'premium-header-gradient' : ''}`}
+    >
       <Link
         href="/app/profil"
         aria-label="Retour à mon profil"

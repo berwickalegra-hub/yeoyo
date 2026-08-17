@@ -24,6 +24,7 @@ import { prisma } from '@/lib/server/prisma';
 import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const USER_SELECT = {
   id: true,
@@ -90,8 +91,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     const page = buildPage(rows, limit);
-    return NextResponse.json(page, {
-      headers: { 'x-request-id': ctx.requestId },
-    });
+    const premiumIds = await getPremiumUserIds(
+      prisma,
+      page.items.map((u) => u.id),
+    );
+    return NextResponse.json(
+      { ...page, items: page.items.map((u) => ({ ...u, isPremium: premiumIds.has(u.id) })) },
+      { headers: { 'x-request-id': ctx.requestId } },
+    );
   });
 }

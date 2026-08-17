@@ -23,6 +23,7 @@ import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { COOKIE_PREFIX } from '@/lib/constants';
+import { looksLikeEmail } from '@/lib/utils';
 import { Icon } from '@/components/ui/Icon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { GoogleIcon } from '@/components/ui/GoogleIcon';
@@ -39,13 +40,6 @@ const MIN_AGE_YEARS = 18;
 // validation never disagrees with what POST /api/auth/signup will actually
 // enforce.
 const SIGNUP_PASSWORD_MIN = 10;
-
-// Simple, permissive check — real validation is server-side (zEmail). This
-// only exists so an obviously-malformed email gets an instant French
-// message instead of a round trip to the API.
-function looksLikeEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
 
 function ageFromIso(iso: string): number {
   const dob = new Date(iso);
@@ -183,6 +177,12 @@ function PillOption({
   );
 }
 
+// Callers key each `<WizardShell>` invocation by step id (see the three
+// call sites below) so React remounts this whole subtree on every step
+// change — the cheapest way to guarantee the `.animate-fade-in-up` on the
+// content wrapper actually replays every time, rather than relying on
+// React reusing DOM nodes whose position/type happens to match across
+// differently-shaped steps (which would silently skip the animation).
 function WizardShell({
   stepLabel,
   progressPct,
@@ -217,7 +217,7 @@ function WizardShell({
       <div className="h-1 flex-shrink-0 bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-6">{children}</div>
+      <div className="animate-fade-in-up flex-1 overflow-y-auto px-5 py-6">{children}</div>
     </div>
   );
 }
@@ -465,7 +465,7 @@ export default function OnboardingPage() {
 
   if (step === 'signup') {
     return (
-      <WizardShell stepLabel="Compte" progressPct={0}>
+      <WizardShell key="signup" stepLabel="Compte" progressPct={0}>
         {/* Logo, centered — reuses the existing brand mark (BrandMark.tsx),
             not a fresh asset, per explicit instruction. */}
         <div className="mb-6 flex flex-col items-center gap-2">
@@ -635,7 +635,7 @@ export default function OnboardingPage() {
 
   if (step === 'verify') {
     return (
-      <WizardShell stepLabel="Compte" progressPct={0} onBack={() => setStep('signup')}>
+      <WizardShell key="verify" stepLabel="Compte" progressPct={0} onBack={() => setStep('signup')}>
         <h1 className="mb-2 font-headings text-2xl font-bold text-foreground">Vérifie ton email</h1>
         <p className="mb-6 font-body text-sm text-muted-foreground">
           On a envoyé un code à 8 caractères à {data.email}.
@@ -683,6 +683,7 @@ export default function OnboardingPage() {
 
   return (
     <WizardShell
+      key={`profile-${profileStep}`}
       stepLabel={`Étape ${profileStep}/4`}
       progressPct={progressPct}
       onBack={profileStep > 1 ? () => setStep((profileStep - 1) as ProfileStep) : undefined}

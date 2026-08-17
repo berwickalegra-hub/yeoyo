@@ -53,6 +53,26 @@ const RELIGIONS = [
 
 const DECK_PAGE_SIZE = 10;
 
+// Loading skeleton — previously a bare "Chargement…" line with no
+// animation (explicit user ask, 2026-08-14: "tiens vraiment compte des
+// animations... dès qu'on arrive, le chargement ainsi"). Mirrors
+// SwipeCard's own shape (rounded card, photo block, floating action row)
+// so the loading state reads as "the real thing about to appear" instead
+// of a generic spinner unrelated to what's coming.
+function SwipeCardSkeleton() {
+  return (
+    <div className="animate-fade-in mx-auto flex h-[calc(100dvh-13rem)] max-h-[680px] min-h-[440px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
+      <div className="h-[340px] flex-shrink-0 animate-pulse bg-muted" />
+      <div className="flex flex-col gap-3 p-4">
+        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="mt-2 h-3 w-full animate-pulse rounded bg-muted" />
+        <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 function buildQuery(filters: Filters, page: number): string {
   const params = new URLSearchParams({ page: String(page), pageSize: String(DECK_PAGE_SIZE) });
   if (filters.gender) params.set('gender', filters.gender);
@@ -269,7 +289,13 @@ export default function ExplorerPage() {
   const current = deck[index];
 
   return (
-    <AppShell active="decouvrir" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="decouvrir"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+      showCoach={false}
+      compactMobileNav
+    >
       <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
         <div className="relative border-b border-border px-5 py-4 text-center lg:px-8">
           <h1 className="font-headings text-lg font-bold text-foreground">Explorer</h1>
@@ -412,12 +438,26 @@ export default function ExplorerPage() {
       )}
 
       <div className="px-5 py-4 lg:px-8">
-        {loading && (
-          <p className="text-center font-body text-sm text-muted-foreground">Chargement…</p>
+        {loading && viewMode === 'swipe' && <SwipeCardSkeleton />}
+        {loading && viewMode === 'grid' && (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface"
+              >
+                <div className="h-[200px] animate-pulse bg-muted" />
+                <div className="flex flex-col gap-2 p-4">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {error && errorCode === 'PROFILE_REQUIRED' && (
-          <div className="mx-auto max-w-sm rounded-lg border border-border bg-surface p-8 text-center">
+          <div className="animate-fade-in-up mx-auto max-w-sm rounded-lg border border-border bg-surface p-8 text-center">
             <p className="font-body text-sm text-muted-foreground">
               Complète ton profil pour explorer des membres.
             </p>
@@ -430,13 +470,19 @@ export default function ExplorerPage() {
           </div>
         )}
         {error && errorCode !== 'PROFILE_REQUIRED' && (
-          <p role="alert" className="text-center font-body text-sm text-red-500">
+          <p role="alert" className="animate-fade-in text-center font-body text-sm text-red-500">
             {error}
           </p>
         )}
 
         {!loading && !error && viewMode === 'swipe' && current && (
-          <div className="mx-auto flex max-w-4xl items-start justify-center gap-8">
+          <div className="mx-auto grid max-w-4xl grid-cols-1 items-start gap-4 lg:grid-cols-[14rem_24rem_14rem]">
+            {/* Mirrors the side panel's column width so the card lands
+                dead-center under the Filtres/toggle row above, instead of
+                the whole (card + panel) block being centered as a unit —
+                which pulls the card left of that toolbar's center. */}
+            <div aria-hidden="true" className="hidden lg:block" />
+
             <SwipeCard
               key={current.userId}
               profile={current}
@@ -451,7 +497,7 @@ export default function ExplorerPage() {
             {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
                 only (Banani's DiscoverScreen own layout), no equivalent on
                 a phone-width swipe deck. */}
-            <div className="hidden w-56 flex-shrink-0 flex-col gap-4 lg:flex">
+            <div className="hidden flex-col gap-4 lg:flex">
               <div className="rounded-lg border border-border bg-surface p-4">
                 <p className="mb-3 font-headings text-sm font-semibold text-foreground">
                   Filtres actifs
@@ -532,7 +578,7 @@ export default function ExplorerPage() {
         )}
 
         {!loading && !error && viewMode === 'swipe' && !current && (
-          <div className="mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
+          <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
             <Icon name="layout-grid" size={28} className="text-muted-foreground" />
             <p className="font-headings text-base font-semibold text-foreground">
               Plus de profils pour l&rsquo;instant
@@ -551,18 +597,23 @@ export default function ExplorerPage() {
 
         {!loading && !error && viewMode === 'grid' && deck.length > 0 && (
           <>
-            <div className="animate-fade-in grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {deck.map((p) => (
-                <ProfileGridCard
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {deck.map((p, i) => (
+                <div
                   key={p.userId}
-                  profile={p}
-                  onLike={onLikeGrid}
-                  onMessage={onMessageGrid}
-                  onDismiss={onDismissGrid}
-                  onFavorite={onFavorite}
-                  favoriteBusy={favoritingUserId === p.userId}
-                  busy={busyUserId === p.userId}
-                />
+                  className="animate-fade-in-up"
+                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                >
+                  <ProfileGridCard
+                    profile={p}
+                    onLike={onLikeGrid}
+                    onMessage={onMessageGrid}
+                    onDismiss={onDismissGrid}
+                    onFavorite={onFavorite}
+                    favoriteBusy={favoritingUserId === p.userId}
+                    busy={busyUserId === p.userId}
+                  />
+                </div>
               ))}
             </div>
             {hasMore && (
@@ -581,7 +632,7 @@ export default function ExplorerPage() {
         )}
 
         {!loading && !error && viewMode === 'grid' && deck.length === 0 && (
-          <div className="mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
+          <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
             <Icon name="layout-grid" size={28} className="text-muted-foreground" />
             <p className="font-headings text-base font-semibold text-foreground">
               Plus de profils pour l&rsquo;instant

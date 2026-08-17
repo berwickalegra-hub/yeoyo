@@ -16,6 +16,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
+import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const Body = z.object({ targetUserId: z.string() });
 
@@ -39,13 +40,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     });
 
-    const rows = favorites
-      .filter((f) => f.target.profile && f.target.profile.onboardingCompletedAt)
-      .map((f) => ({
-        favoriteId: f.id,
-        createdAt: f.createdAt.toISOString(),
-        profile: toProfileCard(f.target.profile!),
-      }));
+    const eligible = favorites.filter(
+      (f) => f.target.profile && f.target.profile.onboardingCompletedAt,
+    );
+    const premiumIds = await getPremiumUserIds(
+      prisma,
+      eligible.map((f) => f.targetId),
+    );
+    const rows = eligible.map((f) => ({
+      favoriteId: f.id,
+      createdAt: f.createdAt.toISOString(),
+      profile: { ...toProfileCard(f.target.profile!), isPremium: premiumIds.has(f.targetId) },
+    }));
 
     return NextResponse.json(
       { favorites: rows },

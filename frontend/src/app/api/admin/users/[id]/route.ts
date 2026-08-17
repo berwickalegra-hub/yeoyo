@@ -38,16 +38,33 @@ export async function GET(
     if (limited) return limited;
 
     const { id } = await ctx.params;
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: USER_SELECT,
-    });
+    const [user, subscription] = await Promise.all([
+      prisma.user.findUnique({ where: { id }, select: USER_SELECT }),
+      prisma.subscription.findFirst({
+        where: { userId: id },
+        orderBy: { createdAt: 'desc' },
+        select: { status: true, provider: true, planId: true, currentPeriodEnd: true },
+      }),
+    ]);
     if (!user) {
       return NextResponse.json(
         { error: 'USER_NOT_FOUND', message: 'User not found' },
         { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
-    return NextResponse.json({ user }, { headers: { 'x-request-id': reqCtx.requestId } });
+    return NextResponse.json(
+      {
+        user,
+        subscription: subscription
+          ? {
+              status: subscription.status,
+              provider: subscription.provider,
+              planId: subscription.planId,
+              currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+            }
+          : null,
+      },
+      { headers: { 'x-request-id': reqCtx.requestId } },
+    );
   });
 }

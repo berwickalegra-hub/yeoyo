@@ -10,6 +10,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
+import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const Query = z.object({ type: z.enum(['received', 'sent']).default('received') });
 
@@ -56,6 +57,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       orderBy: { createdAt: 'desc' },
     });
 
+    const premiumIds = await getPremiumUserIds(
+      prisma,
+      rows.map((row) => (parsed.data.type === 'received' ? row.requesterId : row.targetId)),
+    );
+
     const requests = rows
       .map((row) => {
         const otherUser = parsed.data.type === 'received' ? row.requester : row.target;
@@ -65,7 +71,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           status: row.status,
           createdAt: row.createdAt.toISOString(),
           conversationId: row.conversation?.id ?? null,
-          otherUser: toProfileCard(otherUser.profile),
+          otherUser: {
+            ...toProfileCard(otherUser.profile),
+            isPremium: premiumIds.has(otherUser.id),
+          },
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);

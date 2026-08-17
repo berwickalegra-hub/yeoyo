@@ -41,7 +41,14 @@ export const TOPNAV_ITEMS: NavItem[] = [
   { id: 'favoris', icon: 'heart', label: 'Favoris', href: '/app/favoris' },
   { id: 'decouvrir', icon: 'search', label: 'Découvrir', href: '/app/explorer' },
   { id: 'demandes', icon: 'users', label: 'Demandes', href: '/app/demandes' },
-  { id: 'visiteurs', icon: 'eye', label: 'Visiteurs', href: '/app/visiteurs' },
+  // Was a direct link to /app/visiteurs — now opens a small menu offering
+  // Messages + Visiteurs (2026-08-17, explicit user ask), since Messages
+  // previously had no entry point in the bottom tab bar at all (only
+  // reachable from TopNav's top-strip icon). `href` is unused for this tab
+  // (TopNav/MobileTabBar special-case it, same pattern as 'decouvrir') but
+  // kept pointing at /app/visiteurs so any stray reference still resolves
+  // somewhere sensible.
+  { id: 'visiteurs', icon: 'menu', label: 'Activité', href: '/app/visiteurs' },
 ];
 
 export const PREMIUM_ITEM: NavItem = {

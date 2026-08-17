@@ -44,6 +44,15 @@ function formatUsd(cents: number): string {
 interface SubscriptionInfo {
   planName: string;
   status: string;
+  currentPeriodEnd: string | null;
+}
+
+function formatExpiryDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 const PHONE_COUNTRIES = [
@@ -93,7 +102,7 @@ const COMPARISON_ROWS: { feature: string; free: string | boolean; premium: strin
   { feature: 'Demandes de contact', free: '5 / mois', premium: 'Illimitées' },
   { feature: 'Voir qui vous a mis en favori', free: false, premium: true },
   { feature: 'Voir qui a visité votre profil', free: false, premium: true },
-  { feature: 'Messagerie', free: '20 messages / jour', premium: 'Illimitée' },
+  { feature: 'Messagerie', free: '3 messages / jour', premium: 'Illimitée' },
   { feature: 'Boosts de profil', free: '1 / 24h', premium: true },
   { feature: 'Badge Premium', free: false, premium: true },
   { feature: 'Support prioritaire', free: false, premium: true },
@@ -110,7 +119,11 @@ const FAQ = [
   },
   {
     q: 'Puis-je annuler mon abonnement ?',
-    a: 'Oui, à tout moment depuis Paramètres → Compte.',
+    // No auto-renewal exists in this app — each plan is a one-time,
+    // fixed-length purchase, so there's nothing to "cancel" mid-period; it
+    // simply expires. The old answer promised a cancel flow that never
+    // existed anywhere in the app (2026-08-17 audit finding).
+    a: "Il n'y a pas de prélèvement automatique : chaque plan est un achat unique pour une durée fixe. Ton accès Premium reste actif jusqu'à la fin de la période payée, puis s'arrête automatiquement — tu n'as rien à annuler.",
   },
 ];
 
@@ -181,7 +194,11 @@ export default function PremiumPage() {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
   return (
-    <AppShell active="premium" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="premium"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="mx-auto flex max-w-2xl flex-col gap-8 px-5 py-6 lg:px-8 lg:py-8">
         {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
 
@@ -190,6 +207,11 @@ export default function PremiumPage() {
             <p className="font-headings text-lg font-bold text-foreground">
               Tu es déjà Premium ({subscription.planName})
             </p>
+            {subscription.currentPeriodEnd && (
+              <p className="mt-1 font-body text-sm text-muted-foreground">
+                Actif jusqu&rsquo;au {formatExpiryDate(subscription.currentPeriodEnd)}
+              </p>
+            )}
             <Link
               href="/app/parametres/paiement"
               className="mt-4 inline-block text-sm text-primary underline"
@@ -339,7 +361,7 @@ export default function PremiumPage() {
                   type="button"
                   onClick={checkout}
                   disabled={submitting || phoneLocal.trim().length < 4}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-headings text-sm font-bold text-primary-foreground disabled:opacity-50"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold py-3.5 font-headings text-sm font-bold text-gold-foreground disabled:opacity-50"
                 >
                   <Icon name="crown" size={18} />
                   {submitting ? 'Redirection…' : 'Devenir membre Premium'}

@@ -13,6 +13,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
+import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
 
@@ -62,7 +63,11 @@ export default function VisiteursPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="visiteurs" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="visiteurs"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-5 lg:px-8">
         <div>
           <h1 className="font-headings text-xl font-bold text-foreground">Visiteurs</h1>
@@ -73,7 +78,7 @@ export default function VisiteursPage() {
       </div>
 
       <div className="flex flex-col gap-3 px-5 py-6 lg:mx-auto lg:w-full lg:max-w-2xl lg:px-8">
-        {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
+        {loading && <MessageListSkeleton count={4} />}
         {!loading && visitors.length === 0 && (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-8 text-center">
             <Icon name="eye" size={28} className="text-muted-foreground" />
@@ -83,35 +88,45 @@ export default function VisiteursPage() {
             </p>
           </div>
         )}
-        {visitors.map((v) => (
-          <Link
-            key={v.profile.userId}
-            href={`/app/profils/${v.profile.userId}`}
-            className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
-          >
-            <UserAvatar name={v.profile.firstName} avatarUrl={v.profile.photoUrl} size={56} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-headings text-base font-bold text-foreground">
-                  {v.profile.firstName}
-                </span>
-                <span className="font-body text-sm text-muted-foreground">{v.profile.age} ans</span>
-                {v.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
-              </div>
-              <div className="mt-1 flex items-center gap-3 text-muted-foreground">
-                <span className="flex items-center gap-1 font-body text-xs">
-                  <Icon name="gem" size={11} />
-                  {INTENT_LABELS[v.profile.intent] ?? v.profile.intent}
-                </span>
-                <span className="flex items-center gap-1 font-body text-xs">
-                  <Icon name="clock" size={11} />
-                  {timeAgo(v.viewedAt)}
-                </span>
-              </div>
-            </div>
-            <Icon name="chevron-right" size={18} className="flex-shrink-0 text-muted-foreground" />
-          </Link>
-        ))}
+        {!loading && visitors.length > 0 && (
+          <div className="animate-fade-in flex flex-col gap-3">
+            {visitors.map((v) => (
+              <Link
+                key={v.profile.userId}
+                href={`/app/profils/${v.profile.userId}`}
+                className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
+              >
+                <UserAvatar name={v.profile.firstName} avatarUrl={v.profile.photoUrl} size={56} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-headings text-base font-bold text-foreground">
+                      {v.profile.firstName}
+                    </span>
+                    <span className="font-body text-sm text-muted-foreground">
+                      {v.profile.age} ans
+                    </span>
+                    {v.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-muted-foreground">
+                    <span className="flex items-center gap-1 font-body text-xs">
+                      <Icon name="gem" size={11} />
+                      {INTENT_LABELS[v.profile.intent] ?? v.profile.intent}
+                    </span>
+                    <span className="flex items-center gap-1 font-body text-xs">
+                      <Icon name="clock" size={11} />
+                      {timeAgo(v.viewedAt)}
+                    </span>
+                  </div>
+                </div>
+                <Icon
+                  name="chevron-right"
+                  size={18}
+                  className="flex-shrink-0 text-muted-foreground"
+                />
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </AppShell>
   );

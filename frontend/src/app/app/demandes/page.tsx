@@ -16,6 +16,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { ContactRequestCard } from '@/components/yeoyo/ContactRequestCard';
+import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
@@ -141,7 +142,11 @@ export default function DemandesPage() {
   };
 
   return (
-    <AppShell active="demandes" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="demandes"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="flex flex-1 flex-col lg:flex-row">
         <div className="flex-1">
           <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
@@ -188,8 +193,8 @@ export default function DemandesPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 px-5 py-6 lg:px-8">
-            {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
+          <div key={tab} className="flex flex-col gap-3 px-5 py-6 lg:px-8 animate-fade-in">
+            {loading && <MessageListSkeleton count={4} />}
 
             {!loading && activeRows.length === 0 && tab !== 'contacts' && (
               <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-12 text-center">
@@ -275,11 +280,12 @@ export default function DemandesPage() {
                   Débloquer plus de demandes
                 </p>
                 <p className="mb-3 font-body text-xs text-muted-foreground">
-                  Avec le plan Premium, envoie jusqu&rsquo;à 20 demandes par semaine.
+                  Le plan gratuit permet 5 demandes de contact par mois. Passe Premium pour envoyer
+                  des demandes en illimité.
                 </p>
                 <a
                   href="/app/premium"
-                  className="block w-full rounded-lg bg-primary py-2.5 text-center font-body text-xs font-semibold text-primary-foreground"
+                  className="block w-full rounded-lg bg-gold py-2.5 text-center font-body text-xs font-semibold text-gold-foreground"
                 >
                   Passer Premium — Mobile Money
                 </a>

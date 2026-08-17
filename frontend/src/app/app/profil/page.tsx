@@ -123,6 +123,7 @@ interface ProfileSelf {
   qualities: string | null;
   flaws: string | null;
   dealbreakers: string | null;
+  interests: string[];
   verifiedAt: string | null;
   verificationStatus: string;
 }
@@ -179,6 +180,11 @@ export default function ProfilPage() {
   const [editingFlaws, setEditingFlaws] = useState(false);
   const [flawsDraft, setFlawsDraft] = useState('');
   const [savingFlaws, setSavingFlaws] = useState(false);
+
+  const [editingInterests, setEditingInterests] = useState(false);
+  const [interestsDraft, setInterestsDraft] = useState<string[]>([]);
+  const [interestInput, setInterestInput] = useState('');
+  const [savingInterests, setSavingInterests] = useState(false);
 
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoDraft, setInfoDraft] = useState({
@@ -301,6 +307,34 @@ export default function ProfilPage() {
     }
   }
 
+  function addInterestFromInput() {
+    const value = interestInput.trim();
+    if (!value) return;
+    if (interestsDraft.length >= 15) return;
+    if (!interestsDraft.some((i) => i.toLowerCase() === value.toLowerCase())) {
+      setInterestsDraft((prev) => [...prev, value]);
+    }
+    setInterestInput('');
+  }
+
+  function removeInterest(value: string) {
+    setInterestsDraft((prev) => prev.filter((i) => i !== value));
+  }
+
+  async function saveInterests() {
+    setSavingInterests(true);
+    try {
+      await api('/api/profile', { method: 'PATCH', body: { interests: interestsDraft } });
+      setProfile((p) => (p ? { ...p, interests: interestsDraft } : p));
+      setEditingInterests(false);
+      toast('Centres d’intérêt mis à jour', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setSavingInterests(false);
+    }
+  }
+
   async function saveInfo() {
     setSavingInfo(true);
     try {
@@ -360,7 +394,11 @@ export default function ProfilPage() {
   if (!user) return null;
 
   return (
-    <AppShell active="profil" user={{ name: user.email }} badgeCounts={badgeCounts}>
+    <AppShell
+      active="profil"
+      user={{ name: user.email, avatarUrl: user.avatarUrl }}
+      badgeCounts={badgeCounts}
+    >
       <div className="px-5 py-5 lg:px-8 lg:py-6">
         {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
 
@@ -380,7 +418,7 @@ export default function ProfilPage() {
             {/* Identity block */}
             <div className="flex flex-col gap-6 rounded-xl border border-border bg-surface p-6 sm:flex-row sm:items-start">
               <div className="relative flex-shrink-0 self-center sm:self-start">
-                <div className="h-28 w-28 overflow-hidden rounded-xl bg-muted">
+                <div className="avatar-ring h-28 w-28 overflow-hidden rounded-xl border-2 border-transparent bg-muted">
                   <UserAvatar
                     name={profile.firstName}
                     avatarUrl={profile.photoUrl}
@@ -677,6 +715,107 @@ export default function ProfilPage() {
                       </p>
                     )}
                   </div>
+                </div>
+
+                {/* Centres d'intérêt — chip editor (type + Entrée/virgule
+                    pour ajouter, × pour retirer). Distinct from
+                    qualités/défauts (free text) since it's an array field
+                    on Profile; shown on the discovery card
+                    (ProfileInfoSections) so a match can judge compatibility
+                    before sending a request. */}
+                <div className="rounded-xl border border-border bg-surface p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="font-headings text-base font-bold text-foreground">
+                      Mes centres d&apos;intérêt
+                    </p>
+                    {!editingInterests && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInterestsDraft(profile.interests);
+                          setInterestInput('');
+                          setEditingInterests(true);
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-primary px-2.5 py-1 font-body text-xs text-primary"
+                      >
+                        <Icon name="pencil" size={11} />
+                        Modifier
+                      </button>
+                    )}
+                  </div>
+                  {editingInterests ? (
+                    <div className="flex flex-col gap-3">
+                      {interestsDraft.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {interestsDraft.map((interest) => (
+                            <span
+                              key={interest}
+                              className="flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 font-body text-xs text-foreground"
+                            >
+                              {interest}
+                              <button
+                                type="button"
+                                onClick={() => removeInterest(interest)}
+                                aria-label={`Retirer ${interest}`}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <Icon name="x" size={11} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <input
+                        type="text"
+                        value={interestInput}
+                        onChange={(e) => setInterestInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ',') {
+                            e.preventDefault();
+                            addInterestFromInput();
+                          }
+                        }}
+                        maxLength={30}
+                        disabled={interestsDraft.length >= 15}
+                        placeholder={
+                          interestsDraft.length >= 15
+                            ? 'Maximum 15 atteint'
+                            : 'Ex : Cuisine, voyages, lecture… (Entrée pour ajouter)'
+                        }
+                        className="w-full rounded-lg border border-border bg-background p-3 font-body text-sm text-foreground disabled:opacity-50"
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingInterests(false)}
+                          className="rounded-lg px-3 py-1.5 font-body text-xs text-muted-foreground"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveInterests()}
+                          disabled={savingInterests}
+                          className="rounded-lg bg-primary px-4 py-1.5 font-body text-xs font-bold text-primary-foreground disabled:opacity-50"
+                        >
+                          {savingInterests ? 'Enregistrement…' : 'Enregistrer'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : profile.interests.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.interests.map((interest) => (
+                        <span
+                          key={interest}
+                          className="rounded-lg bg-accent px-2.5 py-1 font-body text-xs text-foreground"
+                        >
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-body text-sm text-muted-foreground">Pas encore renseigné.</p>
+                  )}
                 </div>
 
                 {/* Visibilité — direct toggles, no draft/edit-mode needed
@@ -1126,10 +1265,10 @@ export default function ProfilPage() {
                     </div>
                     <Link
                       href="/app/premium"
-                      className="mt-4 flex items-center gap-2 rounded-xl bg-accent p-3"
+                      className="mt-4 flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/10 p-3"
                     >
-                      <Icon name="crown" size={14} className="text-primary" />
-                      <p className="font-body text-xs text-accent-foreground">
+                      <Icon name="crown" size={14} className="text-gold" />
+                      <p className="font-body text-xs text-foreground">
                         Premium = plus de visibilité
                       </p>
                     </Link>

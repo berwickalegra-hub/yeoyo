@@ -24,19 +24,36 @@ export function AppShell({
   active,
   user,
   badgeCounts,
+  showCoach = true,
+  compactMobileNav = false,
   children,
 }: {
   active: SidebarTab;
   user: SidebarUser;
   badgeCounts?: SidebarBadgeCounts | undefined;
+  /** Découvrir (Explorer) already stacks a raised nav FAB, the SwipeCard's
+   * own action row, and the swipe gestures themselves — the Coach bubble
+   * added one floating element too many there (2026-08-17, explicit user
+   * report). Every other screen keeps it; only that one call site opts out. */
+  showCoach?: boolean;
+  /** Découvrir (Explorer) only (2026-08-17, explicit user report): swaps
+   * MobileTabBar's full 5-tab bar for a single "Accueil" button — that
+   * screen's own action row + raised Découvrir FAB already fill the same
+   * thumb zone, so the full bar was one row of controls too many. Desktop's
+   * TopNav is unaffected either way (no crowding there). */
+  compactMobileNav?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-background font-body">
       <TopNav active={active} user={user} badgeCounts={badgeCounts} />
       <div className="flex flex-1 flex-col pb-16 md:pb-0">{children}</div>
-      <MobileTabBar active={active} badgeCounts={badgeCounts} />
-      <CoachWidget />
+      <MobileTabBar
+        active={active}
+        badgeCounts={badgeCounts}
+        variant={compactMobileNav ? 'minimal' : 'full'}
+      />
+      {showCoach && <CoachWidget />}
     </div>
   );
 }

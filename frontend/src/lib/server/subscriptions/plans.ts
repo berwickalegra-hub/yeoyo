@@ -33,7 +33,15 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '15j',
     name: 'Premium 15 Jours',
     durationLabel: '15 jours',
-    priceUsdCentsTotal: 599,
+    // TEMP TEST PRICE (2026-08-17, explicit user ask): dropped from 599 to
+    // 100 ($1) so the account owner can test the paid checkout flow without
+    // spending much. MUST be paired with the same $1 price set on the
+    // matching product in the Chariow dashboard — reconcile.ts compares
+    // this figure against what Chariow actually reports and REJECTS the
+    // charge (subscription never activates) if the two don't match within
+    // 5%. Restore to a real price (and update the Chariow product back)
+    // before going live.
+    priceUsdCentsTotal: 100,
     originalPriceUsdCentsTotal: 799,
     priceUsdCentsPerMonth: 1199,
     discountPct: 25,
@@ -44,9 +52,11 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '1m',
     name: 'Premium 1 Mois',
     durationLabel: '1 mois',
-    priceUsdCentsTotal: 399,
+    // TEMP TEST PRICE — see the '15j' plan's comment above; same caveat
+    // applies (must match the Chariow dashboard product price).
+    priceUsdCentsTotal: 100,
     originalPriceUsdCentsTotal: 699,
-    priceUsdCentsPerMonth: 399,
+    priceUsdCentsPerMonth: 100,
     discountPct: 43,
     billingDays: 30,
     boosts: 3,

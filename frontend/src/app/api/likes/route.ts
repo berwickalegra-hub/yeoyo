@@ -32,6 +32,7 @@ import { createNotification } from '@/lib/server/notifications';
 import { contactRequestReceived } from '@/lib/server/notifications/templates';
 import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-merge';
 import { orderedPair } from '@/lib/server/conversations/lib';
+import { contactRequestQuotaStatus } from '@/lib/server/contact-requests/quota';
 
 const Body = z.object({ targetUserId: z.string() });
 
@@ -74,6 +75,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { code: 'PROFILE_NOT_FOUND', message: 'Target profile not found' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
       );
+    }
+
+    // Quota only applies to a genuinely NEW request — re-liking a target
+    // you've already requested (or un-liked and are re-requesting) is
+    // idempotent via the upsert below and must never be blocked or double-
+    // counted. Checked outside the transaction (mirrors messageQuotaStatus's
+    // plain check-then-act — this is a soft free-tier cap, not a
+    // double-spend-grade invariant, so no Serializable isolation needed).
+    const existingRequest = await prisma.contactRequest.findUnique({
+      where: { requesterId_targetId: { requesterId: auth.user.sub, targetId: targetUserId } },
+      select: { id: true },
+    });
+    if (!existingRequest) {
+      const quota = await contactRequestQuotaStatus(auth.user.sub);
+      if (quota.limit !== null && (quota.remaining ?? 0) <= 0) {
+        return NextResponse.json(
+          {
+            code: 'CONTACT_REQUEST_QUOTA_EXCEEDED',
+            message:
+              'Tu as atteint la limite de demandes de contact gratuites pour ce mois-ci. Passe Premium pour envoyer des demandes en illimité.',
+            quota: { remaining: quota.remaining, limit: quota.limit, resetAt: quota.resetAt },
+          },
+          { status: 403, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
     }
 
     const { userAId, userBId } = orderedPair(auth.user.sub, targetUserId);

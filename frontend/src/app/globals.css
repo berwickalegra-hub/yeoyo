@@ -285,12 +285,114 @@ body {
     color 0.2s ease-out;
 }
 
+@keyframes slide-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-120%) rotate(-8deg);
+  }
+}
+@keyframes slide-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(120%) rotate(8deg);
+  }
+}
+.animate-slide-out-left {
+  animation: slide-out-left 0.25s ease-in both;
+}
+.animate-slide-out-right {
+  animation: slide-out-right 0.25s ease-in both;
+}
+
+/* Tap feedback for primary action buttons (favoris, accepter/refuser,
+   like) — kept as a class rather than a per-call-site utility string so
+   every button that uses it reacts identically (2026-08-17 transversal
+   animation pass). */
+.btn-press {
+  transition: transform 0.15s ease-out;
+}
+.btn-press:active {
+  transform: scale(0.95);
+}
+
+/* Skeleton loading — shaped placeholders (Skeleton.tsx) replace bare
+   spinners on lists/tables so the loading state already hints at the
+   content's final shape. */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted) 25%,
+    var(--color-border) 37%,
+    var(--color-muted) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Premium accent — gold liseré/gradient layered on top of whichever
+   Standard palette (`data-theme`) is active, toggled automatically by
+   PremiumContext based on subscription status. `--color-gold` already
+   exists app-wide (see @theme above); these two rules are the only places
+   it's applied outside badges/pills. */
+[data-premium='true'] .avatar-ring {
+  border-color: var(--color-gold);
+}
+[data-premium='true'] .premium-header-gradient {
+  /* Soft tint, not a solid banner — "signale un statut, pas une interface
+     luxe tape-à-l'œil" (2026-08-17 spec). */
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
+    color-mix(in srgb, var(--color-gold) 14%, transparent) 100%
+  );
+}
+
+/* Scroll hint — subtle bob on the swipe card's photo edge, hinting there's
+   more profile content below the fold (2026-08-17, SwipeCard redesign). */
+@keyframes scroll-hint-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(4px);
+    opacity: 0.9;
+  }
+}
+.scroll-hint {
+  animation: scroll-hint-bob 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-down,
   .animate-fade-in,
   .animate-fade-in-up,
   .animate-scale-in,
-  .animate-heart-pop {
+  .animate-heart-pop,
+  .animate-slide-out-left,
+  .animate-slide-out-right,
+  .skeleton-shimmer,
+  .scroll-hint {
     animation: none;
+  }
+  .btn-press {
+    transition: none;
   }
 }

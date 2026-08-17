@@ -95,6 +95,27 @@ export function ProfileInfoSections({ profile }: { profile: ProfileCard }) {
         </div>
       )}
 
+      {profile.interests.length > 0 && (
+        <div className="border-t border-border pt-4">
+          <div className="mb-1.5 flex items-center gap-1.5 text-primary">
+            <Icon name="sparkles" size={13} />
+            <span className="font-headings text-xs font-semibold uppercase tracking-widest">
+              Centres d&apos;intérêt
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {profile.interests.map((interest) => (
+              <span
+                key={interest}
+                className="rounded-lg bg-accent px-2.5 py-1 font-body text-xs text-foreground"
+              >
+                {interest}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {profile.qualities && (
         <div className="border-t border-border pt-4">
           <div className="mb-1.5 flex items-center gap-1.5 text-primary">

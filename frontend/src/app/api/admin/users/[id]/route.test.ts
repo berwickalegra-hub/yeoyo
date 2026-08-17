@@ -51,12 +51,40 @@ describe('/api/admin/users/[id] — detail', () => {
       emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
       createdAt: new Date('2026-05-01T00:00:00Z'),
     } as never);
+    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
 
     const res = await GET(makeGet('http://test/api/admin/users/u1'), ctxWith('u1'));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { user: { id: string; email: string } };
     expect(body.user.id).toBe('u1');
     expect(body.user).not.toHaveProperty('passwordHash');
+  });
+
+  it("GET includes the caller's most recent Subscription (Premium status)", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'u1@test.local',
+      name: null,
+      avatarUrl: null,
+      role: 'USER',
+      status: 'ACTIVE',
+      emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
+      createdAt: new Date('2026-05-01T00:00:00Z'),
+    } as never);
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      status: 'ACTIVE',
+      provider: 'admin-grant',
+      planId: '6m',
+      currentPeriodEnd: new Date('2027-02-01T00:00:00Z'),
+    } as never);
+
+    const res = await GET(makeGet('http://test/api/admin/users/u1'), ctxWith('u1'));
+    const body = (await res.json()) as {
+      subscription: { status: string; provider: string } | null;
+    };
+    expect(body.subscription).toEqual(
+      expect.objectContaining({ status: 'ACTIVE', provider: 'admin-grant' }),
+    );
   });
 
   it('GET returns 404 USER_NOT_FOUND for a missing user', async () => {

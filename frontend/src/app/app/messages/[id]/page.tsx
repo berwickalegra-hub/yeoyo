@@ -57,9 +57,11 @@ import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { closeAblySafely } from '@/lib/yeoyo/ably-safe-close';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { INTENT_LABELS } from '@/lib/yeoyo/types';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
@@ -127,6 +129,21 @@ function dayLabel(iso: string): string {
 
 function timeOfDay(iso: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Loading placeholder for the initial message fetch — alternating bubble
+// widths/alignment stand in for a chat history without borrowing
+// MessageListSkeleton's avatar-row shape, which doesn't read as a thread.
+function ThreadSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      <Skeleton className="h-9 w-2/3 rounded-2xl" />
+      <Skeleton className="ml-auto h-9 w-1/2 rounded-2xl" />
+      <Skeleton className="h-14 w-3/4 rounded-2xl" />
+      <Skeleton className="ml-auto h-9 w-2/5 rounded-2xl" />
+      <Skeleton className="h-9 w-1/2 rounded-2xl" />
+    </div>
+  );
 }
 
 export default function MessageThreadPage() {
@@ -229,8 +246,9 @@ export default function MessageThreadPage() {
     // Realtime is a progressive enhancement — the thread already works via
     // plain GET/POST above. Without ABLY_API_KEY configured server-side,
     // /api/realtime/token returns 503 and this connection never
-    // authenticates; Ably then throws when closed during unmount. Swallow
-    // both so a missing (optional) Ably key never crashes the chat screen.
+    // authenticates (state 'failed'); closeAblySafely skips the close()
+    // call in that case instead of letting the SDK throw an unhandled
+    // rejection on unmount.
     const ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
     ably.connection.on('failed', () => {
       // no-op — sending/receiving still works over REST, just not live-pushed
@@ -302,10 +320,10 @@ export default function MessageThreadPage() {
           .get(`conversation:${conversationId}`)
           .presence.leave()
           .catch(() => {});
-        ably.close();
       } catch {
         // ignore — see comment above
       }
+      closeAblySafely(ably);
     };
   }, [conversationId, user]);
 
@@ -473,6 +491,11 @@ export default function MessageThreadPage() {
         method: 'PATCH',
       });
       setMutedOverride(res.muted);
+      // The header's own bell icon already reads `mutedOverride`, but the
+      // desktop sidebar's conversation list reads `c.muted` straight from
+      // `useConversations` — without a reload it kept showing the stale
+      // icon until some other trigger refetched the list (2026-08-17 audit).
+      void reload();
       toast(
         res.muted ? 'Notifications coupées pour cette conversation' : 'Notifications réactivées',
         'success',
@@ -503,6 +526,11 @@ export default function MessageThreadPage() {
     try {
       await api(`/api/users/${active.otherUser.userId}/block`, { method: 'POST' });
       toast('Utilisateur bloqué', 'success');
+      // The inbox (GET /api/conversations) now excludes blocked contacts
+      // server-side — reload so this page's own conversation list drops it
+      // too, not just the one we navigate to next (2026-08-17 audit finding:
+      // the blocked thread stayed visible/clickable in the inbox before).
+      void reload();
       router.push('/app/messages');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
@@ -529,7 +557,11 @@ export default function MessageThreadPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background font-body">
-      <TopNav active="messages" user={{ name: user.email }} badgeCounts={badgeCounts} />
+      <TopNav
+        active="messages"
+        user={{ name: user.email, avatarUrl: user.avatarUrl }}
+        badgeCounts={badgeCounts}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="hidden w-96 flex-col border-r border-border lg:flex">
@@ -715,7 +747,7 @@ export default function MessageThreadPage() {
                 Charger les messages précédents
               </button>
             )}
-            {loading && <p className="font-body text-sm text-muted-foreground">Chargement…</p>}
+            {loading && <ThreadSkeleton />}
             {!loading && messages.length === 0 && (
               <div className="flex flex-col items-center gap-3 py-6 text-center">
                 <Icon name="message-circle" size={28} className="text-muted-foreground" />
@@ -726,7 +758,7 @@ export default function MessageThreadPage() {
                 </p>
               </div>
             )}
-            <div className="flex flex-col gap-1">
+            <div key={conversationId} className="animate-fade-in flex flex-col gap-1">
               {messages.map((m) => {
                 const dateKey = new Date(m.createdAt).toDateString();
                 const showDateSeparator = dateKey !== lastDateKey;

@@ -5,6 +5,7 @@ import Ably from 'ably';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useUser } from '@/contexts/AuthContext';
+import { closeAblySafely } from '@/lib/yeoyo/ably-safe-close';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 export interface ConversationRow {
@@ -78,11 +79,7 @@ export function useConversations() {
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      try {
-        ably.close();
-      } catch {
-        // ignore
-      }
+      closeAblySafely(ably);
     };
     // Deliberately keyed on `conversations.length`, not `conversations` —
     // re-subscribing on every field change (a new message bumps almost
