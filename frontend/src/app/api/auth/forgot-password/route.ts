@@ -28,6 +28,7 @@ import { log } from '@/lib/server/observability/log';
 import { generateVerificationCode } from '@/lib/server/auth';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { enqueueOutbox } from '@/lib/server/outbox';
+import { drainOutboxNow } from '@/lib/server/outbox/drain-now';
 
 const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) * 60 * 1000;
 
@@ -108,6 +109,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     } else {
       log.info('forgot-password no-user (enumeration-resist)');
     }
+
+    // Unconditional (both branches) so this never becomes a timing side
+    // channel — see drain-now.ts for why the once-daily cron alone isn't
+    // enough for a code the user is actively waiting on.
+    await drainOutboxNow();
 
     // CR-01 — wall-clock floor: pad to TARGET_LATENCY_MS so residual jitter
     // (Neon cold-start, outbox latency spikes) cannot reveal the branch.
