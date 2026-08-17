@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
@@ -24,26 +25,22 @@ const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
 ];
 
+// pnpm hoists/symlinks packages (next, react, ...) into the *workspace
+// root's* node_modules/.pnpm store, not into frontend/node_modules directly.
+// Turbopack's root confinement ("files outside of the project directory will
+// not be compiled") was previously pointed at `frontend/` (__dirname) itself,
+// which put the real, symlink-resolved location of the `next` package
+// outside the trusted boundary and produced: "couldn't find the Next.js
+// package (next/package.json) from the project directory: .../frontend/src/app".
+// Pointing root one level up, at the pnpm workspace root, is Next's own
+// documented fix for this exact monorepo layout.
+const workspaceRoot = path.join(__dirname, '..');
+
 const config: NextConfig = {
   reactStrictMode: true,
-  // Pins the workspace root explicitly, per Next's own recommendation for
-  // monorepos with more than one lockfile in the ancestor chain (relevant
-  // here because a git worktree under `.claude/worktrees/<name>/` sits
-  // nested inside the main repo, which has its own pnpm-workspace.yaml).
-  // `outputFileTracingRoot` covers the webpack builder; `turbopack.root` is
-  // its Turbopack (default since Next 16) equivalent. NOTE: `turbopack.root`
-  // does not resolve Turbopack's package-resolution failure ("couldn't find
-  // the Next.js package (next/package.json) from the project directory:
-  // .../src/app") in this environment — confirmed on both `next build` in a
-  // nested worktree AND plain `next dev --turbopack` at the top-level repo
-  // root, so it is not worktree-specific; it reproduces on this Windows
-  // checkout whose path contains spaces (`My Anti-Gravity`, `DELL i7`) and
-  // does not appear to honor this setting. `next build --webpack` /
-  // `next dev --webpack` (see `pnpm dev:webpack`) both work cleanly and
-  // produce the correct route manifest — use those as the substitute here.
-  outputFileTracingRoot: __dirname,
+  outputFileTracingRoot: workspaceRoot,
   turbopack: {
-    root: __dirname,
+    root: workspaceRoot,
   },
   // The floating black "N" badge some testers spot in a corner during
   // `pnpm dev` is Next.js's own dev-mode indicator — not app UI, and never
