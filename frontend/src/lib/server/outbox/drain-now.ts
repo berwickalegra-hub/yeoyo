@@ -20,14 +20,24 @@ import { createLogger } from '../logger';
 
 const log = createLogger();
 const IMMEDIATE_DRAIN_BATCH_SIZE = 3;
+// Hard upper bound on how long this can delay the caller's own response —
+// a slow/contended DB must never turn a "check your email" signup response
+// into a multi-second hang. try/catch alone doesn't cover this: a stalled
+// (not rejected) query would sail past it. Confirmed necessary in practice:
+// concurrent requests each awaiting a real drainOutbox() call measurably
+// added up under load (signup's own rate-limit test issues 6 requests at
+// once) — 2026-08-18.
+const MAX_WAIT_MS = 3000;
 
 export async function drainOutboxNow(): Promise<void> {
   try {
     const queue = getEmailQueue();
-    await drainOutbox(
-      { prisma, ...(queue ? { emailQueue: queue } : {}) },
-      IMMEDIATE_DRAIN_BATCH_SIZE,
-    );
+    await Promise.race([
+      drainOutbox({ prisma, ...(queue ? { emailQueue: queue } : {}) }, IMMEDIATE_DRAIN_BATCH_SIZE),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('drainOutboxNow: timed out')), MAX_WAIT_MS),
+      ),
+    ]);
   } catch (err) {
     log.warn(
       'drainOutboxNow: best-effort immediate drain failed, daily cron remains the fallback',

@@ -9,6 +9,12 @@ process.env.AUTH_FORGOT_TARGET_LATENCY_MS = '0';
 vi.mock('@/lib/server/outbox', () => ({
   enqueueOutbox: vi.fn().mockResolvedValue({ id: 'outbox-1' }),
 }));
+// Real drainOutboxNow exercises the unmocked dispatcher against
+// prismaMock.outboxEvent (never configured here) — unnecessary overhead in
+// a route that already calls it unconditionally on every request.
+vi.mock('@/lib/server/outbox/drain-now', () => ({
+  drainOutboxNow: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/server/auth/dummy-bcrypt', () => ({
   dummyBcryptCompare: vi.fn().mockResolvedValue(undefined),
 }));

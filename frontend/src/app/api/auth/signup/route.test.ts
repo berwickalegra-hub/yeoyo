@@ -12,6 +12,12 @@ import { NextRequest } from 'next/server';
 vi.mock('@/lib/server/outbox', () => ({
   enqueueOutbox: vi.fn().mockResolvedValue({ id: 'outbox-1' }),
 }));
+// Real drainOutboxNow exercises the unmocked dispatcher against
+// prismaMock.outboxEvent (never configured here) — under this test's own
+// 6-concurrent-request rate-limit check that measurably slowed the suite.
+vi.mock('@/lib/server/outbox/drain-now', () => ({
+  drainOutboxNow: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/server/auth/dummy-bcrypt', () => ({
   dummyBcryptCompare: vi.fn().mockResolvedValue(undefined),
 }));

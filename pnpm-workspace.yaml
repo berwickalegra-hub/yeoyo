@@ -1,2 +1,12 @@
 packages:
   - 'frontend'
+
+# Safety net for transitive high-severity CVEs pulled in by build-time
+# tooling (Sentry's webpack plugin chain) — `pnpm.overrides` in package.json
+# is no longer read by pnpm 9+, this is its actual home now.
+overrides:
+  sharp: '>=0.35.0'
+  postcss: '>=8.5.18'
+  nanoid: '>=3.3.18'
+  fast-uri: '>=3.1.5'
+  brace-expansion: '>=5.0.9'
