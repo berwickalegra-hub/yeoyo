@@ -1,10 +1,12 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { TopNav, type SidebarUser, type SidebarBadgeCounts } from './TopNav';
 import { MobileTabBar } from './MobileTabBar';
 import { CoachWidget } from './CoachWidget';
 import type { SidebarTab } from './nav-items';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Shared app-shell layout: TopNav (sticky top, full desktop bar from `md`,
 // a compact mobile strip below `md`) + MobileTabBar (fixed bottom, mobile
@@ -44,6 +46,20 @@ export function AppShell({
   compactMobileNav?: boolean;
   children: ReactNode;
 }) {
+  const router = useRouter();
+  const { user: authUser, loading: authLoading } = useAuth();
+
+  // Every /app/* screen renders through AppShell (the onboarding wizard
+  // itself does not), so gating here is the single choke point that stops
+  // an incomplete profile (fresh Google sign-in, or the wizard abandoned
+  // partway) from reaching pages that assume a Profile row exists —
+  // 2026-08-18, explicit user report of console errors while browsing
+  // Découvrir with "Compléter le profil" left unfinished.
+  useEffect(() => {
+    if (authLoading || !authUser) return;
+    if (!authUser.profileCompleted) router.replace('/onboarding');
+  }, [authLoading, authUser, router]);
+
   return (
     <div className="flex min-h-screen flex-col bg-background font-body">
       <TopNav active={active} user={user} badgeCounts={badgeCounts} />

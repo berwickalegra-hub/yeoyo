@@ -55,6 +55,9 @@ const config: NextConfig = {
     remotePatterns: [
       // Cloudinary-hosted profile photos/avatars (frontend/src/lib/server/upload).
       { protocol: 'https', hostname: 'res.cloudinary.com' },
+      // Google account avatar (oauth/google.ts stores the `picture` claim
+      // as-is). Google serves these from lh3/lh4/lh5/lh6 subdomains.
+      { protocol: 'https', hostname: '*.googleusercontent.com' },
       // Illustrative fixture photos only (scripts/seed-yeoyo-profiles.ts) —
       // real avatars from this project's own Banani design export (public
       // GCS bucket). Not used by any real upload path.

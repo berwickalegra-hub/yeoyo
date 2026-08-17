@@ -53,6 +53,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // nav avatar shows the same photo the discovery cards do.
         profile: {
           select: {
+            onboardingCompletedAt: true,
             photos: {
               orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }],
               take: 1,
@@ -93,6 +94,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       hasPassword: !!dbUser?.passwordHash,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
       avatarUrl,
+      // Drives the AppShell onboarding gate — false for both "no Profile row
+      // yet" (fresh OAuth signup) and "Profile row exists but the wizard was
+      // abandoned partway" (onboardingCompletedAt still null).
+      profileCompleted: !!dbUser?.profile?.onboardingCompletedAt,
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });

@@ -18,6 +18,8 @@ export interface User {
   linkedProviders: string[];
   /** OAuth avatar, else the dating profile's primary photo, else null (nav falls back to initials). */
   avatarUrl: string | null;
+  /** False until the onboarding wizard's profile steps are finished — drives the AppShell redirect gate. */
+  profileCompleted: boolean;
 }
 
 interface AuthContextValue {
