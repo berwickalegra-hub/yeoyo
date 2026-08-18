@@ -2,11 +2,13 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { TopNav, type SidebarUser, type SidebarBadgeCounts } from './TopNav';
 import { MobileTabBar } from './MobileTabBar';
 import { CoachWidget } from './CoachWidget';
 import type { SidebarTab } from './nav-items';
 import { useAuth } from '@/contexts/AuthContext';
+import { Icon } from '@/components/ui/Icon';
 
 // Shared app-shell layout: TopNav (sticky top, full desktop bar from `md`,
 // a compact mobile strip below `md`) + MobileTabBar (fixed bottom, mobile
@@ -28,6 +30,7 @@ export function AppShell({
   badgeCounts,
   showCoach = true,
   compactMobileNav = false,
+  hideChrome = false,
   children,
 }: {
   active: SidebarTab;
@@ -42,8 +45,18 @@ export function AppShell({
    * MobileTabBar's full 5-tab bar for a single "Accueil" button — that
    * screen's own action row + raised Découvrir FAB already fill the same
    * thumb zone, so the full bar was one row of controls too many. Desktop's
-   * TopNav is unaffected either way (no crowding there). */
+   * TopNav is unaffected either way (no crowding there). Superseded on
+   * Explorer by `hideChrome` below; kept as a lighter-touch option other
+   * screens can still reach for. */
   compactMobileNav?: boolean;
+  /** Explorer only (2026-08-19, explicit user ask): on mobile, removes
+   * TopNav's top strip AND MobileTabBar entirely so the swipe card + its
+   * fixed action row can use the full viewport height without ever needing
+   * to scroll to reach them — "le cadre... ne puisse pas avoir besoin qu'on
+   * puisse scroller pour voir cela". Desktop is untouched (TopNav's desktop
+   * bar already has room to spare). A small floating "Accueil" button
+   * replaces the lost mobile navigation. */
+  hideChrome?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -62,13 +75,27 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-body">
-      <TopNav active={active} user={user} badgeCounts={badgeCounts} />
-      <div className="flex flex-1 flex-col pb-16 md:pb-0">{children}</div>
-      <MobileTabBar
-        active={active}
-        badgeCounts={badgeCounts}
-        variant={compactMobileNav ? 'minimal' : 'full'}
-      />
+      <TopNav active={active} user={user} badgeCounts={badgeCounts} hideMobileStrip={hideChrome} />
+      <div
+        className={`flex flex-1 flex-col ${hideChrome ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-0' : 'pb-16 md:pb-0'}`}
+      >
+        {children}
+      </div>
+      {hideChrome ? (
+        <Link
+          href="/app/decouvrir"
+          aria-label="Retour à l'accueil"
+          className="fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface/90 text-foreground shadow-md backdrop-blur-sm active:scale-95 md:hidden"
+        >
+          <Icon name="arrow-right" size={17} className="rotate-180" />
+        </Link>
+      ) : (
+        <MobileTabBar
+          active={active}
+          badgeCounts={badgeCounts}
+          variant={compactMobileNav ? 'minimal' : 'full'}
+        />
+      )}
       {showCoach && <CoachWidget />}
     </div>
   );

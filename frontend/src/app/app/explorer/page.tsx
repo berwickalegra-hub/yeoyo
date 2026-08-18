@@ -294,7 +294,7 @@ export default function ExplorerPage() {
       user={{ name: user.email, avatarUrl: user.avatarUrl }}
       badgeCounts={badgeCounts}
       showCoach={false}
-      compactMobileNav
+      hideChrome
     >
       {/* This page owns its own full-height layout (2026-08-19, explicit
           user report of a double-scroll conflict on the swipe deck): the
@@ -306,7 +306,10 @@ export default function ExplorerPage() {
           became scrollable at once. */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-shrink-0 animate-fade-in-down bg-background/95">
-          <div className="flex items-center justify-center gap-2 border-b border-border px-5 py-3">
+          {/* Extra top padding on mobile only (2026-08-19): AppShell's
+              floating back button (`hideChrome`) sits fixed at top-left over
+              this row, since the top strip that used to hold it is gone. */}
+          <div className="flex items-center justify-center gap-2 border-b border-border px-5 pb-3 pt-14 md:pt-3">
             <button
               type="button"
               onClick={openFilterPanel}

@@ -330,10 +330,15 @@ export function TopNav({
   active,
   user,
   badgeCounts,
+  hideMobileStrip = false,
 }: {
   active: SidebarTab;
   user: SidebarUser;
   badgeCounts?: SidebarBadgeCounts | undefined;
+  /** Explorer only (2026-08-19, explicit user ask) — the mobile top strip
+   * eats vertical space the swipe card needs to fit on-screen without
+   * scrolling. Desktop's bar is never affected (it isn't cramped there). */
+  hideMobileStrip?: boolean;
 }) {
   const { isPremium } = usePremium();
   return (
@@ -434,26 +439,28 @@ export function TopNav({
 
       {/* Mobile top strip — MobileTabBar.tsx carries the 5 primary tabs
           below `md`, so this only surfaces what wouldn't fit there. */}
-      <div className="flex items-center justify-between px-4 py-3 md:hidden">
-        <Link href="/app/decouvrir" className="flex items-center gap-2">
-          <BrandMark className="h-8 w-auto" />
-          <span className="font-headings text-lg font-bold text-foreground">YeOyo</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/app/messages"
-            aria-label="Messages"
-            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gold/40 bg-gold/10 text-gold"
-          >
-            <Icon name="message-circle" size={17} />
-            {!!badgeFor('messages', badgeCounts) && (
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
-            )}
+      {!hideMobileStrip && (
+        <div className="flex items-center justify-between px-4 py-3 md:hidden">
+          <Link href="/app/decouvrir" className="flex items-center gap-2">
+            <BrandMark className="h-8 w-auto" />
+            <span className="font-headings text-lg font-bold text-foreground">YeOyo</span>
           </Link>
-          <NotificationBell />
-          <AccountMenu user={user} />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/app/messages"
+              aria-label="Messages"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gold/40 bg-gold/10 text-gold"
+            >
+              <Icon name="message-circle" size={17} />
+              {!!badgeFor('messages', badgeCounts) && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
+              )}
+            </Link>
+            <NotificationBell />
+            <AccountMenu user={user} />
+          </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }
