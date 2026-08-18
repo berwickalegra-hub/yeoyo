@@ -75,21 +75,29 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         onClose={() => setDrawerOpen(false)}
       />
       <div className="flex-1 overflow-x-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 md:px-6 lg:px-8">
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-4 backdrop-blur-sm md:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="Ouvrir le menu"
-              className="text-foreground lg:hidden"
+              className="cursor-pointer text-foreground lg:hidden"
             >
               <Icon name="menu" size={20} />
             </button>
-            <span className="font-headings text-sm font-semibold text-foreground">
-              {admin.role === 'SUPERADMIN' ? 'Super Admin' : 'Admin'}
+            <span className="rounded-full bg-secondary px-2.5 py-1 font-body text-xs font-semibold text-secondary-foreground">
+              {admin.role === 'SUPERADMIN'
+                ? 'Super Admin'
+                : admin.role === 'ADMIN'
+                  ? 'Admin'
+                  : 'Modérateur'}
             </span>
           </div>
-          <Link href="/app/decouvrir" className="font-body text-xs text-muted-foreground underline">
+          <Link
+            href="/app/decouvrir"
+            className="flex cursor-pointer items-center gap-1.5 font-body text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Icon name="arrow-right" size={13} className="rotate-180" />
             Retour à l’application
           </Link>
         </div>

@@ -355,12 +355,52 @@ body {
 }
 [data-premium='true'] .premium-header-gradient {
   /* Soft tint, not a solid banner — "signale un statut, pas une interface
-     luxe tape-à-l'œil" (2026-08-17 spec). */
+     luxe tape-à-l'œil" (2026-08-17 spec). Bumped slightly (2026-08-19,
+     explicit user ask for a more noticeable premium interface). */
   background-image: linear-gradient(
     135deg,
     color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
-    color-mix(in srgb, var(--color-gold) 14%, transparent) 100%
+    color-mix(in srgb, var(--color-gold) 20%, transparent) 100%
   );
+}
+
+/* Premium sales page (/app/premium) — bolder gold than the subtle in-app
+   accent above. This page's whole job is to sell Premium, so a richer gold
+   wash is appropriate here specifically, unlike the restrained accent used
+   once a user already has Premium (2026-08-19, explicit user ask: "vraiment
+   rempli de doré"). */
+.premium-sales-hero {
+  background-image: radial-gradient(
+      ellipse 120% 100% at 50% 0%,
+      color-mix(in srgb, var(--color-gold) 22%, transparent) 0%,
+      transparent 60%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-gold) 8%, transparent) 0%,
+      transparent 100%
+    );
+}
+
+/* Scroll-reveal — fades + rises content into view once as it crosses into
+   the viewport (2026-08-19, explicit user ask: landing page + long-form
+   pages should "découvrir plus" as you scroll). Toggled by Reveal.tsx via
+   IntersectionObserver; this CSS only owns the transition itself, plus its
+   own reduced-motion override below, so the component never has to branch
+   on the media query. Distinct from `.animate-fade-in-up` above (an 8px/
+   0.3s micro-interaction for content that just loaded) — this one travels
+   further (28px) over a slower, eased curve to read as a deliberate
+   section-level reveal rather than a loading blip. */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Scroll hint — subtle bob on the swipe card's photo edge, hinting there's
@@ -393,6 +433,11 @@ body {
     animation: none;
   }
   .btn-press {
+    transition: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
     transition: none;
   }
 }

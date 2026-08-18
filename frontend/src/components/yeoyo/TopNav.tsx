@@ -184,6 +184,7 @@ function AccountMenu({ user }: { user: SidebarUser }) {
   // (2026-08-17, explicit user ask) — sits next to the avatar itself, not
   // buried in the dropdown, since the whole point is a one-tap jump.
   const isAdmin = useIsAdmin();
+  const { isPremium } = usePremium();
 
   useEffect(() => {
     if (!open) return;
@@ -232,9 +233,17 @@ function AccountMenu({ user }: { user: SidebarUser }) {
       {open && (
         <div className="animate-scale-in absolute right-0 top-11 z-50 max-h-[75vh] w-60 overflow-y-auto rounded-xl border border-border bg-surface shadow-2xl">
           <div className="sticky top-0 border-b border-border bg-surface px-4 py-3">
-            <p className="truncate font-headings text-sm font-semibold text-foreground">
-              {user.name}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="truncate font-headings text-sm font-semibold text-foreground">
+                {user.name}
+              </p>
+              {isPremium && (
+                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 font-body text-[10px] font-bold text-gold">
+                  <Icon name="crown" size={10} fill="currentColor" />
+                  Premium
+                </span>
+              )}
+            </div>
             {user.verified && (
               <div className="mt-1 flex items-center gap-1">
                 <div className="h-1.5 w-1.5 rounded-full bg-verified" />
@@ -328,7 +337,9 @@ export function TopNav({
 }) {
   const { isPremium } = usePremium();
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface">
+    <header
+      className={`sticky top-0 z-30 border-b border-border bg-surface ${isPremium ? 'premium-header-gradient' : ''}`}
+    >
       {/* Desktop / tablet bar (md+) */}
       <div className="mx-auto hidden max-w-7xl items-center justify-between gap-4 px-6 py-3 md:flex lg:px-8">
         <Link href="/app/decouvrir" className="flex flex-shrink-0 items-center gap-2">
@@ -403,11 +414,15 @@ export function TopNav({
           <Link
             href="/app/messages"
             aria-label="Messages"
-            className={`relative ${active === 'messages' ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              active === 'messages'
+                ? 'bg-gold/15 text-gold'
+                : 'text-gold/80 hover:bg-gold/10 hover:text-gold'
+            }`}
           >
-            <Icon name="message-circle" size={22} />
+            <Icon name="message-circle" size={20} />
             {!!badgeFor('messages', badgeCounts) && (
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary font-body text-[10px] font-bold text-primary-foreground">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary font-body text-[10px] font-bold text-primary-foreground">
                 {(badgeCounts?.messages ?? 0) > 9 ? '9+' : badgeCounts?.messages}
               </span>
             )}
@@ -428,7 +443,7 @@ export function TopNav({
           <Link
             href="/app/messages"
             aria-label="Messages"
-            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gold/40 bg-gold/10 text-gold"
           >
             <Icon name="message-circle" size={17} />
             {!!badgeFor('messages', badgeCounts) && (

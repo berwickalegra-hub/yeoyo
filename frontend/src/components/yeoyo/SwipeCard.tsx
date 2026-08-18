@@ -7,6 +7,17 @@
 // the card). The photo+info wrapper is `flex-1 overflow-y-auto` — the only
 // part that scrolls.
 //
+// Height (2026-08-19): `h-full` instead of a hardcoded `100dvh` calc — the
+// card now lives inside explorer/page.tsx's own non-scrolling, height-
+// bounded flex container, which is the single source of truth for how much
+// vertical space is actually available. The old calc()'d a fixed number of
+// rem for "everything else on screen" (nav bars, page title, filter row);
+// when that chrome changed size, the math silently went stale and the card
+// + its own internal scroll region no longer matched the real viewport,
+// producing a second, competing page-level scrollbar (explicit user
+// report). `h-full` can't go stale the same way — it just fills whatever
+// its parent actually gives it.
+//
 // Action row is a normal (non-`position: fixed`) `flex-shrink-0` footer,
 // last child of the card's own flex column (2026-08-14, reverted a same-day
 // `position: fixed`-to-viewport experiment after explicit user report: fixed
@@ -52,6 +63,9 @@ const CLICK_THRESHOLD = 6;
 // Kept in sync manually since that file is `server-only` and can't be
 // imported into this client component.
 const FREE_FLASH_MESSAGE_LIMIT = 3;
+// Display copy only — enforced server-side in
+// lib/server/contact-requests/quota.ts (FREE_MONTHLY_CONTACT_REQUEST_LIMIT).
+const FREE_MONTHLY_CONTACT_REQUEST_LIMIT = 5;
 // Distance the card flies off-screen before the parent's onLike/onDismiss
 // actually fires — reuses the drag transform's own 0.25s transition (see
 // the `style` below) instead of layering a competing CSS animation on an
@@ -160,7 +174,7 @@ export function SwipeCard({
   const hasMultiplePhotos = profile.photoUrls.length > 1;
 
   return (
-    <div className="animate-fade-in-up mx-auto flex h-[calc(100dvh-13rem)] max-h-[680px] min-h-[440px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
+    <div className="animate-fade-in-up mx-auto flex h-full max-h-[680px] min-h-[380px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
       <div
         className="relative flex-1 touch-pan-y select-none overflow-y-auto"
         style={{
@@ -344,7 +358,12 @@ export function SwipeCard({
           type="button"
           onClick={() => flyOff(1, () => onLike(profile.userId))}
           disabled={busy || liked || exiting}
-          className={`btn-success-flash flex h-14 flex-1 items-center justify-center gap-2 rounded-full px-3 font-body text-sm font-bold shadow-md shadow-secondary/25 transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+          aria-label={
+            isPremium
+              ? 'Demander'
+              : `Demander — ${FREE_MONTHLY_CONTACT_REQUEST_LIMIT} demandes gratuites par mois`
+          }
+          className={`btn-success-flash relative flex h-14 flex-1 items-center justify-center gap-2 rounded-full px-3 font-body text-sm font-bold shadow-md shadow-secondary/25 transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
         >
           {busy ? (
             <Icon name="refresh-cw" size={16} className="flex-shrink-0 animate-spin" />
@@ -356,6 +375,15 @@ export function SwipeCard({
             />
           )}
           <span className="leading-none">{liked ? 'Envoyée' : 'Demander'}</span>
+          {/* Freemium hint (2026-08-19, explicit user ask) — mirrors the
+              Message button's lock badge above: contact requests are also
+              capped for free users (5/mois, contact-requests/quota.ts), this
+              button just never surfaced that anywhere. */}
+          {!isPremium && !liked && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gold shadow">
+              <Icon name="crown" size={11} className="text-gold-foreground" fill="currentColor" />
+            </span>
+          )}
         </button>
       </div>
 

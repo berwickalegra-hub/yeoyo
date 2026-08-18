@@ -24,7 +24,13 @@ export function ProfilePhotoCover({
   if (photoUrl) {
     return (
       <div className="relative w-full" style={sizeStyle}>
-        <Image src={photoUrl} alt={name} fill className="object-cover" />
+        <Image
+          src={photoUrl}
+          alt={name}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 300px"
+          className="object-cover"
+        />
       </div>
     );
   }

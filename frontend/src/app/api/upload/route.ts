@@ -40,6 +40,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
+import { log } from '@/lib/server/observability/log';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { prisma } from '@/lib/server/prisma';
 import { StorageNotConfiguredError, uploadBuffer } from '@/lib/server/upload/cloudinary-client';
@@ -169,6 +170,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 503, headers: { 'x-request-id': ctx.requestId } },
         );
       }
+      // Cloudinary's upload_stream callback rejects with a plain object
+      // ({ message, http_code, name, ... }), not an Error instance — String(e)
+      // on that yields the useless "[object Object]". Pull `.message` off
+      // whatever shape it is, falling back to a full JSON dump.
+      let errDetail: string;
+      if (e instanceof Error) {
+        errDetail = e.message;
+      } else if (e && typeof e === 'object' && 'message' in e) {
+        errDetail = String((e as { message: unknown }).message);
+      } else {
+        try {
+          errDetail = JSON.stringify(e);
+        } catch {
+          errDetail = String(e);
+        }
+      }
+      log.error('upload: cloudinary uploadBuffer failed', { err: errDetail });
       return NextResponse.json(
         { code: 'UPLOAD_FAILED', message: "L'envoi de la photo a échoué. Réessaie." },
         { status: 502, headers: { 'x-request-id': ctx.requestId } },

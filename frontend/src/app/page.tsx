@@ -24,6 +24,7 @@ export const runtime = 'nodejs';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
+import { Reveal } from '@/components/ui/Reveal';
 import { StatChip } from '@/components/yeoyo/StatChip';
 import { StepItem, StepConnector } from '@/components/yeoyo/StepItem';
 import { SuccessStoryCard } from '@/components/yeoyo/SuccessStoryCard';
@@ -229,7 +230,7 @@ export default function LandingPage() {
 
       {/* Pourquoi YeOyo */}
       <section id="pourquoi" className="px-5 py-12 lg:px-12 lg:py-20">
-        <div className="text-center xl:mx-auto xl:max-w-5xl">
+        <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
           <SectionEyebrow icon="heart" label="Pourquoi YeOyo" />
           <SectionHeading>
             Pas une app de rencontre.
@@ -240,44 +241,50 @@ export default function LandingPage() {
             On a créé YeOyo parce qu&rsquo;on n&rsquo;avait pas trouvé ce qu&rsquo;on cherchait :
             une plateforme sérieuse, sans arnaques, qui respecte vraiment les gens.
           </p>
-        </div>
+        </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-16 lg:max-w-5xl lg:grid-cols-4 lg:gap-6">
-          {WHY_FEATURES.map((f) => (
-            <WhyFeatureCard key={f.title} {...f} />
+          {WHY_FEATURES.map((f, i) => (
+            <Reveal key={f.title} delayMs={i * 90}>
+              <WhyFeatureCard {...f} />
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* Sécurité */}
       <section className="bg-muted px-5 py-12 lg:px-12 lg:py-20">
-        <div className="text-center xl:mx-auto xl:max-w-5xl">
+        <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
           <SectionEyebrow icon="shield" label="Sécurité" tone="surface" />
           <SectionHeading>Ta sécurité n&rsquo;est pas négociable</SectionHeading>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-muted-foreground lg:text-base">
             Faux profils, arnaques, harcèlement... On gère tout. Toi, concentre-toi sur ta
             recherche.
           </p>
-        </div>
+        </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3 lg:mt-16 lg:max-w-5xl lg:gap-6">
-          {SECURITY_FEATURES.map((f) => (
-            <WhyFeatureCard key={f.title} {...f} />
+          {SECURITY_FEATURES.map((f, i) => (
+            <Reveal key={f.title} delayMs={i * 90}>
+              <WhyFeatureCard {...f} />
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* Comment ça marche */}
       <section id="comment-ca-marche" className="px-5 py-12 lg:px-12 lg:py-20">
-        <div className="text-center xl:mx-auto xl:max-w-5xl">
+        <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
           <SectionEyebrow icon="zap" label="4 étapes" />
           <SectionHeading>De l&rsquo;inscription à la rencontre</SectionHeading>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-muted-foreground lg:text-base">
             Simple, rapide, efficace. Ta future moitié est peut-être à quelques clics.
           </p>
-        </div>
+        </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:mt-16 lg:flex lg:max-w-5xl lg:grid-cols-none lg:items-start lg:gap-0">
           {STEPS.map((step, i) => (
             <div key={step.n} className="contents lg:flex lg:flex-1 lg:items-start">
-              <StepItem {...step} />
+              <Reveal delayMs={i * 110} className="lg:flex lg:flex-1">
+                <StepItem {...step} />
+              </Reveal>
               {i < STEPS.length - 1 && <StepConnector />}
             </div>
           ))}
@@ -286,119 +293,129 @@ export default function LandingPage() {
 
       {/* CTA intermédiaire */}
       <section className="bg-primary px-5 py-12 text-center lg:px-12 lg:py-16">
-        <h2 className="font-headings text-2xl font-bold text-primary-foreground lg:text-4xl">
-          Ta moitié te cherche aussi.
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl font-body text-sm text-primary-foreground/90 lg:text-lg">
-          Rejoins des milliers de Congolais sérieux qui ont choisi YeOyo.
-        </p>
-        <Link
-          href="/onboarding"
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-foreground py-3.5 font-headings text-base font-bold text-primary transition-opacity hover:opacity-90 active:scale-[0.99] lg:mt-8 lg:w-auto lg:px-8"
-        >
-          <Icon name="user-plus" size={18} />
-          Je me lance
-        </Link>
+        <Reveal>
+          <h2 className="font-headings text-2xl font-bold text-primary-foreground lg:text-4xl">
+            Ta moitié te cherche aussi.
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl font-body text-sm text-primary-foreground/90 lg:text-lg">
+            Rejoins des milliers de Congolais sérieux qui ont choisi YeOyo.
+          </p>
+          <Link
+            href="/onboarding"
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-foreground py-3.5 font-headings text-base font-bold text-primary transition-opacity hover:opacity-90 active:scale-[0.99] lg:mt-8 lg:w-auto lg:px-8"
+          >
+            <Icon name="user-plus" size={18} />
+            Je me lance
+          </Link>
+        </Reveal>
       </section>
 
       {/* Tarifs */}
       <section id="tarifs" className="px-5 py-12 lg:px-12 lg:py-20">
-        <div className="text-center xl:mx-auto xl:max-w-4xl">
+        <Reveal className="text-center xl:mx-auto xl:max-w-4xl">
           <SectionEyebrow icon="tag" label="Tarifs" />
           <SectionHeading>Simple et transparent</SectionHeading>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-muted-foreground lg:text-base">
             Commence gratuitement. Passe Premium quand tu es prêt(e).
           </p>
-        </div>
+        </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-6 lg:mt-16 lg:max-w-4xl lg:grid-cols-2 lg:gap-8">
-          <PricingCard
-            variant="free"
-            title="Gratuit"
-            subtitle="Découvre la plateforme à ton rythme"
-            price="0"
-            priceSuffix="Pour toujours"
-            includedFeatures={[
-              'Création de profil complet',
-              '3 photos de profil',
-              '5 demandes de contact par jour',
-              'Répondre aux messages reçus',
-              'Ice Breaker : idées de messages',
-              'Support par email',
-            ]}
-            lockedFeatures={[
-              'Demandes illimitées',
-              "Voir qui t'a mis en favori",
-              'Voir qui a visité ton profil',
-              'Messages vocaux',
-              'Score de compatibilité IA',
-              'Boosts de profil inclus',
-            ]}
-            ctaLabel="Commencer"
-            ctaHref="/onboarding"
-          />
-          <PricingCard
-            variant="premium"
-            badge="Offre de lancement"
-            title="Premium"
-            subtitle="Maximise tes chances de trouver ta moitié"
-            originalPrice="6,99 $"
-            price="3,99"
-            priceSuffix="$ / mois"
-            paymentMethods="Mobile Money · Carte bancaire"
-            includedFeatures={[
-              'Demandes de contact illimitées',
-              "Voir qui t'a mis en favori ★",
-              'Voir qui a visité ton profil',
-              'Jusqu’à 10 photos HD sur ton profil',
-              'Messagerie 100% illimitée',
-              'Messages vocaux — NOUVEAU',
-              'Vois qui est connecté en temps réel',
-              'Score de compatibilité IA détaillé',
-              'Boosts de profil inclus',
-              'Badge Premium vérifié',
-              'Support prioritaire 7j/7',
-            ]}
-            ctaLabel="Commencer"
-            ctaHref="/onboarding"
-            footnote="* Tarif de lancement limité. Prix normal : 6,99 $ / mois"
-          />
+          <Reveal>
+            <PricingCard
+              variant="free"
+              title="Gratuit"
+              subtitle="Découvre la plateforme à ton rythme"
+              price="0"
+              priceSuffix="Pour toujours"
+              includedFeatures={[
+                'Création de profil complet',
+                '3 photos de profil',
+                '5 demandes de contact par jour',
+                'Répondre aux messages reçus',
+                'Ice Breaker : idées de messages',
+                'Support par email',
+              ]}
+              lockedFeatures={[
+                'Demandes illimitées',
+                "Voir qui t'a mis en favori",
+                'Voir qui a visité ton profil',
+                'Messages vocaux',
+                'Score de compatibilité IA',
+                'Boosts de profil inclus',
+              ]}
+              ctaLabel="Commencer"
+              ctaHref="/onboarding"
+            />
+          </Reveal>
+          <Reveal delayMs={120}>
+            <PricingCard
+              variant="premium"
+              badge="Offre de lancement"
+              title="Premium"
+              subtitle="Maximise tes chances de trouver ta moitié"
+              originalPrice="6,99 $"
+              price="3,99"
+              priceSuffix="$ / mois"
+              paymentMethods="Mobile Money · Carte bancaire"
+              includedFeatures={[
+                'Demandes de contact illimitées',
+                "Voir qui t'a mis en favori ★",
+                'Voir qui a visité ton profil',
+                'Jusqu’à 10 photos HD sur ton profil',
+                'Messagerie 100% illimitée',
+                'Messages vocaux — NOUVEAU',
+                'Vois qui est connecté en temps réel',
+                'Score de compatibilité IA détaillé',
+                'Boosts de profil inclus',
+                'Badge Premium vérifié',
+                'Support prioritaire 7j/7',
+              ]}
+              ctaLabel="Commencer"
+              ctaHref="/onboarding"
+              footnote="* Tarif de lancement limité. Prix normal : 6,99 $ / mois"
+            />
+          </Reveal>
         </div>
       </section>
 
       {/* Témoignages */}
       <section className="bg-muted px-5 py-12 lg:px-12 lg:py-20">
-        <div className="text-center xl:mx-auto xl:max-w-5xl">
+        <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
           <SectionEyebrow icon="heart" label="Ils l'ont fait" tone="surface" />
           <SectionHeading>Des Congolais qui ont trouvé leur moitié</SectionHeading>
-        </div>
+        </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:mt-16 lg:max-w-5xl lg:grid-cols-3 lg:gap-8">
-          {TESTIMONIALS.map((t) => (
-            <SuccessStoryCard key={t.name} {...t} />
+          {TESTIMONIALS.map((t, i) => (
+            <Reveal key={t.name} delayMs={i * 90}>
+              <SuccessStoryCard {...t} />
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* Bandeau final */}
       <section className="bg-secondary px-5 py-12 text-center lg:px-12 lg:py-20">
-        <span className="font-body text-xs font-semibold uppercase tracking-widest text-secondary-foreground/70">
-          YeOyo na biso
-        </span>
-        <h2 className="mt-2 font-headings text-2xl font-bold text-secondary-foreground lg:text-4xl">
-          La bonne personne existe.
-          <br />
-          Elle est peut-être là, ce soir.
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl font-body text-sm text-secondary-foreground/90 lg:text-lg">
-          Rejoins YeOyo. Crée ton profil en 5 minutes. Rencontre des personnes vraies, sérieuses,
-          qui te ressemblent.
-        </p>
-        <Link
-          href="/onboarding"
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 font-headings text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] lg:mt-8 lg:w-auto lg:px-8"
-        >
-          <Icon name="user-plus" size={18} />
-          Créer mon profil gratuitement
-        </Link>
+        <Reveal>
+          <span className="font-body text-xs font-semibold uppercase tracking-widest text-secondary-foreground/70">
+            YeOyo na biso
+          </span>
+          <h2 className="mt-2 font-headings text-2xl font-bold text-secondary-foreground lg:text-4xl">
+            La bonne personne existe.
+            <br />
+            Elle est peut-être là, ce soir.
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl font-body text-sm text-secondary-foreground/90 lg:text-lg">
+            Rejoins YeOyo. Crée ton profil en 5 minutes. Rencontre des personnes vraies, sérieuses,
+            qui te ressemblent.
+          </p>
+          <Link
+            href="/onboarding"
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 font-headings text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] lg:mt-8 lg:w-auto lg:px-8"
+          >
+            <Icon name="user-plus" size={18} />
+            Créer mon profil gratuitement
+          </Link>
+        </Reveal>
       </section>
 
       {/* Footer */}

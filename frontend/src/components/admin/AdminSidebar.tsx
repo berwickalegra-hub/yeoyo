@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type IconName } from '@/components/ui/Icon';
 
 // Reconciled from the Banani `AdminSidebar.jsx` nav structure (Dashboard;
 // Utilisateurs → Membres/Vérification IA/Signalements/Suspensions;
@@ -28,8 +28,21 @@ import { Icon } from '@/components/ui/Icon';
 // desktop-first but shouldn't be unusable on a tablet/phone.
 interface NavGroup {
   label: string;
-  items: { href: string; label: string; badge?: number | undefined }[];
+  items: { href: string; label: string; icon: IconName; badge?: number | undefined }[];
 }
+
+// Icon per inert (not-yet-built) nav label — kept in its own map since these
+// items aren't real NavGroup entries (no href, never active).
+const INERT_ICONS: Record<string, IconName> = {
+  Suspensions: 'ban',
+  'Likes & Matches': 'heart',
+  Messages: 'message-circle',
+  Demandes: 'user-plus',
+  Abonnements: 'crown',
+  Transactions: 'credit-card',
+  Configuration: 'settings',
+  Logs: 'layers',
+};
 
 export function AdminSidebar({
   adminEmail,
@@ -49,13 +62,25 @@ export function AdminSidebar({
   const pathname = usePathname();
 
   const groups: NavGroup[] = [
-    { label: '', items: [{ href: '/admin', label: 'Dashboard' }] },
+    { label: '', items: [{ href: '/admin', label: 'Dashboard', icon: 'layout-grid' }] },
     {
       label: 'Utilisateurs',
       items: [
-        ...(role !== 'MODERATOR' ? [{ href: '/admin/membres', label: 'Membres' }] : []),
-        { href: '/admin/verification', label: 'Vérification IA', badge: verificationCount },
-        { href: '/admin/signalements', label: 'Signalements', badge: reportsCount },
+        ...(role !== 'MODERATOR'
+          ? [{ href: '/admin/membres', label: 'Membres', icon: 'users' as IconName }]
+          : []),
+        {
+          href: '/admin/verification',
+          label: 'Vérification IA',
+          icon: 'bot',
+          badge: verificationCount,
+        },
+        {
+          href: '/admin/signalements',
+          label: 'Signalements',
+          icon: 'shield',
+          badge: reportsCount,
+        },
       ],
     },
     ...(role === 'SUPERADMIN'
@@ -63,8 +88,12 @@ export function AdminSidebar({
           {
             label: 'Administration',
             items: [
-              { href: '/admin/roles', label: 'Rôles admin' },
-              { href: '/admin/2fa-setup', label: 'Authentification à deux facteurs' },
+              { href: '/admin/roles', label: 'Rôles admin', icon: 'shield-check' as IconName },
+              {
+                href: '/admin/2fa-setup',
+                label: 'Authentification à deux facteurs',
+                icon: 'smartphone' as IconName,
+              },
             ],
           },
         ]
@@ -81,68 +110,100 @@ export function AdminSidebar({
   const content = (
     <>
       <div className="flex items-center justify-between border-b border-border px-6 py-6">
-        <span className="font-headings text-lg font-bold text-foreground">YeOyo Admin</span>
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+            <Icon name="shield-check" size={16} />
+          </span>
+          <span className="font-headings text-lg font-bold leading-none text-foreground">
+            YeOyo Admin
+          </span>
+        </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Fermer le menu"
-          className="text-muted-foreground lg:hidden"
+          className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground lg:hidden"
         >
           <Icon name="x" size={20} />
         </button>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
+      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-5">
         {groups.map((group) => (
           <div key={group.label || 'root'}>
             {group.label && (
-              <p className="px-3 pb-1 font-body text-xs uppercase tracking-widest text-muted-foreground">
+              <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                 {group.label}
               </p>
             )}
-            {group.items.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  className={`flex items-center justify-between rounded-lg px-3 py-2 font-body text-sm ${
-                    active ? 'bg-secondary text-primary' : 'text-muted-foreground'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {!!item.badge && (
-                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            <div className="flex flex-col gap-0.5">
+              {group.items.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onClose}
+                    className={`group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                      active
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {active && (
+                      <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+                    )}
+                    <Icon
+                      name={item.icon}
+                      size={17}
+                      className={active ? 'text-primary' : 'text-muted-foreground/80'}
+                    />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {!!item.badge && (
+                      <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-primary-foreground">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         ))}
 
         {inertGroups.map((group) => (
           <div key={group.label + group.items.join()}>
-            <p className="px-3 pb-1 font-body text-xs uppercase tracking-widest text-muted-foreground">
+            <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
               {group.label}
             </p>
-            {group.items.map((label) => (
-              <div
-                key={label}
-                className="flex items-center justify-between rounded-lg px-3 py-2 font-body text-sm text-muted-foreground/50"
-              >
-                <span>{label}</span>
-                <span className="text-xs italic">Bientôt</span>
-              </div>
-            ))}
+            <div className="flex flex-col gap-0.5">
+              {group.items.map((label) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground/40"
+                >
+                  <Icon name={INERT_ICONS[label] ?? 'lock'} size={17} />
+                  <span className="flex-1 truncate">{label}</span>
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] italic">
+                    Bientôt
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </nav>
 
-      <div className="border-t border-border px-4 py-4">
-        <p className="truncate font-body text-xs text-muted-foreground">{adminEmail}</p>
+      <div className="flex items-center gap-2.5 border-t border-border px-4 py-4">
+        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted font-body text-xs font-semibold text-foreground">
+          {adminEmail.slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-body text-xs font-medium text-foreground">{adminEmail}</p>
+          <p className="font-body text-[11px] capitalize text-muted-foreground">
+            {role.toLowerCase()}
+          </p>
+        </div>
       </div>
     </>
   );

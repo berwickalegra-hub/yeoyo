@@ -224,9 +224,9 @@ export default function PremiumPage() {
         {!loading && subscription?.status !== 'ACTIVE' && (
           <>
             {/* Hero pitch */}
-            <div className="border-b border-border pb-8 text-center">
-              <span className="inline-flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-1.5 font-body text-xs font-bold text-primary">
-                <Icon name="shield-check" size={12} />
+            <div className="premium-sales-hero -mx-5 rounded-b-2xl border-b border-gold/20 px-5 pb-8 pt-2 text-center lg:-mx-8 lg:px-8">
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-gold/15 px-3 py-1.5 font-body text-xs font-bold text-gold">
+                <Icon name="crown" size={12} fill="currentColor" />
                 Sérieux, vérifié à la main
               </span>
               <h1 className="mt-4 font-headings text-2xl font-bold text-foreground lg:text-3xl">
@@ -236,14 +236,14 @@ export default function PremiumPage() {
                 Sans Premium, ton profil reste noyé. Avec Premium, tu apparais en premier, tu vois
                 qui s&rsquo;intéresse à toi, et tu réponds sans limite.
               </p>
-              <div className="mx-auto mt-6 flex max-w-sm items-center justify-center divide-x divide-border">
+              <div className="mx-auto mt-6 flex max-w-sm items-center justify-center divide-x divide-gold/20">
                 {[
                   { value: '3×', label: 'plus de réponses' },
                   { value: '50 000+', label: 'profils vérifiés' },
                   { value: '100%', label: 'profils contrôlés' },
                 ].map((s) => (
                   <div key={s.label} className="flex-1 px-2 text-center">
-                    <p className="font-headings text-lg font-bold text-primary">{s.value}</p>
+                    <p className="font-headings text-lg font-bold text-gold">{s.value}</p>
                     <p className="font-body text-[11px] text-muted-foreground">{s.label}</p>
                   </div>
                 ))}
@@ -266,18 +266,16 @@ export default function PremiumPage() {
                       key={plan.id}
                       type="button"
                       onClick={() => setSelectedPlanId(plan.id)}
-                      className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left ${
-                        active ? 'border-primary bg-primary/5' : 'border-border bg-background'
+                      className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+                        active ? 'border-gold bg-gold/5' : 'border-border bg-background'
                       }`}
                     >
                       <div
                         className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                          active ? 'border-primary bg-primary' : 'border-border'
+                          active ? 'border-gold bg-gold' : 'border-border'
                         }`}
                       >
-                        {active && (
-                          <Icon name="check" size={12} className="text-primary-foreground" />
-                        )}
+                        {active && <Icon name="check" size={12} className="text-gold-foreground" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -285,7 +283,8 @@ export default function PremiumPage() {
                             {plan.name}
                           </span>
                           {plan.popular && (
-                            <span className="rounded-md bg-secondary px-2 py-0.5 font-body text-[10px] font-bold text-secondary-foreground">
+                            <span className="flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 font-body text-[10px] font-bold text-gold-foreground">
+                              <Icon name="crown" size={9} fill="currentColor" />
                               Populaire
                             </span>
                           )}
@@ -303,7 +302,7 @@ export default function PremiumPage() {
                           {formatUsd(plan.originalPriceUsdCentsTotal)}
                         </p>
                         <p
-                          className={`font-headings text-base font-bold ${active ? 'text-primary' : 'text-foreground'}`}
+                          className={`font-headings text-base font-bold ${active ? 'text-gold' : 'text-foreground'}`}
                         >
                           {formatUsd(plan.priceUsdCentsTotal)}
                         </p>
@@ -348,12 +347,12 @@ export default function PremiumPage() {
 
             {/* Total + CTA */}
             {selectedPlan && (
-              <div className="rounded-xl border border-border bg-surface p-5">
+              <div className="rounded-xl border border-gold/40 bg-gold/5 p-5">
                 <div className="flex items-center justify-between">
                   <span className="font-body text-sm font-medium text-foreground">
                     Total à payer
                   </span>
-                  <span className="font-headings text-xl font-bold text-foreground">
+                  <span className="font-headings text-xl font-bold text-gold">
                     {formatUsd(selectedPlan.priceUsdCentsTotal)}
                   </span>
                 </div>
@@ -361,7 +360,7 @@ export default function PremiumPage() {
                   type="button"
                   onClick={checkout}
                   disabled={submitting || phoneLocal.trim().length < 4}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold py-3.5 font-headings text-sm font-bold text-gold-foreground disabled:opacity-50"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gold py-3.5 font-headings text-sm font-bold text-gold-foreground shadow-md shadow-gold/30 transition-transform active:scale-[0.99] disabled:opacity-50"
                 >
                   <Icon name="crown" size={18} />
                   {submitting ? 'Redirection…' : 'Devenir membre Premium'}
@@ -393,7 +392,7 @@ export default function PremiumPage() {
               <div className="mt-4 flex flex-col gap-4">
                 {FEATURES.map((f) => (
                   <div key={f.title} className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10 text-primary">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
                       <Icon name={f.icon} size={15} />
                     </div>
                     <div>
@@ -423,7 +422,7 @@ export default function PremiumPage() {
                     <tr className="border-b border-border text-muted-foreground">
                       <th className="px-3 py-2 font-medium">Fonctionnalité</th>
                       <th className="px-3 py-2 font-medium">Gratuit</th>
-                      <th className="px-3 py-2 font-medium">Premium</th>
+                      <th className="bg-gold/10 px-3 py-2 font-medium text-gold">Premium</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -433,7 +432,7 @@ export default function PremiumPage() {
                         <td className="px-3 py-2 text-muted-foreground">
                           {typeof row.free === 'boolean' ? (row.free ? '✓' : '—') : row.free}
                         </td>
-                        <td className="px-3 py-2 text-primary">
+                        <td className="bg-gold/5 px-3 py-2 font-medium text-gold">
                           {typeof row.premium === 'boolean'
                             ? row.premium
                               ? '✓'
@@ -478,7 +477,7 @@ export default function PremiumPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
                   <Icon name="user-check" size={16} />
                 </div>
                 <div>

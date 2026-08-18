@@ -25,14 +25,20 @@ export function UserAvatar({
         alt={name}
         width={size}
         height={size}
-        className={`rounded-full object-cover ${className}`}
+        // Explicit inline width/height (not just the next/image props) so
+        // this stays a perfect circle regardless of the source photo's own
+        // aspect ratio — Tailwind's preflight `img { height: auto }` can
+        // otherwise win over the HTML width/height attributes and stretch
+        // portrait photos into an oval (2026-08-19 regression report).
+        style={{ width: size, height: size }}
+        className={`aspect-square flex-shrink-0 rounded-full object-cover ${className}`}
       />
     );
   }
 
   return (
     <div
-      className={`flex items-center justify-center rounded-full bg-secondary text-secondary-foreground font-headings font-semibold ${className}`}
+      className={`flex flex-shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-headings font-semibold ${className}`}
       style={{ width: size, height: size, fontSize: size * 0.4 }}
       aria-hidden
     >

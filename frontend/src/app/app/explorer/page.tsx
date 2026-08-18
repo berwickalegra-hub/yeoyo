@@ -61,7 +61,7 @@ const DECK_PAGE_SIZE = 10;
 // of a generic spinner unrelated to what's coming.
 function SwipeCardSkeleton() {
   return (
-    <div className="animate-fade-in mx-auto flex h-[calc(100dvh-13rem)] max-h-[680px] min-h-[440px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
+    <div className="animate-fade-in mx-auto flex h-full max-h-[680px] min-h-[380px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
       <div className="h-[340px] flex-shrink-0 animate-pulse bg-muted" />
       <div className="flex flex-col gap-3 p-4">
         <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
@@ -296,350 +296,407 @@ export default function ExplorerPage() {
       showCoach={false}
       compactMobileNav
     >
-      <div className="sticky top-0 z-20 animate-fade-in-down bg-background/95 shadow-sm backdrop-blur-sm">
-        <div className="relative border-b border-border px-5 py-4 text-center lg:px-8">
-          <h1 className="font-headings text-lg font-bold text-foreground">Explorer</h1>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 border-b border-border px-5 py-3">
-          <button
-            type="button"
-            onClick={openFilterPanel}
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 transition-transform active:scale-95"
-          >
-            <Icon name="sliders-horizontal" size={15} />
-            <span className="font-body text-sm font-medium text-foreground">Filtres</span>
-          </button>
-          <div className="flex items-center overflow-hidden rounded-lg border border-border">
+      {/* This page owns its own full-height layout (2026-08-19, explicit
+          user report of a double-scroll conflict on the swipe deck): the
+          outer page no longer scrolls at all — only the deck's own
+          photo/info region does, or the grid/filter panel when they're the
+          active view. Without this, the old sticky "Explorer" title bar +
+          filter row could push the fixed-height SwipeCard just past the
+          viewport, so both the document AND the card's internal region
+          became scrollable at once. */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-shrink-0 animate-fade-in-down bg-background/95">
+          <div className="flex items-center justify-center gap-2 border-b border-border px-5 py-3">
             <button
               type="button"
-              onClick={() => setViewMode('swipe')}
-              aria-label="Vue par cartes"
-              aria-pressed={viewMode === 'swipe'}
-              className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'swipe' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
+              onClick={openFilterPanel}
+              className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 transition-transform active:scale-95"
             >
-              <Icon name="layers" size={15} />
+              <Icon name="sliders-horizontal" size={15} />
+              <span className="font-body text-sm font-medium text-foreground">Filtres</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-label="Vue en grille"
-              aria-pressed={viewMode === 'grid'}
-              className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
-            >
-              <Icon name="layout-grid" size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {showFilterPanel && (
-        <div className="animate-scale-in mx-auto flex w-full max-w-sm flex-col gap-4 rounded-xl border border-border bg-surface p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-headings text-sm font-semibold text-foreground">Filtres</h2>
-            <button type="button" onClick={() => setShowFilterPanel(false)} aria-label="Fermer">
-              <Icon name="x" size={16} />
-            </button>
-          </div>
-
-          <div className="flex gap-2">
-            {(
-              [
-                { value: undefined, label: 'Tous' },
-                { value: 'FEMME', label: 'Femmes' },
-                { value: 'HOMME', label: 'Hommes' },
-              ] as const
-            ).map((g) => (
+            <div className="flex items-center overflow-hidden rounded-lg border border-border">
               <button
-                key={g.label}
                 type="button"
-                onClick={() => setDraftGender(g.value)}
-                className={`flex-1 rounded-lg border py-2 font-body text-xs font-medium ${draftGender === g.value ? 'border-primary bg-secondary/20 text-foreground' : 'border-border text-muted-foreground'}`}
+                onClick={() => setViewMode('swipe')}
+                aria-label="Vue par cartes"
+                aria-pressed={viewMode === 'swipe'}
+                className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'swipe' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
               >
-                {g.label}
+                <Icon name="layers" size={15} />
               </button>
-            ))}
-          </div>
-
-          <div>
-            <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
-              Âge
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={18}
-                value={draftAgeMin}
-                onChange={(e) => setDraftAgeMin(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center font-body text-sm text-foreground"
-              />
-              <span className="text-muted-foreground">—</span>
-              <input
-                type="number"
-                min={18}
-                value={draftAgeMax}
-                onChange={(e) => setDraftAgeMax(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center font-body text-sm text-foreground"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
-              Religion
-            </label>
-            <div className="flex flex-col gap-1.5">
-              {RELIGIONS.map((r) => {
-                const checked = draftReligion.includes(r.value);
-                return (
-                  <button
-                    type="button"
-                    key={r.value}
-                    onClick={() =>
-                      setDraftReligion((prev) =>
-                        checked ? prev.filter((v) => v !== r.value) : [...prev, r.value],
-                      )
-                    }
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left ${checked ? 'border-primary bg-secondary/20' : 'border-border bg-background'}`}
-                  >
-                    <div
-                      className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded ${checked ? 'bg-primary' : 'border border-border'}`}
-                    >
-                      {checked && <Icon name="check" size={11} />}
-                    </div>
-                    <span className="font-body text-sm text-foreground">{r.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
-              Enfants
-            </label>
-            <button
-              type="button"
-              onClick={() => setDraftChildren(draftChildren === '0' ? undefined : '0')}
-              className={`w-full rounded-lg border py-2 font-body text-xs font-medium ${draftChildren === '0' ? 'border-primary bg-secondary/20 text-foreground' : 'border-border text-muted-foreground'}`}
-            >
-              Sans enfant
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={applyFilterPanel}
-            className="rounded-lg bg-primary py-3 font-headings text-sm font-semibold text-primary-foreground"
-          >
-            Appliquer
-          </button>
-        </div>
-      )}
-
-      <div className="px-5 py-4 lg:px-8">
-        {loading && viewMode === 'swipe' && <SwipeCardSkeleton />}
-        {loading && viewMode === 'grid' && (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface"
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                aria-label="Vue en grille"
+                aria-pressed={viewMode === 'grid'}
+                className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-surface text-muted-foreground'}`}
               >
-                <div className="h-[200px] animate-pulse bg-muted" />
-                <div className="flex flex-col gap-2 p-4">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-                </div>
-              </div>
-            ))}
+                <Icon name="layout-grid" size={15} />
+              </button>
+            </div>
           </div>
-        )}
+        </div>
 
-        {error && errorCode === 'PROFILE_REQUIRED' && (
-          <div className="animate-fade-in-up mx-auto max-w-sm rounded-lg border border-border bg-surface p-8 text-center">
-            <p className="font-body text-sm text-muted-foreground">
-              Complète ton profil pour explorer des membres.
-            </p>
-            <Link
-              href="/onboarding"
-              className="mt-4 inline-block rounded-xl bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
-            >
-              Compléter mon profil
-            </Link>
-          </div>
-        )}
-        {error && errorCode !== 'PROFILE_REQUIRED' && (
-          <p role="alert" className="animate-fade-in text-center font-body text-sm text-red-500">
-            {error}
-          </p>
-        )}
+        {/* Swipe mode (filters closed, no error) gets its own non-scrolling,
+          height-filling container — the deck's internal photo/info region
+          is the only thing that scrolls. Every other state (filter panel
+          open, grid view, errors) uses a normal scrollable container, same
+          as before. */}
+        {!showFilterPanel && !error && viewMode === 'swipe' ? (
+          <div className="flex flex-1 items-center justify-center overflow-hidden px-5 py-4 lg:px-8">
+            {loading ? (
+              <SwipeCardSkeleton />
+            ) : current ? (
+              <div className="mx-auto grid h-full w-full max-w-4xl grid-cols-1 items-center gap-4 lg:grid-cols-[14rem_24rem_14rem]">
+                {/* Mirrors the side panel's column width so the card lands
+                  dead-center under the Filtres/toggle row above, instead of
+                  the whole (card + panel) block being centered as a unit —
+                  which pulls the card left of that toolbar's center. */}
+                <div aria-hidden="true" className="hidden lg:block" />
 
-        {!loading && !error && viewMode === 'swipe' && current && (
-          <div className="mx-auto grid max-w-4xl grid-cols-1 items-start gap-4 lg:grid-cols-[14rem_24rem_14rem]">
-            {/* Mirrors the side panel's column width so the card lands
-                dead-center under the Filtres/toggle row above, instead of
-                the whole (card + panel) block being centered as a unit —
-                which pulls the card left of that toolbar's center. */}
-            <div aria-hidden="true" className="hidden lg:block" />
+                <SwipeCard
+                  key={current.userId}
+                  profile={current}
+                  onDismiss={onDismiss}
+                  onMessage={onMessage}
+                  onLike={onLike}
+                  onFavorite={onFavorite}
+                  favoriteBusy={favoritingUserId === current.userId}
+                  busy={busyUserId === current.userId}
+                />
 
-            <SwipeCard
-              key={current.userId}
-              profile={current}
-              onDismiss={onDismiss}
-              onMessage={onMessage}
-              onLike={onLike}
-              onFavorite={onFavorite}
-              favoriteBusy={favoritingUserId === current.userId}
-              busy={busyUserId === current.userId}
-            />
-
-            {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
-                only (Banani's DiscoverScreen own layout), no equivalent on
-                a phone-width swipe deck. */}
-            <div className="hidden flex-col gap-4 lg:flex">
-              <div className="rounded-lg border border-border bg-surface p-4">
-                <p className="mb-3 font-headings text-sm font-semibold text-foreground">
-                  Filtres actifs
-                </p>
-                <div className="flex flex-col gap-2 font-body text-xs text-muted-foreground">
-                  <div className="flex items-center justify-between">
-                    <span>Âge</span>
-                    <span className="text-foreground">
-                      {filters.ageMin ?? 18} – {filters.ageMax ?? '∞'} ans
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Genre</span>
-                    <span className="text-foreground">
-                      {filters.gender === 'FEMME'
-                        ? 'Femmes'
-                        : filters.gender === 'HOMME'
-                          ? 'Hommes'
-                          : 'Tous'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Sans enfant</span>
-                    <span className="text-foreground">
-                      {filters.childrenCount === '0' ? 'Oui' : 'Non'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={openFilterPanel}
-                  className="mt-3 w-full rounded-lg border border-border py-2 font-body text-xs font-medium text-foreground"
-                >
-                  Modifier les filtres
-                </button>
-              </div>
-
-              {stats && (
-                <div className="rounded-lg border border-border bg-surface p-4">
-                  <p className="mb-3 font-headings text-sm font-semibold text-foreground">
-                    Mes stats du jour
-                  </p>
-                  <div className="flex flex-col gap-2 font-body text-xs">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-secondary/10">
-                        <Icon name="heart" size={13} className="text-secondary" />
+                {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
+                  only (Banani's DiscoverScreen own layout), no equivalent on
+                  a phone-width swipe deck. */}
+                <div className="hidden flex-col gap-4 lg:flex">
+                  <div className="rounded-lg border border-border bg-surface p-4">
+                    <p className="mb-3 font-headings text-sm font-semibold text-foreground">
+                      Filtres actifs
+                    </p>
+                    <div className="flex flex-col gap-2 font-body text-xs text-muted-foreground">
+                      <div className="flex items-center justify-between">
+                        <span>Âge</span>
+                        <span className="text-foreground">
+                          {filters.ageMin ?? 18} – {filters.ageMax ?? '∞'} ans
+                        </span>
                       </div>
-                      <span>Ajouts</span>
-                      <span className="ml-auto font-semibold text-foreground">
-                        {stats.likesToday}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-primary/10">
-                        <Icon name="message-circle" size={13} className="text-primary" />
+                      <div className="flex items-center justify-between">
+                        <span>Genre</span>
+                        <span className="text-foreground">
+                          {filters.gender === 'FEMME'
+                            ? 'Femmes'
+                            : filters.gender === 'HOMME'
+                              ? 'Hommes'
+                              : 'Tous'}
+                        </span>
                       </div>
-                      <span>Messages envoyés</span>
-                      <span className="ml-auto font-semibold text-foreground">
-                        {stats.messages.limit === null
-                          ? 'Illimité'
-                          : `${stats.messages.limit - (stats.messages.remaining ?? 0)} / ${stats.messages.limit}`}
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span>Sans enfant</span>
+                        <span className="text-foreground">
+                          {filters.childrenCount === '0' ? 'Oui' : 'Non'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  {stats.messages.limit !== null && (
-                    <Link
-                      href="/app/premium"
-                      className="mt-3 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 font-body text-xs font-medium text-gold"
+                    <button
+                      type="button"
+                      onClick={openFilterPanel}
+                      className="mt-3 w-full rounded-lg border border-border py-2 font-body text-xs font-medium text-foreground"
                     >
-                      <Icon name="crown" size={13} />
-                      Premium = messages illimités
-                    </Link>
+                      Modifier les filtres
+                    </button>
+                  </div>
+
+                  {stats && (
+                    <div className="rounded-lg border border-border bg-surface p-4">
+                      <p className="mb-3 font-headings text-sm font-semibold text-foreground">
+                        Mes stats du jour
+                      </p>
+                      <div className="flex flex-col gap-2 font-body text-xs">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-secondary/10">
+                            <Icon name="heart" size={13} className="text-secondary" />
+                          </div>
+                          <span>Ajouts</span>
+                          <span className="ml-auto font-semibold text-foreground">
+                            {stats.likesToday}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-primary/10">
+                            <Icon name="message-circle" size={13} className="text-primary" />
+                          </div>
+                          <span>Messages envoyés</span>
+                          <span className="ml-auto font-semibold text-foreground">
+                            {stats.messages.limit === null
+                              ? 'Illimité'
+                              : `${stats.messages.limit - (stats.messages.remaining ?? 0)} / ${stats.messages.limit}`}
+                          </span>
+                        </div>
+                      </div>
+                      {stats.messages.limit !== null && (
+                        <Link
+                          href="/app/premium"
+                          className="mt-3 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 font-body text-xs font-medium text-gold"
+                        >
+                          <Icon name="crown" size={13} />
+                          Premium = messages illimités
+                        </Link>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {!loading && !error && viewMode === 'swipe' && !current && (
-          <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
-            <Icon name="layout-grid" size={28} className="text-muted-foreground" />
-            <p className="font-headings text-base font-semibold text-foreground">
-              Plus de profils pour l&rsquo;instant
-            </p>
-            <p className="font-body text-sm text-muted-foreground">
-              Reviens plus tard, ou élargis tes filtres.
-            </p>
-            <Link
-              href="/app/decouvrir"
-              className="mt-3 rounded-xl bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
-            >
-              Retour à l&rsquo;accueil
-            </Link>
-          </div>
-        )}
-
-        {!loading && !error && viewMode === 'grid' && deck.length > 0 && (
-          <>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {deck.map((p, i) => (
-                <div
-                  key={p.userId}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+              </div>
+            ) : (
+              <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
+                <Icon name="layout-grid" size={28} className="text-muted-foreground" />
+                <p className="font-headings text-base font-semibold text-foreground">
+                  Plus de profils pour l&rsquo;instant
+                </p>
+                <p className="font-body text-sm text-muted-foreground">
+                  Reviens plus tard, ou élargis tes filtres.
+                </p>
+                <Link
+                  href="/app/decouvrir"
+                  className="mt-3 rounded-xl bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
                 >
-                  <ProfileGridCard
-                    profile={p}
-                    onLike={onLikeGrid}
-                    onMessage={onMessageGrid}
-                    onDismiss={onDismissGrid}
-                    onFavorite={onFavorite}
-                    favoriteBusy={favoritingUserId === p.userId}
-                    busy={busyUserId === p.userId}
-                  />
+                  Retour à l&rsquo;accueil
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto px-5 py-4 lg:px-8">
+            {showFilterPanel && (
+              <div className="animate-scale-in mx-auto flex w-full max-w-sm flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-headings text-sm font-semibold text-foreground">Filtres</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilterPanel(false)}
+                    aria-label="Fermer"
+                  >
+                    <Icon name="x" size={16} />
+                  </button>
                 </div>
-              ))}
-            </div>
-            {hasMore && (
-              <div className="flex justify-center pt-5">
+
+                <div className="flex gap-2">
+                  {(
+                    [
+                      { value: undefined, label: 'Tous' },
+                      { value: 'FEMME', label: 'Femmes' },
+                      { value: 'HOMME', label: 'Hommes' },
+                    ] as const
+                  ).map((g) => (
+                    <button
+                      key={g.label}
+                      type="button"
+                      onClick={() => setDraftGender(g.value)}
+                      className={`flex-1 rounded-lg border py-2 font-body text-xs font-medium ${draftGender === g.value ? 'border-primary bg-secondary/20 text-foreground' : 'border-border text-muted-foreground'}`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
+                    Âge
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={18}
+                      value={draftAgeMin}
+                      onChange={(e) => setDraftAgeMin(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center font-body text-sm text-foreground"
+                    />
+                    <span className="text-muted-foreground">—</span>
+                    <input
+                      type="number"
+                      min={18}
+                      value={draftAgeMax}
+                      onChange={(e) => setDraftAgeMax(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center font-body text-sm text-foreground"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
+                    Religion
+                  </label>
+                  <div className="flex flex-col gap-1.5">
+                    {RELIGIONS.map((r) => {
+                      const checked = draftReligion.includes(r.value);
+                      return (
+                        <button
+                          type="button"
+                          key={r.value}
+                          onClick={() =>
+                            setDraftReligion((prev) =>
+                              checked ? prev.filter((v) => v !== r.value) : [...prev, r.value],
+                            )
+                          }
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left ${checked ? 'border-primary bg-secondary/20' : 'border-border bg-background'}`}
+                        >
+                          <div
+                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded ${checked ? 'bg-primary' : 'border border-border'}`}
+                          >
+                            {checked && <Icon name="check" size={11} />}
+                          </div>
+                          <span className="font-body text-sm text-foreground">{r.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-body text-xs uppercase tracking-widest text-muted-foreground">
+                    Enfants
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setDraftChildren(draftChildren === '0' ? undefined : '0')}
+                    className={`w-full rounded-lg border py-2 font-body text-xs font-medium ${draftChildren === '0' ? 'border-primary bg-secondary/20 text-foreground' : 'border-border text-muted-foreground'}`}
+                  >
+                    Sans enfant
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => void loadMore()}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-surface px-8 py-3 font-body text-sm font-medium text-foreground"
+                  onClick={applyFilterPanel}
+                  className="rounded-lg bg-primary py-3 font-headings text-sm font-semibold text-primary-foreground"
                 >
-                  <Icon name="refresh-cw" size={15} />
-                  Charger plus de profils
+                  Appliquer
                 </button>
               </div>
             )}
-          </>
-        )}
 
-        {!loading && !error && viewMode === 'grid' && deck.length === 0 && (
-          <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
-            <Icon name="layout-grid" size={28} className="text-muted-foreground" />
-            <p className="font-headings text-base font-semibold text-foreground">
-              Plus de profils pour l&rsquo;instant
-            </p>
-            <p className="font-body text-sm text-muted-foreground">
-              Reviens plus tard, ou élargis tes filtres.
-            </p>
+            {loading && viewMode === 'swipe' && <SwipeCardSkeleton />}
+            {loading && viewMode === 'grid' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface"
+                  >
+                    <div className="h-[200px] animate-pulse bg-muted" />
+                    <div className="flex flex-col gap-2 p-4">
+                      <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {error && errorCode === 'PROFILE_REQUIRED' && (
+              <div className="animate-fade-in-up mx-auto max-w-sm rounded-lg border border-border bg-surface p-8 text-center">
+                <p className="font-body text-sm text-muted-foreground">
+                  Complète ton profil pour explorer des membres.
+                </p>
+                <Link
+                  href="/onboarding"
+                  className="mt-4 inline-block rounded-xl bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
+                >
+                  Compléter mon profil
+                </Link>
+              </div>
+            )}
+            {error && errorCode !== 'PROFILE_REQUIRED' && (
+              <p
+                role="alert"
+                className="animate-fade-in text-center font-body text-sm text-red-500"
+              >
+                {error}
+              </p>
+            )}
+
+            {!loading && !error && viewMode === 'swipe' && current && (
+              <div className="mx-auto grid max-w-4xl grid-cols-1 items-start gap-4 lg:grid-cols-[14rem_24rem_14rem]">
+                <div aria-hidden="true" className="hidden lg:block" />
+                <SwipeCard
+                  key={current.userId}
+                  profile={current}
+                  onDismiss={onDismiss}
+                  onMessage={onMessage}
+                  onLike={onLike}
+                  onFavorite={onFavorite}
+                  favoriteBusy={favoritingUserId === current.userId}
+                  busy={busyUserId === current.userId}
+                />
+                <div aria-hidden="true" className="hidden lg:block" />
+              </div>
+            )}
+
+            {!loading && !error && viewMode === 'swipe' && !current && (
+              <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
+                <Icon name="layout-grid" size={28} className="text-muted-foreground" />
+                <p className="font-headings text-base font-semibold text-foreground">
+                  Plus de profils pour l&rsquo;instant
+                </p>
+                <p className="font-body text-sm text-muted-foreground">
+                  Reviens plus tard, ou élargis tes filtres.
+                </p>
+                <Link
+                  href="/app/decouvrir"
+                  className="mt-3 rounded-xl bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
+                >
+                  Retour à l&rsquo;accueil
+                </Link>
+              </div>
+            )}
+
+            {!loading && !error && viewMode === 'grid' && deck.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {deck.map((p, i) => (
+                    <div
+                      key={p.userId}
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                    >
+                      <ProfileGridCard
+                        profile={p}
+                        onLike={onLikeGrid}
+                        onMessage={onMessageGrid}
+                        onDismiss={onDismissGrid}
+                        onFavorite={onFavorite}
+                        favoriteBusy={favoritingUserId === p.userId}
+                        busy={busyUserId === p.userId}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {hasMore && (
+                  <div className="flex justify-center pt-5">
+                    <button
+                      type="button"
+                      onClick={() => void loadMore()}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-surface px-8 py-3 font-body text-sm font-medium text-foreground"
+                    >
+                      <Icon name="refresh-cw" size={15} />
+                      Charger plus de profils
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!loading && !error && viewMode === 'grid' && deck.length === 0 && (
+              <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
+                <Icon name="layout-grid" size={28} className="text-muted-foreground" />
+                <p className="font-headings text-base font-semibold text-foreground">
+                  Plus de profils pour l&rsquo;instant
+                </p>
+                <p className="font-body text-sm text-muted-foreground">
+                  Reviens plus tard, ou élargis tes filtres.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

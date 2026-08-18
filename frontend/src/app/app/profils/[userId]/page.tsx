@@ -38,6 +38,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { usePremium } from '@/contexts/PremiumContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
@@ -51,6 +52,7 @@ import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export default function ProfileDetailPage() {
   const user = useUser();
+  const { isPremium } = usePremium();
   const router = useRouter();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
@@ -324,7 +326,7 @@ export default function ProfileDetailPage() {
                     type="button"
                     onClick={() => void onLike()}
                     disabled={busy || liked}
-                    className={`btn-success-flash flex h-12 flex-shrink-0 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary/15 text-primary' : 'bg-primary text-primary-foreground'}`}
+                    className={`btn-success-flash relative flex h-12 flex-shrink-0 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
                   >
                     {busy ? (
                       <Icon name="refresh-cw" size={17} className="animate-spin" />
@@ -339,6 +341,20 @@ export default function ProfileDetailPage() {
                     <span className="font-body text-sm font-semibold">
                       {liked ? 'Envoyée' : 'Demander'}
                     </span>
+                    {/* Freemium hint (2026-08-19, explicit user ask) — contact
+                        requests are capped for free users (5/mois, see
+                        contact-requests/quota.ts), same gold-crown treatment
+                        as the swipe card's equivalent button. */}
+                    {!isPremium && !liked && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gold shadow">
+                        <Icon
+                          name="crown"
+                          size={11}
+                          className="text-gold-foreground"
+                          fill="currentColor"
+                        />
+                      </span>
+                    )}
                   </button>
                 </div>
 
