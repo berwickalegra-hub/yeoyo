@@ -2,13 +2,11 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { TopNav, type SidebarUser, type SidebarBadgeCounts } from './TopNav';
 import { MobileTabBar } from './MobileTabBar';
 import { CoachWidget } from './CoachWidget';
 import type { SidebarTab } from './nav-items';
 import { useAuth } from '@/contexts/AuthContext';
-import { Icon } from '@/components/ui/Icon';
 
 // Shared app-shell layout: TopNav (sticky top, full desktop bar from `md`,
 // a compact mobile strip below `md`) + MobileTabBar (fixed bottom, mobile
@@ -30,7 +28,7 @@ export function AppShell({
   badgeCounts,
   showCoach = true,
   compactMobileNav = false,
-  hideChrome = false,
+  hideTopStripOnMobile = false,
   children,
 }: {
   active: SidebarTab;
@@ -45,18 +43,18 @@ export function AppShell({
    * MobileTabBar's full 5-tab bar for a single "Accueil" button — that
    * screen's own action row + raised Découvrir FAB already fill the same
    * thumb zone, so the full bar was one row of controls too many. Desktop's
-   * TopNav is unaffected either way (no crowding there). Superseded on
-   * Explorer by `hideChrome` below; kept as a lighter-touch option other
-   * screens can still reach for. */
+   * TopNav is unaffected either way (no crowding there). */
   compactMobileNav?: boolean;
-  /** Explorer only (2026-08-19, explicit user ask): on mobile, removes
-   * TopNav's top strip AND MobileTabBar entirely so the swipe card + its
-   * fixed action row can use the full viewport height without ever needing
-   * to scroll to reach them — "le cadre... ne puisse pas avoir besoin qu'on
-   * puisse scroller pour voir cela". Desktop is untouched (TopNav's desktop
-   * bar already has room to spare). A small floating "Accueil" button
-   * replaces the lost mobile navigation. */
-  hideChrome?: boolean;
+  /** Découvrir (Explorer) only (2026-08-19, explicit user ask — reverted
+   * from an earlier attempt that also removed MobileTabBar and replaced it
+   * with a floating back button: the user reported that left mobile Safari
+   * with no fixed bottom element at all, which made its own viewport-chrome
+   * sizing less predictable, and removed their only way back to Accueil).
+   * Hides ONLY TopNav's mobile top strip to reclaim vertical space for the
+   * swipe card; MobileTabBar (paired with `compactMobileNav` above) stays
+   * as the single "Accueil" button it always was on this screen. Desktop's
+   * TopNav is unaffected either way. */
+  hideTopStripOnMobile?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -80,27 +78,18 @@ export function AppShell({
     // would stack a full viewport on top of the install banner instead of
     // sharing the real one, reproducing the exact bug this fixed).
     <div className="flex flex-1 flex-col bg-background font-body">
-      <TopNav active={active} user={user} badgeCounts={badgeCounts} hideMobileStrip={hideChrome} />
-      <div
-        className={`flex flex-1 flex-col ${hideChrome ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-0' : 'pb-16 md:pb-0'}`}
-      >
-        {children}
-      </div>
-      {hideChrome ? (
-        <Link
-          href="/app/decouvrir"
-          aria-label="Retour à l'accueil"
-          className="fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface/90 text-foreground shadow-md backdrop-blur-sm active:scale-95 md:hidden"
-        >
-          <Icon name="arrow-right" size={17} className="rotate-180" />
-        </Link>
-      ) : (
-        <MobileTabBar
-          active={active}
-          badgeCounts={badgeCounts}
-          variant={compactMobileNav ? 'minimal' : 'full'}
-        />
-      )}
+      <TopNav
+        active={active}
+        user={user}
+        badgeCounts={badgeCounts}
+        hideMobileStrip={hideTopStripOnMobile}
+      />
+      <div className="flex flex-1 flex-col pb-16 md:pb-0">{children}</div>
+      <MobileTabBar
+        active={active}
+        badgeCounts={badgeCounts}
+        variant={compactMobileNav ? 'minimal' : 'full'}
+      />
       {showCoach && <CoachWidget />}
     </div>
   );
