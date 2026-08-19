@@ -16,7 +16,7 @@
 //      polish pass, not core functionality.
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
@@ -281,10 +281,17 @@ export default function OnboardingPage() {
   const [passwordConfirmError, setPasswordConfirmError] = useState<string | null>(null);
   const [termsError, setTermsError] = useState<string | null>(null);
   const [googleRedirecting, setGoogleRedirecting] = useState(false);
+  // Progressive disclosure — email/password fields stay hidden until the
+  // user picks "Continuer avec email" (2026-08-19 explicit ask, reference:
+  // a Farata-style signup screen). Terms gate BOTH methods now (previously
+  // only email's submit checked acceptTerms — Google had no gate at all).
+  const [emailExpanded, setEmailExpanded] = useState(false);
   const [code, setCode] = useState('');
   // TEMPORARY dev aid — see frontend/src/app/api/auth/dev-verification-code
   // (remove both once RESEND_API_KEY is configured for real).
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -338,6 +345,27 @@ export default function OnboardingPage() {
     // signup→profile-or-app routing and must not re-run every time `step`
     // changes afterward.
   }, [loading, user, router]);
+
+  function requireTermsAccepted(): boolean {
+    if (acceptTerms) return true;
+    const msg = 'Merci d’accepter les conditions pour continuer.';
+    setTermsError(msg);
+    toast(msg, 'error');
+    return false;
+  }
+
+  function onGoogleClick(e: MouseEvent<HTMLAnchorElement>) {
+    if (!requireTermsAccepted()) {
+      e.preventDefault();
+      return;
+    }
+    setGoogleRedirecting(true);
+  }
+
+  function onContinueWithEmail() {
+    if (!requireTermsAccepted()) return;
+    setEmailExpanded(true);
+  }
 
   async function onSignup(e: FormEvent) {
     e.preventDefault();
@@ -446,6 +474,28 @@ export default function OnboardingPage() {
     }
   }
 
+  // Client-side politeness on top of the server's 3-per-15min limiter —
+  // stops accidental double-clicks, not abuse.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  async function onResend() {
+    setResending(true);
+    try {
+      await api('/api/auth/resend-verification', { method: 'POST', body: { email: data.email } });
+      toast('Code renvoyé — vérifie ta boîte mail (et le dossier spam).', 'success');
+      setResendCooldown(30);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Une erreur est survenue. Réessaie.';
+      toast(msg, 'error');
+    } finally {
+      setResending(false);
+    }
+  }
+
   async function onFinish(skipPhoto: boolean) {
     setSubmitting(true);
     setError(null);
@@ -511,145 +561,164 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        {/* Google — the privileged sign-up path, full width and visually
-            dominant (solid border, own row) so it reads as the primary
-            action before the secondary email form below.
-            next=/onboarding (not /app/decouvrir) — a first-time Google
-            signup has no Profile row yet. Landing back here with a session
-            already set, the "returning user" effect above detects the
-            missing profile and auto-advances straight to step 1, skipping
-            signup/verify entirely (Google already verified the email). */}
-        <a
-          href="/api/auth/oauth/google/start?next=/onboarding"
-          onClick={() => setGoogleRedirecting(true)}
-          aria-disabled={googleRedirecting}
-          className="flex items-center justify-center gap-2 rounded-xl border-2 border-foreground/15 bg-surface py-3.5 font-body text-sm font-semibold text-foreground transition-colors hover:bg-background"
-        >
-          {googleRedirecting ? (
-            <Icon name="refresh-cw" size={17} className="animate-spin" />
-          ) : (
-            <GoogleIcon />
+        {/* Terms card — gates BOTH signup methods (previously only the
+            email form's submit validated acceptTerms; Google had no gate at
+            all). Shown once, up front, before either method is chosen. */}
+        <div className="mb-5 rounded-xl border border-border bg-surface p-4">
+          <label className="flex items-start gap-2.5 font-body text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(e) => {
+                setAcceptTerms(e.target.checked);
+                if (termsError) setTermsError(null);
+              }}
+              className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+            />
+            <span>
+              J&rsquo;accepte les{' '}
+              <Link
+                href="/conditions-utilisation"
+                target="_blank"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                conditions d&rsquo;utilisation
+              </Link>{' '}
+              et la{' '}
+              <Link
+                href="/confidentialite"
+                target="_blank"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                politique de confidentialité
+              </Link>
+            </span>
+          </label>
+          {termsError && (
+            <span role="alert" className="mt-2 block font-body text-xs text-red-500">
+              {termsError}
+            </span>
           )}
-          Continuer avec Google
-        </a>
-
-        <div className="my-5 flex items-center gap-3 font-body text-xs uppercase tracking-wider text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          ou
-          <span className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Email form — secondary path: same functional weight, lighter
-            visual weight (muted labels, no card/shadow treatment) than the
-            Google button above. */}
-        <form onSubmit={onSignup} noValidate className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
-            Email
-            <input
-              type="email"
-              autoComplete="email"
-              value={data.email}
-              onChange={(e) => {
-                setData((d) => ({ ...d, email: e.target.value }));
-                if (emailError) setEmailError(null);
-              }}
-              aria-invalid={!!emailError}
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-            {emailError && (
-              <span role="alert" className="font-body text-xs text-red-500">
-                {emailError}
-              </span>
-            )}
-          </label>
-          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
-            Mot de passe
-            <PasswordInput
-              id="signup-password"
-              value={password}
-              onChange={(v) => {
-                setPassword(v);
-                if (passwordError) setPasswordError(null);
-              }}
-              autoComplete="new-password"
-              minLength={SIGNUP_PASSWORD_MIN}
-            />
-            {passwordError && (
-              <span role="alert" className="font-body text-xs text-red-500">
-                {passwordError}
-              </span>
-            )}
-          </label>
-          <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
-            Confirmer le mot de passe
-            <PasswordInput
-              id="signup-password-confirm"
-              value={passwordConfirm}
-              onChange={(v) => {
-                setPasswordConfirm(v);
-                if (passwordConfirmError) setPasswordConfirmError(null);
-              }}
-              autoComplete="new-password"
-            />
-            {passwordConfirmError && (
-              <span role="alert" className="font-body text-xs text-red-500">
-                {passwordConfirmError}
-              </span>
-            )}
-          </label>
+        {!emailExpanded ? (
+          /* Method choice — Google and email carry equal visual weight
+             (same bordered-button treatment) since the terms card above
+             already established which one is "primary": neither. Picking
+             "Continuer avec email" reveals the form in place of these two
+             buttons instead of stacking everything at once (2026-08-19
+             explicit ask, reference: a Farata-style signup screen). */
+          <div className="flex flex-col gap-3">
+            <a
+              href="/api/auth/oauth/google/start?next=/onboarding"
+              onClick={onGoogleClick}
+              aria-disabled={googleRedirecting}
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-foreground/15 bg-surface py-3.5 font-body text-sm font-semibold text-foreground transition-colors hover:bg-background"
+            >
+              {googleRedirecting ? (
+                <Icon name="refresh-cw" size={17} className="animate-spin" />
+              ) : (
+                <GoogleIcon />
+              )}
+              Continuer avec Google
+            </a>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-start gap-2.5 font-body text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={acceptTerms}
-                onChange={(e) => {
-                  setAcceptTerms(e.target.checked);
-                  if (termsError) setTermsError(null);
-                }}
-                className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
-              />
-              <span>
-                J&rsquo;accepte les{' '}
-                <Link
-                  href="/conditions-utilisation"
-                  target="_blank"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
-                >
-                  conditions d&rsquo;utilisation
-                </Link>{' '}
-                et la{' '}
-                <Link
-                  href="/confidentialite"
-                  target="_blank"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
-                >
-                  politique de confidentialité
-                </Link>
-              </span>
-            </label>
-            {termsError && (
-              <span role="alert" className="font-body text-xs text-red-500">
-                {termsError}
-              </span>
-            )}
+            <div className="my-1 flex items-center gap-3 font-body text-xs uppercase tracking-wider text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              ou
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            <button
+              type="button"
+              onClick={onContinueWithEmail}
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-foreground/15 bg-surface py-3.5 font-body text-sm font-semibold text-foreground transition-colors hover:bg-background"
+            >
+              <Icon name="inbox" size={17} />
+              Continuer avec email
+            </button>
           </div>
+        ) : (
+          <form onSubmit={onSignup} noValidate className="flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setEmailExpanded(false)}
+              className="flex items-center gap-1 self-start font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Icon name="chevron-left" size={14} />
+              Changer de méthode
+            </button>
+            <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
+              Email
+              <input
+                type="email"
+                autoComplete="email"
+                value={data.email}
+                onChange={(e) => {
+                  setData((d) => ({ ...d, email: e.target.value }));
+                  if (emailError) setEmailError(null);
+                }}
+                aria-invalid={!!emailError}
+                className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              {emailError && (
+                <span role="alert" className="font-body text-xs text-red-500">
+                  {emailError}
+                </span>
+              )}
+            </label>
+            <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
+              Mot de passe
+              <PasswordInput
+                id="signup-password"
+                value={password}
+                onChange={(v) => {
+                  setPassword(v);
+                  if (passwordError) setPasswordError(null);
+                }}
+                autoComplete="new-password"
+                minLength={SIGNUP_PASSWORD_MIN}
+              />
+              {passwordError && (
+                <span role="alert" className="font-body text-xs text-red-500">
+                  {passwordError}
+                </span>
+              )}
+            </label>
+            <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
+              Confirmer le mot de passe
+              <PasswordInput
+                id="signup-password-confirm"
+                value={passwordConfirm}
+                onChange={(v) => {
+                  setPasswordConfirm(v);
+                  if (passwordConfirmError) setPasswordConfirmError(null);
+                }}
+                autoComplete="new-password"
+              />
+              {passwordConfirmError && (
+                <span role="alert" className="font-body text-xs text-red-500">
+                  {passwordConfirmError}
+                </span>
+              )}
+            </label>
 
-          {error && (
-            <p role="alert" className="font-body text-sm text-red-500">
-              {error}
-            </p>
-          )}
+            {error && (
+              <p role="alert" className="font-body text-sm text-red-500">
+                {error}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-colors hover:bg-accent-foreground active:scale-[0.99] disabled:opacity-50"
-          >
-            {submitting && <Icon name="refresh-cw" size={16} className="animate-spin" />}
-            {submitting ? 'Création…' : 'Créer mon compte'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground transition-colors hover:bg-accent-foreground active:scale-[0.99] disabled:opacity-50"
+            >
+              {submitting && <Icon name="refresh-cw" size={16} className="animate-spin" />}
+              {submitting ? 'Création…' : 'Créer mon compte'}
+            </button>
+          </form>
+        )}
 
         <p className="mt-5 text-center font-body text-sm text-muted-foreground">
           Tu as déjà un compte ?{' '}
@@ -705,6 +774,21 @@ export default function OnboardingPage() {
             {submitting ? 'Vérification…' : 'Continuer'}
           </button>
         </form>
+        <p className="mt-4 text-center font-body text-sm text-muted-foreground">
+          Rien reçu ?{' '}
+          <button
+            type="button"
+            onClick={() => void onResend()}
+            disabled={resending || resendCooldown > 0}
+            className="font-semibold text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+          >
+            {resendCooldown > 0
+              ? `Renvoyer le code (${resendCooldown}s)`
+              : resending
+                ? 'Envoi…'
+                : 'Renvoyer le code'}
+          </button>
+        </p>
       </WizardShell>
     );
   }

@@ -47,12 +47,18 @@
 //
 // Horizontal drag (mouse or touch, via the Pointer Events API) on the
 // photo/info section mirrors the action row: drag right past the threshold
-// = Aimer, left = Passer. A plain tap (drag distance under CLICK_THRESHOLD)
-// opens the full profile detail screen (`/app/profils/[userId]`) — same
-// destination as tapping the name overlay directly. Action buttons and the
-// photo carousel's tap zones stopPropagation their pointerdown (not just
-// their click) so tapping them doesn't also register as a drag/tap on the
-// photo underneath — a plain onClick stopPropagation isn't enough here
+// = Aimer, left = Passer. Tapping the photo and tapping the name/info
+// overlay are now deliberately two different actions (2026-08-19, explicit
+// user ask — every stray tap used to jump straight to the profile page,
+// which read as broken rather than intentional): a plain tap on the photo
+// (drag distance under CLICK_THRESHOLD) opens PhotoLightbox in place, while
+// only the name/info overlay at the bottom (its own onClick, see below)
+// navigates to the full profile detail screen
+// (`/app/profils/[userId]`) — one clear, visible target for "go to
+// profile" instead of the whole card being a trap door. Action buttons and
+// the photo carousel's tap zones stopPropagation their pointerdown (not
+// just their click) so tapping them doesn't also register as a drag/tap on
+// the photo underneath — a plain onClick stopPropagation isn't enough here
 // since the parent listens on pointerdown/up, a separate event pair
 // (2026-08-14 fix: this exact gap made the favorite star unclickable —
 // tapping it also fired the parent's tap-to-navigate).
@@ -62,6 +68,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
+import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import { PremiumGateModal } from '@/components/yeoyo/PremiumGateModal';
 import type { ProfileCard } from '@/lib/yeoyo/types';
@@ -109,6 +116,8 @@ export function SwipeCard({
   const [exiting, setExiting] = useState(false);
   const [messageQuotaBusy, setMessageQuotaBusy] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [showLightbox, setShowLightbox] = useState(false);
   // Gate for the mobile action bar's portal — see file header comment.
   const [mounted, setMounted] = useState(false);
   const startXRef = useRef(0);
@@ -180,7 +189,7 @@ export function SwipeCard({
     } else if (dragX < -SWIPE_THRESHOLD) {
       flyOff(-1, () => onDismiss(profile.userId));
     } else if (Math.abs(dragX) < CLICK_THRESHOLD) {
-      router.push(`/app/profils/${profile.userId}`);
+      setShowLightbox(true);
       setDragX(0);
     } else {
       setDragX(0);
@@ -215,7 +224,12 @@ export function SwipeCard({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            <PhotoCarousel photoUrls={profile.photoUrls} name={profile.firstName} heightPx={340} />
+            <PhotoCarousel
+              photoUrls={profile.photoUrls}
+              name={profile.firstName}
+              heightPx={340}
+              onIndexChange={setPhotoIndex}
+            />
             {profile.boosted && (
               <div
                 className={`absolute left-3 flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 ${hasMultiplePhotos ? 'top-6' : 'top-3'}`}
@@ -293,6 +307,13 @@ export function SwipeCard({
                     <span className="font-body text-xs font-medium text-white">Premium</span>
                   </span>
                 )}
+                {/* Signals this row (unlike the photo above it) is the tap
+                    target that leaves the deck for the profile page. */}
+                <Icon
+                  name="chevron-right"
+                  size={16}
+                  className="ml-auto flex-shrink-0 text-white/60"
+                />
               </div>
               {profile.commune && (
                 <div className="mt-1 flex items-center gap-1 text-white/80">
@@ -343,6 +364,13 @@ export function SwipeCard({
           title="Fonctionnalité Premium"
           description={`Le Message te permet d'envoyer un message avant même que ta demande soit acceptée. Tu as utilisé tes ${FREE_FLASH_MESSAGE_LIMIT} messages gratuits — passe Premium pour continuer.`}
         />
+        {showLightbox && (
+          <PhotoLightbox
+            photoUrl={profile.photoUrls[photoIndex] ?? profile.photoUrls[0] ?? null}
+            name={profile.firstName}
+            onClose={() => setShowLightbox(false)}
+          />
+        )}
       </div>
       {/* Mobile only — floating above MobileTabBar's "Accueil" bar, via a
         portal straight onto document.body so no ancestor transform (the

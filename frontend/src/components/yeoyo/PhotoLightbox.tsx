@@ -1,12 +1,16 @@
 'use client';
 
 // Full-size photo viewer. Tap the photo, name, or close button to shrink
-// back down (2026-08-14). Lives only on the profile-detail page
-// (`/app/profils/[userId]`) — it used to also sit on the Explorer/Découvrir
-// swipe card, but tapping a photo there is also the multi-photo carousel's
-// prev/next gesture and sits right under the favorite star button, so a
-// second competing tap target caused real click conflicts (explicit user
-// report, 2026-08-14: clicking the star opened the lightbox instead).
+// back down (2026-08-14). Used by the profile-detail page
+// (`/app/profils/[userId]`) and, again as of 2026-08-19, by the Explorer/
+// Découvrir swipe card (SwipeCard.tsx) — it briefly lived there before being
+// pulled (2026-08-14) because the multi-photo carousel's prev/next zones and
+// the favorite star both sat on top of it and caused click conflicts. Both
+// of those now stopPropagation their own pointerdown/click (see
+// PhotoCarousel.tsx and SwipeCard.tsx's favorite button), so a plain tap on
+// the remaining open photo area is unambiguous again — SwipeCard wires it to
+// open this lightbox instead of navigating to the profile (explicit
+// 2026-08-19 user ask: tapping the photo shouldn't leave the deck).
 // Rendered via a portal to document.body: an ancestor with an inline
 // `transform` (e.g. a drag animation) becomes a containing block for
 // `position: fixed` descendants per the CSS spec, so a plain nested fixed

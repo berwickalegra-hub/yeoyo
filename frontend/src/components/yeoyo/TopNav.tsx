@@ -231,62 +231,85 @@ function AccountMenu({ user }: { user: SidebarUser }) {
       </button>
 
       {open && (
-        <div className="animate-scale-in absolute right-0 top-11 z-50 max-h-[75vh] w-60 overflow-y-auto rounded-xl border border-border bg-surface shadow-2xl">
-          <div className="sticky top-0 border-b border-border bg-surface px-4 py-3">
-            <div className="flex items-center gap-2">
-              <p className="truncate font-headings text-sm font-semibold text-foreground">
-                {user.name}
-              </p>
-              {isPremium && (
-                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 font-body text-[10px] font-bold text-gold">
-                  <Icon name="crown" size={10} fill="currentColor" />
-                  Premium
-                </span>
+        <div className="animate-scale-in absolute right-0 top-11 z-50 max-h-[75vh] w-64 origin-top-right overflow-y-auto rounded-2xl border border-border bg-surface shadow-2xl">
+          <div className="sticky top-0 flex items-center gap-3 border-b border-border bg-muted/60 px-4 py-3.5">
+            <UserAvatar
+              name={user.name}
+              avatarUrl={user.avatarUrl}
+              size={44}
+              className="border-2 border-surface"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate font-headings text-sm font-semibold text-foreground">
+                  {user.name}
+                </p>
+                {isPremium && (
+                  <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 font-body text-[10px] font-bold text-gold">
+                    <Icon name="crown" size={10} fill="currentColor" />
+                    Premium
+                  </span>
+                )}
+              </div>
+              {user.verified && (
+                <div className="mt-0.5 flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full bg-verified" />
+                  <span className="font-body text-xs text-muted-foreground">Profil vérifié</span>
+                </div>
               )}
             </div>
-            {user.verified && (
-              <div className="mt-1 flex items-center gap-1">
-                <div className="h-1.5 w-1.5 rounded-full bg-verified" />
-                <span className="font-body text-xs text-muted-foreground">Profil vérifié</span>
-              </div>
-            )}
           </div>
-          <div className="py-1">
+
+          <p className="px-4 pb-1 pt-3 font-body text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+            Compte
+          </p>
+          <div className="px-2 pb-1">
             {ACCOUNT_MENU_ITEMS.map((item) => (
               <Link
                 key={item.id}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+                className="flex items-center gap-3 rounded-lg px-2.5 py-2 font-body text-sm text-foreground transition-colors hover:bg-muted"
               >
-                <Icon name={item.icon} size={16} className="text-muted-foreground" />
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <Icon name={item.icon} size={15} className="text-muted-foreground" />
+                </span>
                 {item.label}
               </Link>
             ))}
           </div>
-          <div className="border-t border-border py-1">
+
+          <p className="border-t border-border px-4 pb-1 pt-3 font-body text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+            Paramètres
+          </p>
+          <div className="px-2 pb-1">
             {SETTINGS_MENU_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+                className="flex items-center gap-3 rounded-lg px-2.5 py-2 font-body text-sm text-foreground transition-colors hover:bg-muted"
               >
-                <Icon name={item.icon} size={16} className="text-muted-foreground" />
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <Icon name={item.icon} size={15} className="text-muted-foreground" />
+                </span>
                 {item.label}
               </Link>
             ))}
           </div>
-          <div className="border-t border-border py-1">
+
+          <div className="border-t border-border px-2 py-1.5">
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 setConfirmingLogout(true);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 font-body text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
-              <Icon name="log-out" size={16} className="text-muted-foreground" />
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Icon name="log-out" size={15} className="text-muted-foreground" />
+              </span>
               Se déconnecter
             </button>
           </div>
@@ -295,8 +318,13 @@ function AccountMenu({ user }: { user: SidebarUser }) {
 
       <Modal open={confirmingLogout} onClose={() => setConfirmingLogout(false)}>
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-            <Icon name="log-out" size={22} className="text-red-500" />
+          {/* Logout is reversible (just sign back in), not destructive like
+              a delete — alarm-red belongs to actions that lose data, so this
+              uses the app's own accent/foreground tones instead of a stock
+              red, matching the rest of the design system (2026-08-19,
+              explicit user ask for a more "pro" dialog here). */}
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent">
+            <Icon name="log-out" size={22} className="text-accent-foreground" />
           </div>
           <div>
             <p className="font-headings text-base font-bold text-foreground">Se déconnecter ?</p>
@@ -308,7 +336,7 @@ function AccountMenu({ user }: { user: SidebarUser }) {
             <button
               type="button"
               onClick={() => void handleLogout()}
-              className="flex h-11 items-center justify-center rounded-full bg-red-500 font-body text-sm font-semibold text-white transition-transform active:scale-95"
+              className="flex h-11 items-center justify-center rounded-full bg-foreground font-body text-sm font-semibold text-background transition-transform active:scale-95"
             >
               Se déconnecter
             </button>

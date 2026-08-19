@@ -9,7 +9,7 @@
 // their pointerdown so this never gets swallowed by an ancestor's own
 // drag-to-like/pass handling (SwipeCard) or read as "open the profile"
 // (the card-level tap-to-navigate).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 
 export function PhotoCarousel({
@@ -30,14 +30,21 @@ export function PhotoCarousel({
   const safeIndex = Math.min(index, Math.max(photoUrls.length - 1, 0));
   const current = photoUrls[safeIndex] ?? null;
 
+  // Reporting the index via an effect (rather than from inside the
+  // `setIndex` updater below) is required, not stylistic — React calls a
+  // functional updater during its render phase, so a parent's setState
+  // called from in there is a same-render cross-component update, which
+  // React rejects with "Cannot update a component while rendering a
+  // different component" (2026-08-19 bug report: this crashed the photo
+  // deck's tap-to-cycle and tap-to-lightbox on Explorer/Découvrir).
+  useEffect(() => {
+    onIndexChange?.(safeIndex);
+  }, [safeIndex, onIndexChange]);
+
   function go(delta: number, e: React.PointerEvent<HTMLButtonElement>) {
     e.stopPropagation();
     e.preventDefault();
-    setIndex((i) => {
-      const next = Math.min(Math.max(i + delta, 0), photoUrls.length - 1);
-      onIndexChange?.(next);
-      return next;
-    });
+    setIndex((i) => Math.min(Math.max(i + delta, 0), photoUrls.length - 1));
   }
 
   return (

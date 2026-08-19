@@ -26,6 +26,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 import { log } from '@/lib/server/observability/log';
 import { generateVerificationCode } from '@/lib/server/auth';
 import { enqueueOutbox } from '@/lib/server/outbox';
+import { drainOutboxNow } from '@/lib/server/outbox/drain-now';
 
 const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) * 60 * 1000;
 
@@ -108,6 +109,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         });
       });
       log.info('resend-verification: code re-issued', { userId: user.id });
+      // Same reasoning as signup: don't make the user wait for the once-daily
+      // cron fallback (see drain-now.ts) — best-effort, never blocks/fails
+      // this response.
+      await drainOutboxNow();
     } else {
       // No user, OR already verified — log without leaking which case it is.
       log.info('resend-verification: noop branch (enumeration-resist)');
