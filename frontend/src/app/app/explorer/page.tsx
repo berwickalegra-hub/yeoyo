@@ -61,7 +61,7 @@ const DECK_PAGE_SIZE = 10;
 // of a generic spinner unrelated to what's coming.
 function SwipeCardSkeleton() {
   return (
-    <div className="animate-fade-in mx-auto flex h-full max-h-[680px] min-h-[380px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-[640px]">
+    <div className="animate-fade-in mx-auto flex h-[520px] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-full md:max-h-[680px] md:min-h-[380px]">
       <div className="h-[340px] flex-shrink-0 animate-pulse bg-muted" />
       <div className="flex flex-col gap-3 p-4">
         <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
@@ -339,17 +339,23 @@ export default function ExplorerPage() {
           </div>
         </div>
 
-        {/* Swipe mode (filters closed, no error) gets its own non-scrolling,
-          height-filling container — the deck's internal photo/info region
-          is the only thing that scrolls. Every other state (filter panel
-          open, grid view, errors) uses a normal scrollable container, same
-          as before. */}
+        {/* Swipe mode (filters closed, no error): mobile just scrolls this
+          container normally — SwipeCard itself has no height cap or
+          internal scroll on mobile anymore, and floats its action row via a
+          portal (see SwipeCard.tsx) so the buttons stay on-screen
+          regardless of card height. `pb-36` reserves room for that floating
+          bar + MobileTabBar beneath it so the card's last content never
+          hides under them. Desktop (`md:`) keeps the original non-scrolling,
+          height-filling, centered treatment — the card scrolls internally
+          there instead (unchanged, never had the mobile problem). Every
+          other state (filter panel open, grid view, errors) uses a normal
+          scrollable container, same as before. */}
         {!showFilterPanel && !error && viewMode === 'swipe' ? (
-          <div className="flex flex-1 items-center justify-center overflow-hidden px-5 py-4 lg:px-8">
+          <div className="flex-1 overflow-y-auto px-5 pb-36 pt-4 md:flex md:items-center md:justify-center md:overflow-hidden md:px-8 md:py-4">
             {loading ? (
               <SwipeCardSkeleton />
             ) : current ? (
-              <div className="mx-auto grid h-full w-full max-w-4xl grid-cols-1 items-center gap-4 lg:grid-cols-[14rem_24rem_14rem]">
+              <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-4 md:h-full md:items-center lg:grid-cols-[14rem_24rem_14rem]">
                 {/* Mirrors the side panel's column width so the card lands
                   dead-center under the Filtres/toggle row above, instead of
                   the whole (card + panel) block being centered as a unit —
@@ -467,7 +473,7 @@ export default function ExplorerPage() {
             )}
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-5 py-4 lg:px-8">
+          <div className="flex-1 overflow-y-auto px-5 pb-36 pt-4 md:pb-4 lg:px-8">
             {showFilterPanel && (
               <div className="animate-scale-in mx-auto flex w-full max-w-sm flex-col gap-4 rounded-xl border border-border bg-surface p-5">
                 <div className="flex items-center justify-between">
