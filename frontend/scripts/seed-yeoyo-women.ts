@@ -7,12 +7,14 @@
 // PHOTOS: deliberately NOT scraped from Google Images or any other source
 // of real people's photos. Putting a real, non-consenting person's face on
 // a fake dating profile — even a test one — is a privacy problem regardless
-// of intent. Uses randomuser.me's static portrait URLs instead
-// (https://randomuser.me/api/portraits/women/{0-99}.jpg) — a public,
-// widely-used pool of stock/synthetic headshots that exists specifically
-// for building test/demo user data like this. Each profile gets 1-3 photos
-// (cycled from the 100-image pool) to exercise the new photo carousel.
-// Names are drawn from generic first/last-name pools and paired
+// of intent. Uses this project's own Banani design-export avatar bucket
+// instead (same source as seed-yeoyo-profiles.ts — see that file's PHOTOS
+// comment), bucketed by age so a profile only ever draws from its matching
+// female/{25-35,35-50}/African folder. Switched from randomuser.me
+// 2026-08-19 (user-reported blur — its portraits top out at 128x128 — and
+// ethnic mismatch with the Congolese names). Each profile gets 1-3 photos
+// (cycled from the matching 10-image bucket) to exercise the photo
+// carousel. Names are drawn from generic first/last-name pools and paired
 // deterministically — fictional combinations, not tied to any real
 // identity, and decoupled from the (also generic/stock) photos.
 //
@@ -181,21 +183,22 @@ const INTERESTS_POOL = [
 ];
 const LANGUAGES_POOL = ['Français', 'Lingala', 'Swahili', 'Kikongo', 'Tshiluba'];
 
-// randomuser.me's static portrait pool — 0..99, no live API call needed
-// (their /api/ endpoint returns *random* data per request, which would make
-// this script non-idempotent; the /portraits/ image paths are stable
-// static assets and don't have that problem).
+// 2026-08-19: switched off randomuser.me entirely (user-reported blur —
+// its `med` tier is 72x72, and even its uncapped tier tops out at 128x128,
+// visibly soft once upscaled into a several-hundred-px-wide card) and off
+// randomuser.me's ethnically-mixed pool (user-reported mismatch — Congolese
+// names paired with visibly non-African faces).
 //
-// 2026-08-12: randomuser.me dropped the `large` size — every `large` URL
-// now 404s (confirmed across the full 0-99 range), while `med` and `thumb`
-// still serve fine. `portraitUrl` used to pick `large` for each profile's
-// FIRST photo specifically (`med` for the rest), which meant every single
-// primary photo — the one shown on cards/avatars, i.e. the one actually
-// visible without opening a profile — was broken. Standardized on `med`
-// for all photos so nothing depends on the now-dead size.
-const PORTRAIT_POOL_SIZE = 100;
-function portraitUrl(index: number): string {
-  return `https://randomuser.me/api/portraits/med/women/${index % PORTRAIT_POOL_SIZE}.jpg`;
+// Reuses this project's OWN existing photo source instead — the Banani
+// design-export avatar bucket already wired into seed-yeoyo-profiles.ts
+// (see that file's PHOTOS comment), which is explicitly tagged by ethnicity
+// and age bracket and already vetted as fair to use for fixtures. Confirmed
+// 10 stable images per `female/{25-35,35-50}/African/{0-9}` bucket, each
+// 25-55KB (vs. randomuser's ~2KB) — a real quality jump, not just a resize.
+// Bucketed by age so a 24-year-old profile never draws a 35-50 photo.
+function portraitUrl(age: number, index: number): string {
+  const bucket = age <= 35 ? '25-35' : '35-50';
+  return `https://storage.googleapis.com/banani-avatars/avatar/female/${bucket}/African/${index % 10}`;
 }
 
 function pick<T>(pool: readonly T[], index: number): T {
@@ -281,7 +284,7 @@ export async function main(_args: string[] = [], deps: SeedDeps = {}): Promise<v
       });
 
       const photoCount = 1 + (i % 3); // 1..3 photos
-      const photoUrls = Array.from({ length: photoCount }, (_, j) => portraitUrl(i + j * 17));
+      const photoUrls = Array.from({ length: photoCount }, (_, j) => portraitUrl(age, i + j * 3));
 
       const profile = await prisma.profile.upsert({
         where: { userId: user.id },

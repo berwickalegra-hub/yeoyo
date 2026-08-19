@@ -387,12 +387,12 @@ export function SwipeCard({
           aria-label={
             isPremium ? 'Envoyer un message' : 'Messagerie Premium — passer Premium pour débloquer'
           }
-          className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-gold bg-gold/10 shadow-md transition-transform active:scale-95 disabled:opacity-50"
+          className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gold shadow-md transition-transform active:scale-95 disabled:opacity-50"
         >
           {busy || messageQuotaBusy ? (
-            <Icon name="refresh-cw" size={17} className="animate-spin text-gold" />
+            <Icon name="refresh-cw" size={17} className="animate-spin text-gold-foreground" />
           ) : (
-            <Icon name="message-circle" size={17} className="text-gold" />
+            <Icon name="message-circle" size={17} className="text-gold-foreground" />
           )}
           {!isPremium && (
             <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gold-foreground shadow">

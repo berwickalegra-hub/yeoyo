@@ -263,6 +263,41 @@ body {
   animation: scale-in 0.2s ease-out;
 }
 
+/* Hero on-mount entrance (2026-08-19, explicit user ask: the hero text and
+   photo should animate "dès que l'utilisateur arrive" — on arrival, not on
+   scroll). Distinct from `.reveal` (IntersectionObserver-gated, for
+   below-the-fold sections) because the hero is already in the initial
+   viewport, so it plays immediately via CSS `animation` with a per-element
+   `animationDelay` stagger set inline at each call site. Same premium
+   cubic-bezier as `.reveal` for a consistent "deliberate" feel, but travels
+   further/slower to read as a hero-level beat rather than a section reveal. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes hero-photo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-hero-rise {
+  animation: hero-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-hero-photo-in {
+  animation: hero-photo-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @keyframes heart-pop {
   0% {
     transform: scale(1);
@@ -370,7 +405,8 @@ body {
    once a user already has Premium (2026-08-19, explicit user ask: "vraiment
    rempli de doré"). */
 .premium-sales-hero {
-  background-image: radial-gradient(
+  background-image:
+    radial-gradient(
       ellipse 120% 100% at 50% 0%,
       color-mix(in srgb, var(--color-gold) 22%, transparent) 0%,
       transparent 60%
@@ -403,6 +439,19 @@ body {
   transform: translateY(0);
 }
 
+/* Richer variant for photo moments below the fold (the trust-image break) —
+   same fade/rise timing as `.reveal`, plus a subtle scale-up so a full-bleed
+   photo reads as "arriving" rather than just sliding. Scoped as
+   `.reveal.reveal-photo` (not a bare `.reveal-photo` class) so its higher
+   specificity reliably overrides the plain `.reveal` transform regardless
+   of stylesheet order. */
+.reveal.reveal-photo {
+  transform: translateY(28px) scale(0.96);
+}
+.reveal.reveal-photo.is-visible {
+  transform: translateY(0) scale(1);
+}
+
 /* Scroll hint — subtle bob on the swipe card's photo edge, hinting there's
    more profile content below the fold (2026-08-17, SwipeCard redesign). */
 @keyframes scroll-hint-bob {
@@ -429,7 +478,9 @@ body {
   .animate-slide-out-left,
   .animate-slide-out-right,
   .skeleton-shimmer,
-  .scroll-hint {
+  .scroll-hint,
+  .animate-hero-rise,
+  .animate-hero-photo-in {
     animation: none;
   }
   .btn-press {

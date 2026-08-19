@@ -33,6 +33,7 @@ import { PricingCard } from '@/components/yeoyo/PricingCard';
 import { YeOyoNav } from '@/components/yeoyo/YeOyoNav';
 import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DownloadAppButton } from '@/components/yeoyo/DownloadAppButton';
+import { FaqItem } from '@/components/yeoyo/FaqItem';
 
 const WHY_FEATURES = [
   {
@@ -122,6 +123,30 @@ const NAV_LINKS = [
   { label: 'Accueil', href: '/' },
   { label: 'Comment ça marche', href: '#comment-ca-marche' },
   { label: 'Tarifs', href: '#tarifs' },
+  { label: 'FAQ', href: '#faq' },
+];
+
+const FAQ_ITEMS = [
+  {
+    question: 'Est-ce vraiment gratuit ?',
+    answer:
+      'Oui. La création de profil, 3 photos, 5 demandes de contact par jour et la messagerie de base sont gratuites, pour toujours. Premium est optionnel, pour celles et ceux qui veulent aller plus vite.',
+  },
+  {
+    question: 'Comment fonctionne la vérification des profils ?',
+    answer:
+      "Chaque inscription passe par une vérification manuelle de notre équipe avant d'être validée, en plus d'une modération IA continue des messages. Zéro bot, zéro faux profil.",
+  },
+  {
+    question: 'Mes informations et mes photos sont-elles privées ?',
+    answer:
+      "Oui. Mode anonyme disponible, photos floutées jusqu'au match. C'est toi qui décides qui voit ton profil et tes photos.",
+  },
+  {
+    question: 'Comment annuler mon abonnement Premium ?',
+    answer:
+      "Depuis Paramètres → Abonnement, en un clic. L'accès Premium reste actif jusqu'à la fin de la période déjà payée, sans reconduction ensuite.",
+  },
 ];
 const FOOTER_CITIES = ['Kinshasa', 'Lubumbashi', 'Goma', 'Matadi', 'Kisangani'];
 const FOOTER_LEGAL = ['Règlement', 'Confidentialité', 'Mentions légales', 'CGV'];
@@ -167,27 +192,42 @@ export default function LandingPage() {
     <div className="bg-background font-body">
       <YeOyoNav />
 
-      {/* Hero */}
+      {/* Hero — entrance is a staggered on-mount animation (not scroll-
+          triggered like <Reveal>), since this block is already in the
+          initial viewport: text, then photo, then the two floating badges,
+          each a beat behind the last, so the page feels like it's arriving
+          rather than just appearing. */}
       <section className="px-5 pb-12 pt-10 lg:flex lg:items-center lg:gap-16 lg:px-12 lg:pb-24 lg:pt-20 xl:mx-auto xl:max-w-6xl">
         <div className="lg:max-w-xl lg:flex-1">
-          <SectionEyebrow icon="map-pin" label="Fait pour les Congolais sérieux" />
-          <h1 className="mt-4 font-headings text-3xl font-bold leading-tight text-foreground lg:text-5xl">
+          <div className="animate-hero-rise" style={{ animationDelay: '0ms' }}>
+            <SectionEyebrow icon="map-pin" label="Fait pour les Congolais sérieux" />
+          </div>
+          <h1
+            className="animate-hero-rise mt-4 font-headings text-3xl font-bold leading-tight text-foreground lg:text-5xl"
+            style={{ animationDelay: '90ms' }}
+          >
             La bonne personne
             <br />
             t&rsquo;attend.
             <br />
             <span className="text-primary">Sérieusement.</span>
           </h1>
-          <p className="mt-4 font-body text-sm leading-relaxed text-muted-foreground lg:mt-6 lg:text-lg">
+          <p
+            className="animate-hero-rise mt-4 font-body text-sm leading-relaxed text-muted-foreground lg:mt-6 lg:text-lg"
+            style={{ animationDelay: '180ms' }}
+          >
             Tinder pousse vers le casual. Badoo est générique. Les canaux Telegram sont pleins de
             faux profils. YeOyo, c&rsquo;est différent : intention matrimoniale déclarée, profils
             vérifiés IA, zéro arnaque.
           </p>
 
-          <div className="mt-6 flex flex-col gap-3 lg:mt-8 lg:flex-row lg:gap-4">
+          <div
+            className="animate-hero-rise mt-6 flex flex-col gap-3 lg:mt-8 lg:flex-row lg:gap-4"
+            style={{ animationDelay: '270ms' }}
+          >
             <Link
               href="/onboarding"
-              className="flex items-center justify-center gap-2 rounded-xl bg-primary py-4 text-center font-headings text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 active:scale-[0.99] lg:px-8"
+              className="flex items-center justify-center gap-2 rounded-xl bg-primary py-4 text-center font-headings text-base font-bold text-primary-foreground transition-all hover:-translate-y-0.5 hover:opacity-90 hover:shadow-lg active:scale-[0.99] lg:px-8"
             >
               <Icon name="user-plus" size={18} />
               Créer mon profil gratuitement
@@ -197,21 +237,30 @@ export default function LandingPage() {
         </div>
 
         <div className="relative mt-8 w-full lg:mt-0 lg:w-96 lg:flex-shrink-0">
-          <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border-4 border-surface shadow-lg">
+          <div
+            className="animate-hero-photo-in aspect-[3/4] w-full overflow-hidden rounded-2xl border-4 border-surface shadow-lg"
+            style={{ animationDelay: '150ms' }}
+          >
             <Image
-              src="https://storage.googleapis.com/banani-generated-images/generated-images/b49704bd-8128-4ef4-b9ec-8f3aff0f3f27.jpg"
-              alt="Couple congolais élégant à Kinshasa"
-              width={384}
-              height={512}
+              src="/images/hero-couple.jpg"
+              alt="Couple congolais élégant sur un rooftop à Kinshasa"
+              width={1536}
+              height={1024}
               className="h-full w-full object-cover"
               priority
             />
           </div>
-          <div className="absolute -bottom-4 -left-4 flex items-center gap-2 rounded-xl bg-surface px-3 py-2 shadow-lg">
+          <div
+            className="animate-hero-rise absolute -bottom-4 -left-4 flex items-center gap-2 rounded-xl bg-surface px-3 py-2 shadow-lg"
+            style={{ animationDelay: '560ms' }}
+          >
             <Icon name="shield-check" size={16} className="text-verified" />
             <span className="font-body text-xs font-bold text-foreground">Profil vérifié</span>
           </div>
-          <div className="absolute -right-4 -top-4 rounded-xl bg-secondary px-3 py-2 shadow-lg">
+          <div
+            className="animate-hero-rise absolute -right-4 -top-4 rounded-xl bg-secondary px-3 py-2 shadow-lg"
+            style={{ animationDelay: '660ms' }}
+          >
             <span className="font-body text-xs font-bold text-secondary-foreground">
               50 000+ membres
             </span>
@@ -378,6 +427,31 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Confiance — image break reprenant l'ancienne photo hero (remplacée
+          plus haut par imgLanding.jpg), inspiré du bandeau photo + stat de
+          bas de page Farata. Scroll-révélé avec le variant `reveal-photo`
+          (fade + rise + léger scale) plutôt que le `<Reveal>` standard, pour
+          que ce moment photo se distingue des reveals de section classiques. */}
+      <section className="px-5 py-12 lg:px-12 lg:py-20">
+        <Reveal className="reveal-photo relative mx-auto max-w-3xl overflow-hidden rounded-2xl shadow-lg">
+          <div className="aspect-[4/3] w-full sm:aspect-[16/9]">
+            <Image
+              src="https://storage.googleapis.com/banani-generated-images/generated-images/b49704bd-8128-4ef4-b9ec-8f3aff0f3f27.jpg"
+              alt="Couple congolais souriant, membres vérifiés YeOyo"
+              width={1024}
+              height={640}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/75 via-foreground/10 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-6 text-center lg:p-10">
+            <p className="font-headings text-lg font-bold text-background lg:text-2xl">
+              +50 000 Congolais sérieux nous font déjà confiance
+            </p>
+          </div>
+        </Reveal>
+      </section>
+
       {/* Témoignages */}
       <section className="bg-muted px-5 py-12 lg:px-12 lg:py-20">
         <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
@@ -388,6 +462,21 @@ export default function LandingPage() {
           {TESTIMONIALS.map((t, i) => (
             <Reveal key={t.name} delayMs={i * 90}>
               <SuccessStoryCard {...t} />
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="bg-muted px-5 py-12 lg:px-12 lg:py-20">
+        <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
+          <SectionEyebrow icon="shield" label="Questions fréquentes" tone="surface" />
+          <SectionHeading>On répond à tes questions</SectionHeading>
+        </Reveal>
+        <div className="mx-auto mt-8 flex max-w-2xl flex-col gap-3 lg:mt-12">
+          {FAQ_ITEMS.map((item, i) => (
+            <Reveal key={item.question} delayMs={i * 80}>
+              <FaqItem {...item} />
             </Reveal>
           ))}
         </div>
@@ -419,7 +508,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-foreground px-5 py-8 lg:px-12 lg:py-12">
+      <footer id="site-footer" className="bg-foreground px-5 py-8 lg:px-12 lg:py-12">
         {/* Mobile: flat block. Desktop: 5-col grid (logo spans 2). */}
         <div className="flex flex-col gap-4 lg:hidden">
           <div className="flex items-center gap-2">
