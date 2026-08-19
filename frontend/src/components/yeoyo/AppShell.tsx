@@ -74,7 +74,12 @@ export function AppShell({
   }, [authLoading, authUser, router]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-body">
+    // No min-height here on purpose — the root layout's wrapper already
+    // guarantees `min-h-dvh` and this fills whatever space remains under it
+    // via `flex-1` (see layout.tsx's comment: adding our own min-height back
+    // would stack a full viewport on top of the install banner instead of
+    // sharing the real one, reproducing the exact bug this fixed).
+    <div className="flex flex-1 flex-col bg-background font-body">
       <TopNav active={active} user={user} badgeCounts={badgeCounts} hideMobileStrip={hideChrome} />
       <div
         className={`flex flex-1 flex-col ${hideChrome ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-0' : 'pb-16 md:pb-0'}`}

@@ -72,8 +72,21 @@ export default function RootLayout({
           <ToastProvider>
             <AuthProvider>
               <PremiumProvider>
-                <InstallPwaPrompt />
-                {children}
+                {/* `dvh` (not `vh`) so mobile Safari's collapsing address/
+                    toolbar chrome is accounted for from the very first
+                    paint — `100vh` there is the LARGER "toolbar collapsed"
+                    height, taller than what's actually visible before the
+                    user scrolls once, which is exactly what pushed
+                    Explorer's action buttons out of view (2026-08-19,
+                    explicit user report with screenshots). `flex flex-col`
+                    here + `flex-1` on AppShell's own root (no min-height of
+                    its own) means AppShell correctly shrinks to whatever
+                    space remains under this banner instead of stacking its
+                    own full viewport height on top of it. */}
+                <div className="flex min-h-dvh flex-col">
+                  <InstallPwaPrompt />
+                  {children}
+                </div>
               </PremiumProvider>
             </AuthProvider>
           </ToastProvider>
