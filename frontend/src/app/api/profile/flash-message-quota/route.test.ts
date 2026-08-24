@@ -58,37 +58,78 @@ describe('POST /api/profile/flash-message-quota', () => {
     const res = await POST(makePost());
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body).toEqual({ allowed: true, remaining: null });
+    expect(body).toEqual({ allowed: true, remaining: null, resetAt: null });
     expect(prismaMock.profile.updateMany).not.toHaveBeenCalled();
   });
 
-  it('Test 4: free user under the limit → allowed, remaining reflects usage', async () => {
+  it('Test 4: fresh/expired window → resets and consumes 1 in a single atomic update', async () => {
     prismaMock.subscription.findFirst.mockResolvedValue(null);
-    prismaMock.profile.updateMany.mockResolvedValue({ count: 1 } as never);
-    prismaMock.profile.findUnique.mockResolvedValue({ flashMessagesUsed: 2 } as never);
+    prismaMock.profile.updateMany.mockResolvedValueOnce({ count: 1 } as never);
 
     const res = await POST(makePost());
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ allowed: true, remaining: 1 });
+    expect(body.allowed).toBe(true);
+    expect(body.remaining).toBe(4);
+    expect(typeof body.resetAt).toBe('string');
 
     const args = prismaMock.profile.updateMany.mock.calls[0]?.[0];
     expect(args?.where?.userId).toBe('user-1');
-    expect(args?.where?.flashMessagesUsed).toEqual({ lt: 3 });
-    expect(args?.data?.flashMessagesUsed).toEqual({ increment: 1 });
+    expect(args?.where?.OR).toEqual([
+      { flashMessagesResetAt: null },
+      { flashMessagesResetAt: { lte: expect.any(Date) } },
+    ]);
+    expect(args?.data?.flashMessagesUsed).toBe(1);
+    expect(args?.data?.flashMessagesResetAt).toBeInstanceOf(Date);
+    // Only the reset path ran — the active-window increment path never fires.
+    expect(prismaMock.profile.updateMany).toHaveBeenCalledTimes(1);
   });
 
-  it('Test 5: free user at/over the limit → updateMany matches nothing, allowed:false remaining:0', async () => {
+  it('Test 5: active window, under the limit → increments, remaining reflects usage', async () => {
     prismaMock.subscription.findFirst.mockResolvedValue(null);
-    prismaMock.profile.updateMany.mockResolvedValue({ count: 0 } as never);
+    prismaMock.profile.updateMany
+      .mockResolvedValueOnce({ count: 0 } as never) // reset path misses — window still active
+      .mockResolvedValueOnce({ count: 1 } as never); // increment path hits
+    prismaMock.profile.findUnique.mockResolvedValue({
+      flashMessagesUsed: 4,
+      flashMessagesResetAt: new Date('2026-08-22T00:00:00.000Z'),
+    } as never);
 
     const res = await POST(makePost());
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ allowed: false, remaining: 0 });
-    expect(prismaMock.profile.findUnique).not.toHaveBeenCalled();
+    expect(body).toEqual({
+      allowed: true,
+      remaining: 1,
+      resetAt: '2026-08-22T00:00:00.000Z',
+    });
+
+    const incrementArgs = prismaMock.profile.updateMany.mock.calls[1]?.[0];
+    expect(incrementArgs?.where?.flashMessagesUsed).toEqual({ lt: 5 });
+    expect(incrementArgs?.data?.flashMessagesUsed).toEqual({ increment: 1 });
+  });
+
+  it('Test 6: active window, at the limit → both updateMany calls miss, allowed:false remaining:0', async () => {
+    prismaMock.subscription.findFirst.mockResolvedValue(null);
+    prismaMock.profile.updateMany
+      .mockResolvedValueOnce({ count: 0 } as never)
+      .mockResolvedValueOnce({ count: 0 } as never);
+    prismaMock.profile.findUnique.mockResolvedValue({
+      flashMessagesUsed: 5,
+      flashMessagesResetAt: new Date('2026-08-22T00:00:00.000Z'),
+    } as never);
+
+    const res = await POST(makePost());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({
+      allowed: false,
+      remaining: 0,
+      resetAt: '2026-08-22T00:00:00.000Z',
+    });
   });
 });
 

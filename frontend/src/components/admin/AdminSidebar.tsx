@@ -17,6 +17,17 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 // Per the fallback documented in STATUS.md, this reuses the main app's
 // existing `--color-*` tokens instead of inventing new ones.
 //
+// Dark-green sidebar (2026-08-20, user-reported drift — "la couleur verte
+// [...] ne reflète pas vraiment ce qui est sur Banani"): the `AdminDashboard.jsx`
+// re-fetch's sidebar is `bg-secondary` (this theme's dark green, #1f3a2e)
+// with white (`text-secondary-foreground`) nav text — this component had
+// drifted to a light `bg-surface` sidebar with `text-muted-foreground` nav
+// text, losing that contrast entirely. Restyled to match: dark-green aside,
+// active items get a translucent white wash (`bg-secondary-foreground/15`,
+// Banani's own `bg-opacity-15` value), inactive items are white at 60%
+// opacity (Banani's `opacity-60`), matching both the desktop rail and the
+// mobile drawer (same shared `content` JSX).
+//
 // Responsive treatment: Banani's own `AdminSidebar.jsx` is a fixed `w-56`
 // permanent sidebar with zero responsive classes (confirmed by re-fetching
 // the selected designs — see STATUS.md's responsive-design pass entry).
@@ -36,7 +47,7 @@ interface NavGroup {
 const INERT_ICONS: Record<string, IconName> = {
   Suspensions: 'ban',
   'Likes & Matches': 'heart',
-  Messages: 'message-circle',
+  Messages: 'message-square',
   Demandes: 'user-plus',
   Abonnements: 'crown',
   Transactions: 'credit-card',
@@ -62,7 +73,7 @@ export function AdminSidebar({
   const pathname = usePathname();
 
   const groups: NavGroup[] = [
-    { label: '', items: [{ href: '/admin', label: 'Dashboard', icon: 'layout-grid' }] },
+    { label: '', items: [{ href: '/admin', label: 'Dashboard', icon: 'layout-dashboard' }] },
     {
       label: 'Utilisateurs',
       items: [
@@ -78,7 +89,7 @@ export function AdminSidebar({
         {
           href: '/admin/signalements',
           label: 'Signalements',
-          icon: 'shield',
+          icon: 'flag',
           badge: reportsCount,
         },
       ],
@@ -109,20 +120,24 @@ export function AdminSidebar({
 
   const content = (
     <>
-      <div className="flex items-center justify-between border-b border-border px-6 py-6">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-            <Icon name="shield-check" size={16} />
+      <div className="flex items-center justify-between border-b border-secondary-foreground/10 px-6 py-6">
+        <div className="flex items-center gap-2">
+          <span className="relative h-4 w-6 flex-shrink-0">
+            <span className="absolute left-0 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-primary" />
+            <span className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-secondary-foreground opacity-60" />
           </span>
-          <span className="font-headings text-lg font-bold leading-none text-foreground">
-            YeOyo Admin
+          <span className="font-headings text-base font-bold leading-none text-secondary-foreground">
+            YeOyo
+          </span>
+          <span className="ml-auto rounded px-1.5 py-0.5 font-body text-xs font-bold text-primary-foreground bg-primary">
+            Admin
           </span>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Fermer le menu"
-          className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+          className="cursor-pointer text-secondary-foreground/60 transition-colors hover:text-secondary-foreground lg:hidden"
         >
           <Icon name="x" size={20} />
         </button>
@@ -132,7 +147,7 @@ export function AdminSidebar({
         {groups.map((group) => (
           <div key={group.label || 'root'}>
             {group.label && (
-              <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-secondary-foreground/50">
                 {group.label}
               </p>
             )}
@@ -144,23 +159,16 @@ export function AdminSidebar({
                     key={item.href}
                     href={item.href}
                     onClick={onClose}
-                    className={`group relative flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 font-body text-sm font-medium transition-colors ${
                       active
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        ? 'bg-secondary-foreground/15 text-secondary-foreground'
+                        : 'text-secondary-foreground/60 hover:bg-secondary-foreground/10 hover:text-secondary-foreground'
                     }`}
                   >
-                    {active && (
-                      <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
-                    )}
-                    <Icon
-                      name={item.icon}
-                      size={17}
-                      className={active ? 'text-primary' : 'text-muted-foreground/80'}
-                    />
+                    <Icon name={item.icon} size={16} />
                     <span className="flex-1 truncate">{item.label}</span>
                     {!!item.badge && (
-                      <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-primary-foreground">
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold leading-none text-primary-foreground">
                         {item.badge}
                       </span>
                     )}
@@ -173,18 +181,18 @@ export function AdminSidebar({
 
         {inertGroups.map((group) => (
           <div key={group.label + group.items.join()}>
-            <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+            <p className="px-3 pb-1.5 font-body text-[11px] font-semibold uppercase tracking-widest text-secondary-foreground/50">
               {group.label}
             </p>
             <div className="flex flex-col gap-0.5">
               {group.items.map((label) => (
                 <div
                   key={label}
-                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground/40"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-body text-sm text-secondary-foreground/30"
                 >
-                  <Icon name={INERT_ICONS[label] ?? 'lock'} size={17} />
+                  <Icon name={INERT_ICONS[label] ?? 'lock'} size={16} />
                   <span className="flex-1 truncate">{label}</span>
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] italic">
+                  <span className="rounded-full bg-secondary-foreground/10 px-1.5 py-0.5 text-[10px] italic">
                     Bientôt
                   </span>
                 </div>
@@ -194,13 +202,15 @@ export function AdminSidebar({
         ))}
       </nav>
 
-      <div className="flex items-center gap-2.5 border-t border-border px-4 py-4">
-        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted font-body text-xs font-semibold text-foreground">
+      <div className="flex items-center gap-2.5 border-t border-secondary-foreground/10 px-4 py-4">
+        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary font-body text-xs font-bold text-primary-foreground">
           {adminEmail.slice(0, 1).toUpperCase()}
         </span>
         <div className="min-w-0">
-          <p className="truncate font-body text-xs font-medium text-foreground">{adminEmail}</p>
-          <p className="font-body text-[11px] capitalize text-muted-foreground">
+          <p className="truncate font-body text-xs font-bold text-secondary-foreground">
+            {adminEmail}
+          </p>
+          <p className="font-body text-[11px] capitalize text-secondary-foreground/50">
             {role.toLowerCase()}
           </p>
         </div>
@@ -211,9 +221,7 @@ export function AdminSidebar({
   return (
     <>
       {/* Desktop/tablet-landscape: permanent sidebar */}
-      <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-surface lg:flex">
-        {content}
-      </aside>
+      <aside className="hidden w-60 flex-shrink-0 flex-col bg-secondary lg:flex">{content}</aside>
 
       {/* Mobile/tablet: off-canvas drawer + backdrop */}
       {open && (
@@ -224,7 +232,7 @@ export function AdminSidebar({
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-surface transition-transform duration-200 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-secondary transition-transform duration-200 lg:hidden ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

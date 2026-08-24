@@ -35,6 +35,10 @@ const USER_SELECT = {
   status: true,
   emailVerifiedAt: true,
   createdAt: true,
+  // Ville, for the admin dashboard's "Membres récents" table (Banani
+  // AdminDashboard.jsx) — profile is optional (onboarding not required
+  // before this point), so this can legitimately be null.
+  profile: { select: { commune: true, city: true } },
 } as const satisfies Prisma.UserSelect;
 
 const Q_MAX = 200;
@@ -96,7 +100,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       page.items.map((u) => u.id),
     );
     return NextResponse.json(
-      { ...page, items: page.items.map((u) => ({ ...u, isPremium: premiumIds.has(u.id) })) },
+      {
+        ...page,
+        items: page.items.map(({ profile, ...u }) => ({
+          ...u,
+          isPremium: premiumIds.has(u.id),
+          city: profile?.commune ?? profile?.city ?? null,
+        })),
+      },
       { headers: { 'x-request-id': ctx.requestId } },
     );
   });

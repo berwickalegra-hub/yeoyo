@@ -57,6 +57,7 @@ Pour obtenir `DATABASE_URL` + `DIRECT_URL` : crée un projet gratuit sur https:/
 | `ENCRYPTION_KEY` | 32 bytes base64, générer avec `openssl rand -base64 32` |
 | `CRON_SECRET` | Bearer token requis par les handlers `/api/cron/*` ; `openssl rand -base64 32` |
 | `APP_URL` | Utilisé pour la génération des liens email et la base de redirect OAuth ; défaut `http://localhost:3000` |
+| `PUBLIC_URL` | Utilisé pour l'URL de retour (`redirect_url`) après un paiement Chariow ; **obligatoire en prod** — sans elle `/api/subscriptions/checkout` renvoie 503 au lieu de rediriger l'acheteur vers `http://localhost:3000` (injoignable depuis son téléphone) |
 
 Groupes optionnels (set les vars pour activer ; absent = inerte) :
 

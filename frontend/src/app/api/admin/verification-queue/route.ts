@@ -12,6 +12,7 @@ import { clampLimit } from '@/lib/server/pagination/paginate';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { ageInYears } from '@/lib/server/profile/card';
+import { cloudinaryUrlForKey } from '@/lib/server/storage';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -29,7 +30,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         where: { verificationStatus: 'PENDING', onboardingCompletedAt: { not: null } },
         orderBy: { onboardingCompletedAt: 'asc' },
         take: limit,
-        include: { photos: { where: { isPrimary: true }, take: 1, include: { fileUpload: true } } },
+        select: {
+          id: true,
+          userId: true,
+          firstName: true,
+          dateOfBirth: true,
+          commune: true,
+          city: true,
+          onboardingCompletedAt: true,
+          photos: {
+            where: { isPrimary: true },
+            take: 1,
+            select: { id: true, fileUpload: { select: { key: true } } },
+          },
+        },
       }),
       prisma.profile.count({
         where: { verificationStatus: 'PENDING', onboardingCompletedAt: { not: null } },
@@ -43,8 +57,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           userId: p.userId,
           firstName: p.firstName,
           age: ageInYears(p.dateOfBirth),
+          city: p.commune ?? p.city,
           waitingSince: p.onboardingCompletedAt?.toISOString() ?? null,
           photoCount: p.photos.length,
+          photoUrl: p.photos[0] ? cloudinaryUrlForKey(p.photos[0].fileUpload.key) : null,
         })),
         total,
       },

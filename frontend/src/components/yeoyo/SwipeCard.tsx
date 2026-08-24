@@ -78,10 +78,11 @@ import { usePremium } from '@/contexts/PremiumContext';
 const SWIPE_THRESHOLD = 90;
 const CLICK_THRESHOLD = 6;
 // Display copy only — the real limit is enforced server-side in
-// lib/server/conversations/flash-message-quota.ts (FREE_FLASH_MESSAGE_LIMIT).
-// Kept in sync manually since that file is `server-only` and can't be
-// imported into this client component.
-const FREE_FLASH_MESSAGE_LIMIT = 3;
+// lib/server/conversations/flash-message-quota.ts (FREE_FLASH_MESSAGE_LIMIT),
+// which also resets this count every rolling 24h. Kept in sync manually
+// since that file is `server-only` and can't be imported into this client
+// component.
+const FREE_FLASH_MESSAGE_LIMIT = 5;
 // Display copy only — enforced server-side in
 // lib/server/contact-requests/quota.ts (FREE_MONTHLY_CONTACT_REQUEST_LIMIT).
 const FREE_MONTHLY_CONTACT_REQUEST_LIMIT = 5;
@@ -132,7 +133,7 @@ export function SwipeCard({
 
   // Message is gold-styled as a Premium-flavored action (2026-08-17,
   // explicit user ask): non-Premium users get FREE_FLASH_MESSAGE_LIMIT free
-  // uses (checked+consumed atomically server-side, see
+  // uses per rolling 24h (checked+consumed atomically server-side, see
   // /api/profile/flash-message-quota), then PremiumGateModal instead of a
   // hard redirect — the lock badge stays visible regardless of remaining
   // quota (it signals "Premium-flavored", not "currently blocked").
@@ -362,7 +363,7 @@ export function SwipeCard({
           open={showPremiumModal}
           onClose={() => setShowPremiumModal(false)}
           title="Fonctionnalité Premium"
-          description={`Le Message te permet d'envoyer un message avant même que ta demande soit acceptée. Tu as utilisé tes ${FREE_FLASH_MESSAGE_LIMIT} messages gratuits — passe Premium pour continuer.`}
+          description={`Le Message te permet d'envoyer un message avant même que ta demande soit acceptée. Tu as utilisé tes ${FREE_FLASH_MESSAGE_LIMIT} messages gratuits d'aujourd'hui — reviens demain pour ${FREE_FLASH_MESSAGE_LIMIT} nouveaux, ou passe Premium pour un accès illimité.`}
         />
         {showLightbox && (
           <PhotoLightbox
@@ -422,9 +423,14 @@ export function SwipeCard({
           ) : (
             <Icon name="message-circle" size={17} className="text-gold-foreground" />
           )}
+          {/* Crown, not a padlock — a lock reads as "blocked," but tapping
+              this still works below the free quota. Matches the Demander
+              button's badge below so the same freemium concept isn't shown
+              two contradictory ways (2026-08-20, explicit user report: the
+              mismatch read as a bug). */}
           {!isPremium && (
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gold-foreground shadow">
-              <Icon name="lock" size={9} className="text-gold" />
+            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gold shadow">
+              <Icon name="crown" size={9} className="text-gold-foreground" fill="currentColor" />
             </span>
           )}
         </button>

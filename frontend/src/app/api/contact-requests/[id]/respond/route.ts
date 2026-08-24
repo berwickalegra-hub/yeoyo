@@ -12,6 +12,11 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { orderedPair } from '@/lib/server/conversations/lib';
+import { createNotification } from '@/lib/server/notifications';
+import {
+  contactRequestAccepted,
+  contactRequestDeclined,
+} from '@/lib/server/notifications/templates';
 
 const Body = z.object({ action: z.enum(['ACCEPT', 'DECLINE']) });
 
@@ -51,10 +56,17 @@ export async function POST(
     }
 
     if (parsed.data.action === 'DECLINE') {
-      const updated = await prisma.contactRequest.update({
-        where: { id },
-        data: { status: 'CANCELLED' },
-      });
+      const [updated, targetProfile] = await Promise.all([
+        prisma.contactRequest.update({ where: { id }, data: { status: 'CANCELLED' } }),
+        prisma.profile.findUnique({
+          where: { userId: auth.user.sub },
+          select: { firstName: true },
+        }),
+      ]);
+      await createNotification(
+        prisma,
+        contactRequestDeclined(request.requesterId, id, targetProfile?.firstName ?? 'La personne'),
+      );
       return NextResponse.json(
         { status: updated.status, conversationId: null },
         { status: 200, headers: { 'x-request-id': ctx.requestId } },
@@ -71,6 +83,24 @@ export async function POST(
       });
       return { conversationId: conversation.id };
     });
+
+    // Tell the original requester it's a match — the accepter already
+    // knows (they're the one who just tapped Accepter), but without this
+    // the requester would only find out by happening to reopen Demandes →
+    // Envoyées. See lib/server/notifications/templates.ts's doc comment.
+    const accepterProfile = await prisma.profile.findUnique({
+      where: { userId: auth.user.sub },
+      select: { firstName: true },
+    });
+    await createNotification(
+      prisma,
+      contactRequestAccepted(
+        request.requesterId,
+        id,
+        conversationId,
+        accepterProfile?.firstName ?? 'Quelqu’un',
+      ),
+    );
 
     return NextResponse.json(
       { status: 'ACCEPTED', conversationId },

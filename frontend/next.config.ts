@@ -60,6 +60,16 @@ const config: NextConfig = {
   // present in a production build. Disabled here so dev screenshots match
   // what a real visitor sees.
   devIndicators: false,
+  // Dev-only, never shipped to prod: `next dev`'s HMR websocket + asset
+  // requests are same-origin-locked by default (DNS-rebinding protection),
+  // which silently breaks the whole page (repeated failed reconnects → a
+  // reload loop) the moment you view it through a tunnel like ngrok instead
+  // of localhost. Wildcarding the common ngrok domain suffixes here means
+  // this keeps working across tunnel restarts without hardcoding today's
+  // random subdomain into a committed file.
+  ...(process.env.NODE_ENV !== 'production'
+    ? { allowedDevOrigins: ['*.ngrok-free.dev', '*.ngrok-free.app', '*.ngrok.io', '*.ngrok.app'] }
+    : {}),
   // Standalone output bundles a self-contained server.js + minimal node_modules
   // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
   // Has no impact on `next dev` / `next start` workflows. Not set on Vercel
@@ -89,6 +99,10 @@ const config: NextConfig = {
         hostname: 'storage.googleapis.com',
         pathname: '/banani-generated-images/**',
       },
+      // Illustrative fixture photos only (scripts/seed-yeoyo-more.ts) —
+      // licensed stock photos, not scraped real-people photos. Not used by
+      // any real upload path.
+      { protocol: 'https', hostname: 'images.pexels.com' },
     ],
   },
   async headers() {

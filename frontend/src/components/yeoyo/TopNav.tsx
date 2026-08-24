@@ -98,21 +98,15 @@ function BoostButton() {
 }
 
 // Desktop counterpart to MobileTabBar's ActivityTab (2026-08-17, explicit
-// user ask) — the "Activité" tab opens Messages + Visiteurs in a dropdown
-// instead of linking straight to /app/visiteurs, since desktop already has
-// a dedicated Messages icon in the top-right cluster; this keeps the two
-// screens' navigation structure consistent rather than diverging.
-function ActivityNavItem({
-  active,
-  badgeCounts,
-}: {
-  active: SidebarTab;
-  badgeCounts?: SidebarBadgeCounts | undefined;
-}) {
+// user ask; revised 2026-08-20) — the "Activité" tab opens Favoris +
+// Visiteurs in a dropdown instead of linking straight to /app/visiteurs.
+// Messages moved out to its own primary tab (see TOPNAV_ITEMS) since a
+// submenu didn't give chat enough visibility; desktop still keeps a
+// dedicated Messages icon in the top-right cluster too.
+function ActivityNavItem({ active }: { active: SidebarTab }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const isActive = active === 'visiteurs' || active === 'messages';
-  const messagesBadge = badgeFor('messages', badgeCounts);
+  const isActive = active === 'visiteurs' || active === 'favoris';
 
   useEffect(() => {
     if (!open) return;
@@ -128,7 +122,7 @@ function ActivityNavItem({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Activité — Messages et Visiteurs"
+        aria-label="Activité — Favoris et Visiteurs"
         aria-expanded={open}
         className={`relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium lg:px-4 ${
           isActive ? 'text-primary' : 'text-muted-foreground'
@@ -136,34 +130,28 @@ function ActivityNavItem({
       >
         <Icon name="menu" size={18} />
         <span className="hidden lg:inline">Activité</span>
-        {!!messagesBadge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-[10px] font-bold text-primary-foreground">
-            {messagesBadge > 9 ? '9+' : messagesBadge}
-          </span>
-        )}
       </button>
 
       {open && (
-        <div className="animate-scale-in absolute left-1/2 top-11 z-50 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+        <div className="animate-scale-in absolute left-1/2 top-11 z-50 w-56 -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-surface p-2 shadow-2xl">
           <Link
-            href="/app/messages"
+            href="/app/favoris"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+            className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 font-body text-sm text-foreground transition-colors hover:bg-muted"
           >
-            <Icon name="message-circle" size={16} className="text-muted-foreground" />
-            Messages
-            {!!messagesBadge && (
-              <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-[10px] font-bold text-primary-foreground">
-                {messagesBadge > 9 ? '9+' : messagesBadge}
-              </span>
-            )}
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Icon name="heart" size={17} className="text-muted-foreground" />
+            </span>
+            Favoris
           </Link>
           <Link
             href="/app/visiteurs"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 border-t border-border px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+            className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 font-body text-sm text-foreground transition-colors hover:bg-muted"
           >
-            <Icon name="eye" size={16} className="text-muted-foreground" />
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Icon name="eye" size={17} className="text-muted-foreground" />
+            </span>
             Visiteurs
           </Link>
         </div>
@@ -406,7 +394,7 @@ export function TopNav({
             }
 
             if (item.id === 'visiteurs') {
-              return <ActivityNavItem key={item.id} active={active} badgeCounts={badgeCounts} />;
+              return <ActivityNavItem key={item.id} active={active} />;
             }
 
             return (

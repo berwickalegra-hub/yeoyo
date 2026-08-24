@@ -2,14 +2,19 @@
 // the mockup implies admin-editable pricing; promote to a
 // `SubscriptionPlan` table if that ever changes.
 //
-// PRICING IS A PLACEHOLDER (2026-08-16): re-priced from the original
-// CDF-native catalog into USD cents because the platform's Chariow
-// boutique bills in USD (Chariow charges the exact price of the product
-// configured in its own dashboard — see chariow.ts's module doc). These
-// numbers are NOT a business decision — before going live, create 4
-// products in the Chariow dashboard with real prices, point
-// CHARIOW_PRODUCT_ID_15J/1M/3M/6M at them (see chariow.ts's
-// `getChariowProductId`), and update the values below to match.
+// REAL LAUNCH PRICING (2026-08-21, explicit user decision after confirming
+// M-Pesa checkout works end-to-end via Chariow): 15j/3m/6m below are the
+// real prices to charge at launch — 3 – 8 $/month-equivalent as decided.
+// The '1m' plan is DELIBERATELY LEFT at its $1 test price for now (explicit
+// user ask: "celui de 1 cela reste d'abord pour le test, tu vas le changer
+// plus tard") — do not touch it until told to.
+//
+// ACTION REQUIRED before these prices go live: the Chariow dashboard
+// products behind CHARIOW_PRODUCT_ID_15J/3M/6M (see chariow.ts's
+// `getChariowProductId`) must be updated to charge these exact totals —
+// reconcile.ts compares this file's price against what Chariow reports and
+// REJECTS the charge (subscription never activates) if they differ by more
+// than 5%. This file alone does not change what a customer is charged.
 import 'server-only';
 
 export interface SubscriptionPlan {
@@ -33,18 +38,13 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '15j',
     name: 'Premium 15 Jours',
     durationLabel: '15 jours',
-    // TEMP TEST PRICE (2026-08-17, explicit user ask): dropped from 599 to
-    // 100 ($1) so the account owner can test the paid checkout flow without
-    // spending much. MUST be paired with the same $1 price set on the
-    // matching product in the Chariow dashboard — reconcile.ts compares
-    // this figure against what Chariow actually reports and REJECTS the
-    // charge (subscription never activates) if the two don't match within
-    // 5%. Restore to a real price (and update the Chariow product back)
-    // before going live.
-    priceUsdCentsTotal: 100,
-    originalPriceUsdCentsTotal: 799,
-    priceUsdCentsPerMonth: 1199,
-    discountPct: 25,
+    // Real launch price — the "essai découverte" tier, deliberately the
+    // cheapest entry point. ACTION REQUIRED: match this on the Chariow
+    // dashboard product behind CHARIOW_PRODUCT_ID_15J (see file header).
+    priceUsdCentsTotal: 399,
+    originalPriceUsdCentsTotal: 599,
+    priceUsdCentsPerMonth: 799,
+    discountPct: 33,
     billingDays: 15,
     boosts: 1,
   },
@@ -52,8 +52,16 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '1m',
     name: 'Premium 1 Mois',
     durationLabel: '1 mois',
-    // TEMP TEST PRICE — see the '15j' plan's comment above; same caveat
-    // applies (must match the Chariow dashboard product price).
+    // TEMP TEST PRICE (2026-08-17, explicit user ask, reconfirmed
+    // 2026-08-21: "celui de 1 cela reste d'abord pour le test, tu vas le
+    // changer plus tard") — dropped from 699 to 100 ($1) so the account
+    // owner can test the paid checkout flow without spending much. MUST be
+    // paired with the same $1 price set on the matching product in the
+    // Chariow dashboard — reconcile.ts compares this figure against what
+    // Chariow actually reports and REJECTS the charge (subscription never
+    // activates) if the two don't match within 5%. Do NOT change this plan
+    // until the user explicitly asks — restore to a real price (and update
+    // the Chariow product back) only then.
     priceUsdCentsTotal: 100,
     originalPriceUsdCentsTotal: 699,
     priceUsdCentsPerMonth: 100,
@@ -66,10 +74,12 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '3m',
     name: 'Premium 3 Mois',
     durationLabel: '3 mois',
-    priceUsdCentsTotal: 899,
-    originalPriceUsdCentsTotal: 1499,
-    priceUsdCentsPerMonth: 299,
-    discountPct: 40,
+    // Real launch price. ACTION REQUIRED: match this on the Chariow
+    // dashboard product behind CHARIOW_PRODUCT_ID_3M (see file header).
+    priceUsdCentsTotal: 1199,
+    originalPriceUsdCentsTotal: 1799,
+    priceUsdCentsPerMonth: 400,
+    discountPct: 33,
     billingDays: 90,
     boosts: 3,
   },
@@ -77,10 +87,13 @@ export const PLANS: readonly SubscriptionPlan[] = [
     id: '6m',
     name: 'Premium 6 Mois',
     durationLabel: '6 mois',
-    priceUsdCentsTotal: 1499,
+    // Real launch price — explicit user ask: "diminue encore le prix, je
+    // veux le 6 mois soit 18$". ACTION REQUIRED: match this on the Chariow
+    // dashboard product behind CHARIOW_PRODUCT_ID_6M (see file header).
+    priceUsdCentsTotal: 1800,
     originalPriceUsdCentsTotal: 2999,
-    priceUsdCentsPerMonth: 249,
-    discountPct: 50,
+    priceUsdCentsPerMonth: 300,
+    discountPct: 40,
     billingDays: 180,
     boosts: 6,
   },

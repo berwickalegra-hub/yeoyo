@@ -194,7 +194,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
     }
 
-    const publicUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
+    // Fail closed when PUBLIC_URL is unset in production — mirrors WR-06 in
+    // api/orders/route.ts. The redirect_url handed to Chariow is baked into
+    // the hosted checkout; a forgotten PUBLIC_URL env var means a real
+    // charge redirects the buyer's phone to http://localhost:3000 after
+    // payment (unreachable), and since the webhook is a separate, easy-to-
+    // miss manual setup step in Chariow's own dashboard, a misconfigured
+    // deploy could otherwise go undetected until the daily reconcile cron.
+    const envPublicUrl = process.env.PUBLIC_URL;
+    if (!envPublicUrl && process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        {
+          code: 'PAYMENT_PROVIDER_UNCONFIGURED',
+          message: 'PUBLIC_URL not set; cannot construct the Chariow redirect URL.',
+        },
+        { status: 503, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    const publicUrl = envPublicUrl ?? 'http://localhost:3000';
 
     const order = await prisma.order.create({
       data: {

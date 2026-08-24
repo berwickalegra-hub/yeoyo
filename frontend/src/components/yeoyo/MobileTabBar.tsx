@@ -14,20 +14,15 @@ import {
 const ACCUEIL_ITEM = TOPNAV_ITEMS.find((i) => i.id === 'accueil') as NavItem;
 
 // "Activité" tab (2026-08-17, explicit user ask): a tap opens a small
-// upward popover with Messages + Visiteurs instead of navigating straight
-// to /app/visiteurs — the tab is a menu now, not a link. Highlighted
-// whenever either destination is active, not just 'visiteurs'.
-function ActivityTab({
-  active,
-  badgeCounts,
-}: {
-  active: SidebarTab;
-  badgeCounts?: SidebarBadgeCounts | undefined;
-}) {
+// upward popover instead of navigating straight to /app/visiteurs — the tab
+// is a menu now, not a link. 2026-08-20: Messages was promoted to its own
+// primary tab (needed more visibility than a submenu gave it) and Favoris
+// moved in here to take its place. Highlighted whenever either destination
+// is active, not just 'visiteurs'.
+function ActivityTab({ active }: { active: SidebarTab }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const isActive = active === 'visiteurs' || active === 'messages';
-  const messagesBadge = badgeFor('messages', badgeCounts);
+  const isActive = active === 'visiteurs' || active === 'favoris';
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +38,7 @@ function ActivityTab({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Activité — Messages et Visiteurs"
+        aria-label="Activité — Favoris et Visiteurs"
         aria-expanded={open}
         className={`relative flex flex-1 flex-col items-center justify-center gap-1 ${
           isActive ? 'text-primary' : 'text-muted-foreground'
@@ -51,32 +46,28 @@ function ActivityTab({
       >
         <Icon name="menu" size={20} />
         <span className="font-body text-[10px] font-medium">Activité</span>
-        {!!messagesBadge && (
-          <span className="absolute right-1/4 top-1.5 h-2 w-2 rounded-full bg-primary" />
-        )}
       </button>
 
       {open && (
-        <div className="animate-scale-in absolute bottom-14 right-0 z-50 w-44 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+        <div className="animate-scale-in absolute bottom-16 right-0 z-50 w-56 origin-bottom-right overflow-hidden rounded-2xl border border-border bg-surface p-2 shadow-2xl">
           <Link
-            href="/app/messages"
+            href="/app/favoris"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+            className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 font-body text-sm text-foreground transition-colors hover:bg-muted"
           >
-            <Icon name="message-circle" size={16} className="text-muted-foreground" />
-            Messages
-            {!!messagesBadge && (
-              <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-[10px] font-bold text-primary-foreground">
-                {messagesBadge > 9 ? '9+' : messagesBadge}
-              </span>
-            )}
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Icon name="heart" size={17} className="text-muted-foreground" />
+            </span>
+            Favoris
           </Link>
           <Link
             href="/app/visiteurs"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 border-t border-border px-4 py-2.5 font-body text-sm text-foreground hover:bg-background"
+            className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 font-body text-sm text-foreground transition-colors hover:bg-muted"
           >
-            <Icon name="eye" size={16} className="text-muted-foreground" />
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Icon name="eye" size={17} className="text-muted-foreground" />
+            </span>
             Visiteurs
           </Link>
         </div>
@@ -151,7 +142,7 @@ export function MobileTabBar({
         }
 
         if (item.id === 'visiteurs') {
-          return <ActivityTab key={item.id} active={active} badgeCounts={badgeCounts} />;
+          return <ActivityTab key={item.id} active={active} />;
         }
 
         return (

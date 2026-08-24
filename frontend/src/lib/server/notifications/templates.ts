@@ -54,7 +54,10 @@ export function paymentReceived(
 /**
  * YeOyo — someone liked your profile, which auto-creates a PENDING contact
  * request (see POST /api/likes). dedupeKey is the ContactRequest's own id,
- * so re-liking (upsert no-op) doesn't re-notify.
+ * so re-liking (upsert no-op) doesn't re-notify. Copy deliberately spells
+ * out "s'intéresse à toi" + "attend ta réponse" (2026-08-21, explicit user
+ * ask) so the recipient reads this as a real, waiting person — not a
+ * generic system event.
  */
 export function contactRequestReceived(
   userId: string,
@@ -64,10 +67,73 @@ export function contactRequestReceived(
   return {
     userId,
     type: 'CONTACT_REQUEST',
-    title: 'Nouvelle demande de contact',
-    body: `${fromName} souhaite entrer en contact avec toi.`,
+    title: `${fromName} s'intéresse à toi`,
+    body: `${fromName} attend ta réponse pour faire connaissance.`,
     data: { contactRequestId },
     dedupeKey: `contact-request:${contactRequestId}`,
+  };
+}
+
+/**
+ * YeOyo — the target accepted a pending contact request (see POST
+ * /api/contact-requests/[id]/respond, action=ACCEPT), sent to the original
+ * requester so they find out even if they're not staring at the Demandes
+ * tab (the accepter already knows — they're the one who just tapped
+ * Accepter). dedupeKey is the ContactRequest's own id, matching
+ * contactRequestDeclined's pattern. 2026-08-21, explicit user ask: a match
+ * must read as "something new starting", not a silent status flip.
+ */
+export function contactRequestAccepted(
+  userId: string,
+  contactRequestId: string,
+  conversationId: string,
+  fromName: string,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'CONTACT_REQUEST_ACCEPTED',
+    title: `C'est un match avec ${fromName} !`,
+    body: `${fromName} a accepté ta demande — une nouvelle conversation commence.`,
+    data: { contactRequestId, conversationId },
+    dedupeKey: `contact-request-accepted:${contactRequestId}`,
+  };
+}
+
+/**
+ * YeOyo — the target declined a pending contact request (see POST
+ * /api/contact-requests/[id]/respond, action=DECLINE). dedupeKey is the
+ * ContactRequest's own id, matching contactRequestReceived's pattern.
+ */
+export function contactRequestDeclined(
+  userId: string,
+  contactRequestId: string,
+  fromName: string,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'CONTACT_REQUEST_DECLINED',
+    title: 'Demande déclinée',
+    body: `${fromName} n’a pas donné suite à ta demande de contact.`,
+    data: { contactRequestId },
+    dedupeKey: `contact-request-declined:${contactRequestId}`,
+  };
+}
+
+/**
+ * YeOyo — a profile crossed the auto-suspend report threshold (see
+ * lib/server/reports/auto-suspend.ts). dedupeKey includes reportCount, not
+ * just userId, so a future re-suspension (after an admin restores the
+ * account and it accumulates fresh reports past the threshold again) still
+ * notifies instead of being silently deduped against the first event.
+ */
+export function accountAutoSuspended(userId: string, reportCount: number): CreateNotificationInput {
+  return {
+    userId,
+    type: 'ACCOUNT_AUTO_SUSPENDED',
+    title: 'Ton compte est suspendu',
+    body: 'Ton profil a reçu plusieurs signalements et est suspendu le temps que notre équipe l’examine.',
+    data: { reportCount },
+    dedupeKey: `account-auto-suspended:${userId}:${reportCount}`,
   };
 }
 

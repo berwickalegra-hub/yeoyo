@@ -61,7 +61,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
-import { closeAblySafely } from '@/lib/yeoyo/ably-safe-close';
+import { closeAblySafely, installAblyRejectionGuard } from '@/lib/yeoyo/ably-safe-close';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { INTENT_LABELS } from '@/lib/yeoyo/types';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
@@ -292,6 +292,7 @@ export default function MessageThreadPage() {
     // authenticates (state 'failed'); closeAblySafely skips the close()
     // call in that case instead of letting the SDK throw an unhandled
     // rejection on unmount.
+    installAblyRejectionGuard();
     const ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
     ably.connection.on('failed', () => {
       // no-op — sending/receiving still works over REST, just not live-pushed

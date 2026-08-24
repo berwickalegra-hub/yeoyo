@@ -10,10 +10,12 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { usePremium } from '@/contexts/PremiumContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
+import { PremiumGateModal } from '@/components/yeoyo/PremiumGateModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
 
@@ -36,9 +38,12 @@ function timeAgo(iso: string): string {
 export default function VisiteursPage() {
   const user = useUser();
   const { toast } = useToast();
+  const { isPremium, loading: premiumLoading } = usePremium();
   const badgeCounts = useNavCounts();
   const [visitors, setVisitors] = useState<VisitorRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const locked = !premiumLoading && !isPremium;
 
   useEffect(() => {
     if (!user) return;
@@ -88,46 +93,120 @@ export default function VisiteursPage() {
             </p>
           </div>
         )}
+        {!loading && locked && visitors.length > 0 && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20">
+                <Icon name="eye" size={18} className="text-gold" />
+              </div>
+              <div>
+                <p className="font-body text-sm font-bold text-foreground">
+                  {visitors.length}{' '}
+                  {visitors.length > 1 ? 'personnes ont consulté' : 'personne a consulté'} ton
+                  profil
+                </p>
+                <p className="font-body text-xs text-muted-foreground">
+                  Passe Premium pour voir qui
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPremiumModal(true)}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-gold px-4 py-2 font-body text-sm font-bold text-gold-foreground transition-transform active:scale-95"
+            >
+              <Icon name="crown" size={14} />
+              Débloquer
+            </button>
+          </div>
+        )}
         {!loading && visitors.length > 0 && (
           <div className="animate-fade-in flex flex-col gap-3">
-            {visitors.map((v) => (
-              <Link
-                key={v.profile.userId}
-                href={`/app/profils/${v.profile.userId}`}
-                className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
-              >
-                <UserAvatar name={v.profile.firstName} avatarUrl={v.profile.photoUrl} size={56} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-headings text-base font-bold text-foreground">
-                      {v.profile.firstName}
-                    </span>
-                    <span className="font-body text-sm text-muted-foreground">
-                      {v.profile.age} ans
-                    </span>
-                    {v.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
+            {visitors.map((v) =>
+              locked ? (
+                <button
+                  key={v.profile.userId}
+                  type="button"
+                  onClick={() => setShowPremiumModal(true)}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4 text-left"
+                >
+                  <div className="blur-sm select-none">
+                    <UserAvatar
+                      name={v.profile.firstName}
+                      avatarUrl={v.profile.photoUrl}
+                      size={56}
+                    />
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-muted-foreground">
-                    <span className="flex items-center gap-1 font-body text-xs">
-                      <Icon name="gem" size={11} />
-                      {INTENT_LABELS[v.profile.intent] ?? v.profile.intent}
-                    </span>
-                    <span className="flex items-center gap-1 font-body text-xs">
-                      <Icon name="clock" size={11} />
-                      {timeAgo(v.viewedAt)}
-                    </span>
+                  <div className="min-w-0 flex-1 select-none blur-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-headings text-base font-bold text-foreground">
+                        {v.profile.firstName}
+                      </span>
+                      <span className="font-body text-sm text-muted-foreground">
+                        {v.profile.age} ans
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-muted-foreground">
+                      <span className="flex items-center gap-1 font-body text-xs">
+                        <Icon name="gem" size={11} />
+                        {INTENT_LABELS[v.profile.intent] ?? v.profile.intent}
+                      </span>
+                      <span className="flex items-center gap-1 font-body text-xs">
+                        <Icon name="clock" size={11} />
+                        {timeAgo(v.viewedAt)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <Icon
-                  name="chevron-right"
-                  size={18}
-                  className="flex-shrink-0 text-muted-foreground"
-                />
-              </Link>
-            ))}
+                  <Icon name="crown" size={18} className="flex-shrink-0 text-gold" />
+                </button>
+              ) : (
+                <Link
+                  key={v.profile.userId}
+                  href={`/app/profils/${v.profile.userId}`}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4"
+                >
+                  <UserAvatar name={v.profile.firstName} avatarUrl={v.profile.photoUrl} size={56} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-headings text-base font-bold text-foreground">
+                        {v.profile.firstName}
+                      </span>
+                      <span className="font-body text-sm text-muted-foreground">
+                        {v.profile.age} ans
+                      </span>
+                      {v.profile.verified && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-verified" />
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-muted-foreground">
+                      <span className="flex items-center gap-1 font-body text-xs">
+                        <Icon name="gem" size={11} />
+                        {INTENT_LABELS[v.profile.intent] ?? v.profile.intent}
+                      </span>
+                      <span className="flex items-center gap-1 font-body text-xs">
+                        <Icon name="clock" size={11} />
+                        {timeAgo(v.viewedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <Icon
+                    name="chevron-right"
+                    size={18}
+                    className="flex-shrink-0 text-muted-foreground"
+                  />
+                </Link>
+              ),
+            )}
           </div>
         )}
       </div>
+
+      <PremiumGateModal
+        open={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        title="Qui a consulté ton profil ?"
+        description="Découvre qui s'intéresse à toi et deviens Premium pour voir tous tes visiteurs."
+      />
     </AppShell>
   );
 }

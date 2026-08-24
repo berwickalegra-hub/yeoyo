@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
@@ -61,6 +62,35 @@ export default function AProposPage() {
             </div>
           </SettingsSection>
         )}
+
+        <SettingsSection title="Légal">
+          <div className="flex flex-col gap-3">
+            <Link
+              href="/reglement"
+              target="_blank"
+              className="flex items-center justify-between font-body text-sm text-foreground"
+            >
+              Règlement de la communauté
+              <Icon name="chevron-right" size={16} className="text-muted-foreground" />
+            </Link>
+            <Link
+              href="/conditions-utilisation"
+              target="_blank"
+              className="flex items-center justify-between font-body text-sm text-foreground"
+            >
+              Conditions d&rsquo;utilisation
+              <Icon name="chevron-right" size={16} className="text-muted-foreground" />
+            </Link>
+            <Link
+              href="/confidentialite"
+              target="_blank"
+              className="flex items-center justify-between font-body text-sm text-foreground"
+            >
+              Politique de confidentialité
+              <Icon name="chevron-right" size={16} className="text-muted-foreground" />
+            </Link>
+          </div>
+        </SettingsSection>
       </div>
     </AppShell>
   );

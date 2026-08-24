@@ -9,13 +9,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { ContactRequestCard } from '@/components/yeoyo/ContactRequestCard';
+import { MatchModal } from '@/components/yeoyo/MatchModal';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import type { ProfileCard } from '@/lib/yeoyo/types';
@@ -50,7 +50,6 @@ const HOW_IT_WORKS = [
 
 export default function DemandesPage() {
   const user = useUser();
-  const router = useRouter();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
   const [tab, setTab] = useState<Tab>('received');
@@ -58,6 +57,9 @@ export default function DemandesPage() {
   const [sent, setSent] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [match, setMatch] = useState<{ conversationId: string; otherUser: ProfileCard } | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,7 +91,7 @@ export default function DemandesPage() {
     });
   }, [received, sent]);
 
-  async function respond(id: string, action: 'ACCEPT' | 'DECLINE') {
+  async function respond(id: string, action: 'ACCEPT' | 'DECLINE', otherUser: ProfileCard) {
     setRespondingId(id);
     try {
       const res = await api<{ status: string; conversationId: string | null }>(
@@ -102,8 +104,10 @@ export default function DemandesPage() {
       // resolved it.
       setReceived((prev) => prev.filter((r) => r.id !== id));
       if (action === 'ACCEPT' && res.conversationId) {
-        toast('Demande acceptée — conversation ouverte', 'success');
-        router.push(`/app/messages/${res.conversationId}`);
+        // A plain toast + silent redirect read as a status flip, not a
+        // moment — show the match celebration instead (explicit user ask,
+        // 2026-08-21) and let the person choose when to jump into the chat.
+        setMatch({ conversationId: res.conversationId, otherUser });
         return;
       }
       toast('Demande refusée', 'success');
@@ -243,8 +247,8 @@ export default function DemandesPage() {
                   direction={tab === 'sent' ? 'sent' : 'received'}
                   conversationId={r.conversationId}
                   responding={respondingId === r.id}
-                  onAccept={() => respond(r.id, 'ACCEPT')}
-                  onDecline={() => respond(r.id, 'DECLINE')}
+                  onAccept={() => respond(r.id, 'ACCEPT', r.otherUser)}
+                  onDecline={() => respond(r.id, 'DECLINE', r.otherUser)}
                   onWithdraw={tab === 'sent' ? () => withdraw(r.id, r.otherUser.userId) : undefined}
                 />
               ))}
@@ -294,6 +298,18 @@ export default function DemandesPage() {
           </div>
         </div>
       </div>
+
+      {match && (
+        <MatchModal
+          open
+          onClose={() => setMatch(null)}
+          conversationId={match.conversationId}
+          otherName={match.otherUser.firstName}
+          otherPhotoUrl={match.otherUser.photoUrl}
+          myName={user.email}
+          myAvatarUrl={user.avatarUrl}
+        />
+      )}
     </AppShell>
   );
 }

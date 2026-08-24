@@ -5,7 +5,7 @@ import Ably from 'ably';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useUser } from '@/contexts/AuthContext';
-import { closeAblySafely } from '@/lib/yeoyo/ably-safe-close';
+import { closeAblySafely, installAblyRejectionGuard } from '@/lib/yeoyo/ably-safe-close';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 export interface ConversationRow {
@@ -60,6 +60,7 @@ export function useConversations() {
     // Ably is a progressive enhancement here too — a missing ABLY_API_KEY
     // (or a failed connection) just means the list stays fetch-once, same
     // graceful degrade as the thread view.
+    installAblyRejectionGuard();
     const ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
     ably.connection.on('failed', () => {
       // no-op

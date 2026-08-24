@@ -583,14 +583,22 @@ export default function OnboardingPage() {
                 className="font-medium text-primary underline-offset-2 hover:underline"
               >
                 conditions d&rsquo;utilisation
-              </Link>{' '}
-              et la{' '}
+              </Link>
+              , la{' '}
               <Link
                 href="/confidentialite"
                 target="_blank"
                 className="font-medium text-primary underline-offset-2 hover:underline"
               >
                 politique de confidentialité
+              </Link>{' '}
+              et le{' '}
+              <Link
+                href="/reglement"
+                target="_blank"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                règlement de la communauté
               </Link>
             </span>
           </label>

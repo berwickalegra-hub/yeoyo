@@ -11,6 +11,9 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { maybeAutoSuspend } from '@/lib/server/reports/auto-suspend';
+import { createNotification } from '@/lib/server/notifications';
+import { accountAutoSuspended } from '@/lib/server/notifications/templates';
 
 const Body = z.object({
   targetUserId: z.string(),
@@ -63,6 +66,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       },
       select: { id: true },
     });
+
+    // 3+ signalements (any status, ever) → auto-suspend pending manual
+    // review, per the product's trust & safety rule — see auto-suspend.ts.
+    const { suspended, reportCount } = await maybeAutoSuspend(prisma, targetUserId);
+    if (suspended) {
+      await createNotification(prisma, accountAutoSuspended(targetUserId, reportCount));
+    }
 
     return NextResponse.json(
       { id: report.id },

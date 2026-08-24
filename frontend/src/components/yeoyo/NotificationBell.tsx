@@ -44,6 +44,7 @@ function targetHref(item: NotificationItem): string | null {
     return `/app/messages/${data.conversationId}`;
   }
   if (item.type === 'CONTACT_REQUEST') return '/app/demandes';
+  if (item.type === 'CONTACT_REQUEST_DECLINED') return '/app/decouvrir';
   return null;
 }
 

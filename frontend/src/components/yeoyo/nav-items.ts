@@ -36,18 +36,23 @@ export interface NavItem {
 // row on mobile. Order deliberately deviates from Banani's TopNav.jsx
 // (2026-08-14, explicit user ask): 'Découvrir' centered as the emphasized
 // middle tab, 'Visiteurs' pushed to the trailing/rightmost slot.
+//
+// 2026-08-20 reshuffle (explicit user ask): 'Demandes' takes the slot
+// 'Favoris' used to hold, 'Messages' becomes its own primary tab right of
+// 'Découvrir' (previously only reachable inside the Activité menu — chat
+// needed more visibility than that), and 'Favoris' moves into the Activité
+// menu in Messages' old spot there. 'favoris' stays a valid SidebarTab id
+// (pages still pass it as `active`) even though it's no longer in this
+// array — ActivityTab/ActivityNavItem's `isActive` check covers it.
 export const TOPNAV_ITEMS: NavItem[] = [
   { id: 'accueil', icon: 'home', label: 'Accueil', href: '/app/decouvrir' },
-  { id: 'favoris', icon: 'heart', label: 'Favoris', href: '/app/favoris' },
-  { id: 'decouvrir', icon: 'search', label: 'Découvrir', href: '/app/explorer' },
   { id: 'demandes', icon: 'users', label: 'Demandes', href: '/app/demandes' },
-  // Was a direct link to /app/visiteurs — now opens a small menu offering
-  // Messages + Visiteurs (2026-08-17, explicit user ask), since Messages
-  // previously had no entry point in the bottom tab bar at all (only
-  // reachable from TopNav's top-strip icon). `href` is unused for this tab
-  // (TopNav/MobileTabBar special-case it, same pattern as 'decouvrir') but
-  // kept pointing at /app/visiteurs so any stray reference still resolves
-  // somewhere sensible.
+  { id: 'decouvrir', icon: 'search', label: 'Découvrir', href: '/app/explorer' },
+  { id: 'messages', icon: 'message-circle', label: 'Messages', href: '/app/messages' },
+  // Opens a small menu offering Favoris + Visiteurs (2026-08-17, revised
+  // 2026-08-20). `href` is unused for this tab (TopNav/MobileTabBar
+  // special-case it, same pattern as 'decouvrir') but kept pointing at
+  // /app/visiteurs so any stray reference still resolves somewhere sensible.
   { id: 'visiteurs', icon: 'menu', label: 'Activité', href: '/app/visiteurs' },
 ];
 

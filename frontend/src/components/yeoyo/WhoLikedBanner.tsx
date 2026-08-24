@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { usePremium } from '@/contexts/PremiumContext';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 // Banani's WhoLikedBanner.jsx (Accueil sidebar) — teaser for "X personnes
@@ -12,8 +13,41 @@ import type { ProfileCard } from '@/lib/yeoyo/types';
 // copy exactly ("Passe Premium pour les voir"). Restyled gold (2026-08-17,
 // explicit user ask: every Premium-gated button/feature reads gold
 // consistently) — originally matched Banani's `bg-accent` verbatim.
+//
+// Premium-aware (2026-08-20): a Premium viewer never sees the paywall
+// copy/blur/CTA — the same real data (`preview`/`total`) is rendered
+// unblurred with each avatar linking to the profile, so "who favorited me"
+// is genuinely unlocked rather than just re-labelled.
 export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; total: number }) {
+  const { isPremium } = usePremium();
   if (total === 0) return null;
+
+  if (isPremium) {
+    return (
+      <div className="flex flex-col gap-3 rounded-lg border border-gold bg-gold/10 p-4">
+        <div className="flex items-center gap-2">
+          <Icon name="crown" size={14} className="text-gold" />
+          <p className="font-body text-sm font-bold text-foreground">
+            {total} {total > 1 ? 'personnes apprécient' : 'personne apprécie'} ton profil
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          {preview.slice(0, 3).map((p) => (
+            <Link
+              key={p.userId}
+              href={`/app/profils/${p.userId}`}
+              className="flex items-center gap-2.5"
+            >
+              <div className="h-9 w-9 overflow-hidden rounded-full border-2 border-background">
+                <UserAvatar name={p.firstName} avatarUrl={p.photoUrl} size={36} />
+              </div>
+              <span className="font-body text-sm text-foreground">{p.firstName}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
