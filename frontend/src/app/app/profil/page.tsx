@@ -60,7 +60,13 @@ import {
   MARITAL_STATUS_LABELS,
   WANTS_CHILDREN_LABELS,
 } from '@/lib/yeoyo/types';
-import { KINSHASA_COMMUNES, INTENT_OPTIONS } from '@/lib/yeoyo/constants';
+import {
+  COUNTRIES,
+  KINSHASA_COMMUNES,
+  MAJOR_CITIES_BY_COUNTRY,
+  INTENT_OPTIONS,
+  type CountryCode,
+} from '@/lib/yeoyo/constants';
 import { COOKIE_PREFIX } from '@/lib/constants';
 
 // Option lists moved here from the now-deleted /app/parametres/profil and
@@ -150,6 +156,7 @@ interface ProfileSelf {
   photoUrl: string | null;
   photos: { id: string; url: string | null; isPrimary: boolean }[];
   dateOfBirth: string;
+  country: string | null;
   city: string;
   commune: string | null;
   religion: string | null;
@@ -231,6 +238,8 @@ export default function ProfilPage() {
 
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoDraft, setInfoDraft] = useState({
+    country: '' as CountryCode | '',
+    city: '',
     commune: '',
     religion: '',
     maritalStatus: '',
@@ -369,6 +378,8 @@ export default function ProfilPage() {
     setSavingInfo(true);
     try {
       const body = {
+        ...(infoDraft.country ? { country: infoDraft.country } : {}),
+        ...(infoDraft.city.trim() ? { city: infoDraft.city.trim() } : {}),
         commune: infoDraft.commune || null,
         religion: infoDraft.religion || null,
         maritalStatus: infoDraft.maritalStatus || null,
@@ -897,6 +908,8 @@ export default function ProfilPage() {
                         type="button"
                         onClick={() => {
                           setInfoDraft({
+                            country: (profile.country as CountryCode | null) ?? '',
+                            city: profile.city ?? '',
                             commune: profile.commune ?? '',
                             religion: profile.religion ?? '',
                             maritalStatus: profile.maritalStatus ?? '',
@@ -918,22 +931,67 @@ export default function ProfilPage() {
                     <div className="flex flex-col gap-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <label className="flex flex-col gap-1">
-                          <span className="font-body text-xs text-muted-foreground">Commune</span>
+                          <span className="font-body text-xs text-muted-foreground">Pays</span>
                           <select
-                            value={infoDraft.commune}
+                            value={infoDraft.country}
                             onChange={(e) =>
-                              setInfoDraft((d) => ({ ...d, commune: e.target.value }))
+                              setInfoDraft((d) => ({
+                                ...d,
+                                country: e.target.value as CountryCode | '',
+                                // Commune only applies to RDC — same rule as onboarding.
+                                commune: e.target.value === 'CD' ? d.commune : '',
+                              }))
                             }
                             className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
                           >
                             <option value="">Non précisé</option>
-                            {KINSHASA_COMMUNES.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
+                            {COUNTRIES.map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
                               </option>
                             ))}
                           </select>
                         </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="font-body text-xs text-muted-foreground">Ville</span>
+                          <input
+                            type="text"
+                            list="profil-city-suggestions"
+                            value={infoDraft.city}
+                            onChange={(e) => setInfoDraft((d) => ({ ...d, city: e.target.value }))}
+                            placeholder="ex. Kinshasa"
+                            className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
+                          />
+                          <datalist id="profil-city-suggestions">
+                            {(infoDraft.country
+                              ? MAJOR_CITIES_BY_COUNTRY[infoDraft.country]
+                              : undefined
+                            )?.map((c) => (
+                              <option key={c} value={c} />
+                            ))}
+                          </datalist>
+                        </label>
+                        {infoDraft.country === 'CD' && (
+                          <label className="flex flex-col gap-1">
+                            <span className="font-body text-xs text-muted-foreground">
+                              Commune à Kinshasa
+                            </span>
+                            <select
+                              value={infoDraft.commune}
+                              onChange={(e) =>
+                                setInfoDraft((d) => ({ ...d, commune: e.target.value }))
+                              }
+                              className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
+                            >
+                              <option value="">Non précisé</option>
+                              {KINSHASA_COMMUNES.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
                         <label className="flex flex-col gap-1">
                           <span className="font-body text-xs text-muted-foreground">Religion</span>
                           <select

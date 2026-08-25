@@ -23,6 +23,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Modal } from '@/components/ui/Modal';
+import { CreditConfirmModal } from './CreditConfirmModal';
 import { BrandMark } from './BrandMark';
 import { NotificationBell } from './NotificationBell';
 import { useIsAdmin } from '@/lib/yeoyo/useIsAdmin';
@@ -51,11 +52,11 @@ interface BoostStatus {
 }
 
 function BoostButton() {
-  const router = useRouter();
   const { toast } = useToast();
-  const { refresh: refreshCredits } = useCredits();
+  const { balance, unlimited, refresh: refreshCredits } = useCredits();
   const [status, setStatus] = useState<BoostStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     api<BoostStatus>('/api/profile/boost')
@@ -72,11 +73,11 @@ function BoostButton() {
       await api('/api/profile/boost', { method: 'POST' });
       toast('Ton profil est boosté pour 24h !', 'success');
       setStatus((s) => (s ? { ...s, active: true } : s));
+      setShowConfirm(false);
       void refreshCredits();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
         toast('Solde de crédits insuffisant pour booster ton profil.', 'error');
-        router.push('/app/credits');
       } else {
         toast('Impossible de lancer le boost pour le moment.', 'error');
       }
@@ -85,23 +86,44 @@ function BoostButton() {
     }
   }
 
+  function requestBoost() {
+    if (!status || status.active || busy) return;
+    if (unlimited) {
+      void activate();
+      return;
+    }
+    setShowConfirm(true);
+  }
+
   if (!status) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => void activate()}
-      disabled={busy || status.active}
-      aria-label={`Booster mon profil — ${status.cost} crédits`}
-      className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-body text-sm font-medium transition-colors ${
-        status.active
-          ? 'border-primary/40 bg-primary/10 text-primary'
-          : 'border-border text-muted-foreground hover:border-primary/40'
-      } ${busy ? 'opacity-50' : ''}`}
-    >
-      <Icon name="zap" size={15} />
-      {status.active ? 'En avant' : `Boost · ${status.cost}`}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={requestBoost}
+        disabled={busy || status.active}
+        aria-label={`Booster mon profil — ${status.cost} crédits`}
+        className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-body text-sm font-medium transition-colors ${
+          status.active
+            ? 'border-primary/40 bg-primary/10 text-primary'
+            : 'border-border text-muted-foreground hover:border-primary/40'
+        } ${busy ? 'opacity-50' : ''}`}
+      >
+        <Icon name="zap" size={15} />
+        {status.active ? 'En avant' : `Boost · ${status.cost}`}
+      </button>
+
+      <CreditConfirmModal
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        cost={status.cost}
+        balance={balance}
+        actionLabel="Booster ton profil pendant 24h"
+        onConfirm={activate}
+        confirming={busy}
+      />
+    </>
   );
 }
 

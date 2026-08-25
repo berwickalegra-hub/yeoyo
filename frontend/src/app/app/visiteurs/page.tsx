@@ -3,15 +3,16 @@
 // Banani re-theme (2026-08-13) — no dedicated Banani screen was fetched for
 // this list view, so it follows the existing /app/likes list pattern for
 // consistency rather than a pixel-matched mockup.
-// 2026-08-25: Premium replaced by pay-per-use credits — "Débloquer" spends
-// 1 credit via POST /api/credits/spend { action: 'view_visitors' },
-// confirmed first through CreditConfirmModal. `unlocked` is local component
-// state, not persisted — reloading this page re-blurs the list, matching
-// the product spec's "consommé à l'usage, pas un déblocage permanent".
+// 2026-08-25 (credit gating Script 3): "Débloquer" spends 1 credit via
+// POST /api/credits/spend { action: 'view_visitors' }, confirmed first
+// through CreditConfirmModal. The reveal is PERMANENT per-visitor (server-
+// tracked via Profile.visitorsUnlockedAt, see the API route's comment) —
+// each row's own `revealed` flag decides whether it's blurred, and
+// `unrevealedCount` decides whether the paywall banner still shows at all.
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -48,19 +49,28 @@ export default function VisiteursPage() {
   const { balance, unlimited, refresh: refreshCredits } = useCredits();
   const badgeCounts = useNavCounts();
   const [visitors, setVisitors] = useState<VisitorRow[]>([]);
+  const [unrevealedCount, setUnrevealedCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [unlocked, setUnlocked] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [spending, setSpending] = useState(false);
-  const locked = !unlocked && !unlimited;
+  const hasUnrevealed = unrevealedCount > 0 && !unlimited;
+
+  const load = useCallback(() => {
+    return api<{ visitors: VisitorRow[]; unrevealedCount: number }>('/api/profile/visitors').then(
+      (res) => {
+        setVisitors(res.visitors);
+        setUnrevealedCount(res.unrevealedCount);
+      },
+    );
+  }, []);
 
   async function unlock() {
     setSpending(true);
     try {
       await api('/api/credits/spend', { method: 'POST', body: { action: 'view_visitors' } });
-      setUnlocked(true);
       setShowConfirm(false);
       void refreshCredits();
+      await load();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -80,10 +90,7 @@ export default function VisiteursPage() {
     if (!user) return;
     let cancelled = false;
     setLoading(true);
-    api<{ visitors: VisitorRow[] }>('/api/profile/visitors')
-      .then((res) => {
-        if (!cancelled) setVisitors(res.visitors);
-      })
+    load()
       .catch((err) => {
         if (!cancelled)
           toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
@@ -94,7 +101,7 @@ export default function VisiteursPage() {
     return () => {
       cancelled = true;
     };
-  }, [user, toast]);
+  }, [user, toast, load]);
 
   if (!user) return null;
 
@@ -124,7 +131,7 @@ export default function VisiteursPage() {
             </p>
           </div>
         )}
-        {!loading && locked && visitors.length > 0 && (
+        {!loading && hasUnrevealed && visitors.length > 0 && (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20">
@@ -137,7 +144,8 @@ export default function VisiteursPage() {
                   profil
                 </p>
                 <p className="font-body text-xs text-muted-foreground">
-                  {COST} crédit pour voir qui
+                  {COST} crédit pour voir{' '}
+                  {unrevealedCount < visitors.length ? `${unrevealedCount} de plus` : 'qui'}
                 </p>
               </div>
             </div>
@@ -154,7 +162,7 @@ export default function VisiteursPage() {
         {!loading && visitors.length > 0 && (
           <div className="animate-fade-in flex flex-col gap-3">
             {visitors.map((v) =>
-              locked ? (
+              !unlimited && !v.profile.revealed ? (
                 <button
                   key={v.profile.userId}
                   type="button"

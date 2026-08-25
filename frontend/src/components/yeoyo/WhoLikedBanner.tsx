@@ -19,17 +19,31 @@ const COST = 1;
 // gate, not a fabricated placeholder), so the count/who is always honest —
 // only the "who" resolution is withheld until unlocked.
 //
-// 2026-08-25: Premium replaced by pay-per-use credits — "Découvrir" spends
-// 1 credit via POST /api/credits/spend { action: 'view_favorited_by' },
-// confirmed first through CreditConfirmModal. `unlocked` is local component
-// state, not persisted — reloading Accueil re-blurs the list, matching the
-// product spec's "consommé à l'usage, pas un déblocage permanent". Staff
-// (ADMIN/SUPERADMIN, `unlimited`) skip the modal — the server bypasses
-// their charge too.
-export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; total: number }) {
+// 2026-08-25 (credit gating Script 3): "Découvrir" spends 1 credit via
+// POST /api/credits/spend { action: 'view_favorited_by' }, confirmed first
+// through CreditConfirmModal. The reveal is now PERMANENT per-row (server-
+// tracked via Profile.favoritedByUnlockedAt, see the API route's comment) —
+// each `preview` item's own `revealed` flag decides its blur, and
+// `unrevealedCount` (whoever favorited AFTER the last unlock) decides
+// whether the "Découvrir" CTA still shows at all. No local "unlocked"
+// state anymore — `onUnlocked` asks the parent to re-fetch the list so the
+// server's own revealed/unrevealedCount stays the single source of truth.
+// Staff (ADMIN/SUPERADMIN, `unlimited`) skip the modal — the server
+// bypasses their charge too, and never blurs for them regardless of
+// `revealed`.
+export function WhoLikedBanner({
+  preview,
+  total,
+  unrevealedCount,
+  onUnlocked,
+}: {
+  preview: ProfileCard[];
+  total: number;
+  unrevealedCount: number;
+  onUnlocked: () => void;
+}) {
   const { balance, unlimited, refresh: refreshCredits } = useCredits();
   const { toast } = useToast();
-  const [unlocked, setUnlocked] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [spending, setSpending] = useState(false);
 
@@ -39,9 +53,9 @@ export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; tot
     setSpending(true);
     try {
       await api('/api/credits/spend', { method: 'POST', body: { action: 'view_favorited_by' } });
-      setUnlocked(true);
       setShowConfirm(false);
       void refreshCredits();
+      onUnlocked();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -57,7 +71,9 @@ export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; tot
     setShowConfirm(true);
   }
 
-  if (unlocked || unlimited) {
+  const fullyRevealed = unlimited || unrevealedCount === 0;
+
+  if (fullyRevealed) {
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-gold bg-gold/10 p-4">
         <div className="flex items-center gap-2">
@@ -89,20 +105,31 @@ export function WhoLikedBanner({ preview, total }: { preview: ProfileCard[]; tot
       <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
         <div className="flex items-center gap-3">
           <div className="flex -space-x-2">
-            {preview.slice(0, 3).map((p) => (
-              <div
-                key={p.userId}
-                className="h-9 w-9 overflow-hidden rounded-full border-2 border-background blur-sm"
-              >
-                <UserAvatar name={p.firstName} avatarUrl={p.photoUrl} size={36} />
-              </div>
-            ))}
+            {preview.slice(0, 3).map((p) =>
+              p.revealed ? (
+                <div
+                  key={p.userId}
+                  className="h-9 w-9 overflow-hidden rounded-full border-2 border-background"
+                >
+                  <UserAvatar name={p.firstName} avatarUrl={p.photoUrl} size={36} />
+                </div>
+              ) : (
+                <div
+                  key={p.userId}
+                  className="h-9 w-9 overflow-hidden rounded-full border-2 border-background blur-sm"
+                >
+                  <UserAvatar name={p.firstName} avatarUrl={p.photoUrl} size={36} />
+                </div>
+              ),
+            )}
           </div>
           <div>
             <p className="font-body text-sm font-bold text-foreground">
               {total} {total > 1 ? 'personnes apprécient' : 'personne apprécie'} ton profil
             </p>
-            <p className="font-body text-xs text-muted-foreground">1 crédit pour les voir</p>
+            <p className="font-body text-xs text-muted-foreground">
+              1 crédit pour voir {unrevealedCount < total ? `${unrevealedCount} de plus` : 'qui'}
+            </p>
           </div>
         </div>
         <button

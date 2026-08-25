@@ -58,6 +58,7 @@ import { RecommendedProfileCard } from '@/components/yeoyo/RecommendedProfileCar
 import { ProfileCardSkeleton } from '@/components/yeoyo/ProfileCardSkeleton';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import { WhoLikedBanner } from '@/components/yeoyo/WhoLikedBanner';
+import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { periodicPick, quotesForReligion, PROFILE_TIPS } from '@/lib/yeoyo/content';
 import { useCardExit } from '@/lib/yeoyo/useCardExit';
@@ -94,6 +95,7 @@ interface BoostStatus {
 interface FavoritedBy {
   preview: ProfileCard[];
   total: number;
+  unrevealedCount: number;
 }
 
 interface NewNearbyCount {
@@ -203,11 +205,16 @@ export default function DecouvrirPage() {
   const [recommended, setRecommended] = useState<ProfileCard[]>([]);
   const [likes, setLikes] = useState<LikeRow[]>([]);
   const [visitorsCount, setVisitorsCount] = useState(0);
-  const [favoritedBy, setFavoritedBy] = useState<FavoritedBy>({ preview: [], total: 0 });
+  const [favoritedBy, setFavoritedBy] = useState<FavoritedBy>({
+    preview: [],
+    total: 0,
+    unrevealedCount: 0,
+  });
   const [newNearby, setNewNearby] = useState<NewNearbyCount | null>(null);
   const [heroVariant, setHeroVariant] = useState(0);
   const [boost, setBoost] = useState<BoostStatus | null>(null);
   const [boosting, setBoosting] = useState(false);
+  const [showBoostConfirm, setShowBoostConfirm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [actingUserId, setActingUserId] = useState<string | null>(null);
@@ -251,6 +258,18 @@ export default function DecouvrirPage() {
   useEffect(() => {
     if (user) void load();
   }, [user, load]);
+
+  // Server is the single source of truth for revealed/unrevealedCount
+  // (see WhoLikedBanner's header comment) — a lighter re-fetch than
+  // `load()` after a successful credit spend, so the rest of the page
+  // (recommended grid, profile completeness, etc.) doesn't flash reload.
+  const refetchFavoritedBy = useCallback(async () => {
+    try {
+      setFavoritedBy(await api<FavoritedBy>('/api/profile/favorited-by'));
+    } catch {
+      /* non-critical widget refresh */
+    }
+  }, []);
 
   useEffect(() => {
     setCompletionBannerDismissed(isBannerSnoozed(COMPLETION_BANNER_DISMISS_KEY));
@@ -302,6 +321,7 @@ export default function DecouvrirPage() {
       await api('/api/profile/boost', { method: 'POST' });
       toast('Ton profil est boosté pour 24h !', 'success');
       setBoost((b) => (b ? { ...b, active: true } : b));
+      setShowBoostConfirm(false);
       void refreshCredits();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
@@ -312,6 +332,14 @@ export default function DecouvrirPage() {
     } finally {
       setBoosting(false);
     }
+  }
+
+  function requestBoost() {
+    if (creditsUnlimited) {
+      void activateBoost();
+      return;
+    }
+    setShowBoostConfirm(true);
   }
 
   if (!user) return null;
@@ -453,7 +481,7 @@ export default function DecouvrirPage() {
                 <div className={`animate-fade-in-up relative ${boostBannerExit.exitClassName}`}>
                   <button
                     type="button"
-                    onClick={() => void activateBoost()}
+                    onClick={requestBoost}
                     disabled={boosting}
                     className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 pr-10 text-left"
                   >
@@ -564,7 +592,12 @@ export default function DecouvrirPage() {
                 )}
               </div>
 
-              <WhoLikedBanner preview={favoritedBy.preview} total={favoritedBy.total} />
+              <WhoLikedBanner
+                preview={favoritedBy.preview}
+                total={favoritedBy.total}
+                unrevealedCount={favoritedBy.unrevealedCount}
+                onUnlocked={() => void refetchFavoritedBy()}
+              />
 
               {/* "Profil du jour" — Banani's sidebar single-profile card,
                 reuses recommended[0] (already-fetched real data, same list
@@ -782,6 +815,16 @@ export default function DecouvrirPage() {
           </div>
         )}
       </div>
+
+      <CreditConfirmModal
+        open={showBoostConfirm}
+        onClose={() => setShowBoostConfirm(false)}
+        cost={boost?.cost ?? 3}
+        balance={creditBalance}
+        actionLabel="Booster ton profil pendant 24h"
+        onConfirm={activateBoost}
+        confirming={boosting}
+      />
     </AppShell>
   );
 }

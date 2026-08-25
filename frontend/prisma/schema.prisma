@@ -326,6 +326,15 @@ model Profile {
   // filtering is unaffected). See IMPLEMENTATION-PLAN-v2.md for the
   // cooldown rule (free: 1/24h, Premium: unlimited).
   boostedUntil          DateTime?
+  // Persistent per-feature reveal marker (2026-08-25, credit gating Script
+  // 3): every Favorite/ProfileView row with `createdAt <= this timestamp`
+  // stays revealed forever once unlocked via POST /api/credits/spend; a
+  // NEW row created after that (someone new favorites/visits) shows
+  // blurred again and needs a fresh 1-credit unlock, which simply bumps
+  // this timestamp forward — never loses an earlier reveal. Null = never
+  // unlocked (everything blurred).
+  favoritedByUnlockedAt DateTime?
+  visitorsUnlockedAt    DateTime?
   // Set by POST /api/subscriptions/checkout on first successful submit —
   // reused to pre-fill the phone step on future Premium checkouts. Chariow
   // requires { national number, ISO2 country } per checkout, not stored
