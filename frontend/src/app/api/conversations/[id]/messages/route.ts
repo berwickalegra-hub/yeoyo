@@ -27,11 +27,32 @@ import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-m
 import { isParticipant, otherParticipant, isMutedBy } from '@/lib/server/conversations/lib';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
 import { cloudinaryUrlForKey } from '@/lib/server/storage';
-import { messageQuotaStatus } from '@/lib/server/conversations/message-quota';
+import { spendCredits, CREDIT_COSTS } from '@/lib/server/credits/ledger';
 
 const log = createLogger();
 
 const PAGE_SIZE = 30;
+
+/**
+ * 2026-08-25 — "envoyer le premier message après une demande de contact
+ * acceptée : 1 crédit, hommes uniquement" (explicit product spec). Free for
+ * everyone else: replying, and any message once the conversation already
+ * has at least one message, is always free regardless of sender.
+ */
+async function computeFirstMessageCost(conversationId: string, senderId: string): Promise<number> {
+  const [messageCount, sender] = await Promise.all([
+    prisma.message.count({ where: { conversationId } }),
+    prisma.user.findUnique({
+      where: { id: senderId },
+      select: { role: true, profile: { select: { gender: true } } },
+    }),
+  ]);
+  const isStaff = sender?.role === 'ADMIN' || sender?.role === 'SUPERADMIN';
+  const isFirstMessage = messageCount === 0;
+  const isMan = sender?.profile?.gender === 'HOMME';
+  return isFirstMessage && isMan && !isStaff ? CREDIT_COSTS.first_message : 0;
+}
+
 const Query = z.object({ before: z.string().datetime().optional() });
 const Body = z
   .object({
@@ -97,7 +118,7 @@ export async function GET(
       }
     }
 
-    const quota = await messageQuotaStatus(auth.user.sub);
+    const firstMessageCost = await computeFirstMessageCost(id, auth.user.sub);
 
     return NextResponse.json(
       {
@@ -116,7 +137,7 @@ export async function GET(
           fromSelf: m.senderId === auth.user.sub,
         })),
         hasMore: messages.length === PAGE_SIZE,
-        quota: { remaining: quota.remaining, limit: quota.limit, resetAt: quota.resetAt },
+        firstMessageCost,
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
@@ -160,18 +181,6 @@ export async function POST(
       );
     }
 
-    const quota = await messageQuotaStatus(auth.user.sub);
-    if (quota.limit !== null && (quota.remaining ?? 0) <= 0) {
-      return NextResponse.json(
-        {
-          code: 'MESSAGE_DAILY_LIMIT_REACHED',
-          message: 'Tu as atteint la limite de messages gratuits pour aujourd’hui.',
-          resetAt: quota.resetAt,
-        },
-        { status: 403, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-
     if (parsed.data.imageUploadId) {
       const upload = await prisma.fileUpload.findFirst({
         where: { id: parsed.data.imageUploadId, userId: auth.user.sub },
@@ -185,7 +194,32 @@ export async function POST(
     }
 
     const now = new Date();
-    const message = await prisma.$transaction(async (tx) => {
+    // The first-message credit spend and the message insert must succeed or
+    // fail together — checking "is this the first message" outside the
+    // transaction would race two rapid double-submits into both seeing an
+    // empty conversation and only one actually being free.
+    const result = await prisma.$transaction(async (tx) => {
+      const [messageCount, sender] = await Promise.all([
+        tx.message.count({ where: { conversationId: id } }),
+        tx.user.findUnique({
+          where: { id: auth.user.sub },
+          select: { role: true, profile: { select: { gender: true } } },
+        }),
+      ]);
+      const isStaff = sender?.role === 'ADMIN' || sender?.role === 'SUPERADMIN';
+      const requiresCredit = messageCount === 0 && sender?.profile?.gender === 'HOMME' && !isStaff;
+
+      if (requiresCredit) {
+        const spend = await spendCredits(tx, {
+          userId: auth.user.sub,
+          action: 'first_message',
+          role: sender?.role,
+        });
+        if (!spend.ok) {
+          return { ok: false as const, balance: spend.balance };
+        }
+      }
+
       const created = await tx.message.create({
         data: {
           conversationId: id,
@@ -196,8 +230,21 @@ export async function POST(
         include: { imageUpload: { select: { key: true } } },
       });
       await tx.conversation.update({ where: { id }, data: { lastMessageAt: now } });
-      return created;
+      return { ok: true as const, message: created };
     });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          code: 'INSUFFICIENT_CREDITS',
+          message: 'Solde de crédits insuffisant pour envoyer ce premier message.',
+          balance: result.balance,
+          cost: CREDIT_COSTS.first_message,
+        },
+        { status: 402, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    const message = result.message;
     const imageUrl = message.imageUpload ? cloudinaryUrlForKey(message.imageUpload.key) : null;
 
     const [senderProfile, recipientPrefsRow] = await Promise.all([

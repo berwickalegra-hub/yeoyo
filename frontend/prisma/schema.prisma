@@ -40,6 +40,11 @@ model User {
   twoFactorSecret        String?
   twoFactorEnabled       Boolean   @default(false)
   twoFactorRecoveryCodes Json?
+  // Pay-per-use credit balance (2026-08-25 replacement for the old
+  // recurring Premium subscription) — never negative, only ever mutated
+  // through lib/server/credits/ledger.ts's atomic CAS helpers. Credits
+  // don't expire.
+  creditBalance          Int       @default(0)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -63,7 +68,7 @@ model User {
   messagesSent            Message[]                 @relation("MessagesSent")
   blocksGiven             BlockedUser[]             @relation("BlocksGiven")
   blocksReceived          BlockedUser[]             @relation("BlocksReceived")
-  subscriptions           Subscription[]
+  creditTransactions      CreditTransaction[]
   reportsFiled            Report[]                  @relation("ReportsFiled")
   reportsReceived         Report[]                  @relation("ReportsReceived")
   coachMessages           CoachMessage[]
@@ -626,39 +631,39 @@ model Order {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  subscription Subscription?
-
   @@index([userId, createdAt])
   @@index([status, expiresAt])
   @@index([provider, providerChargeId])
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// YeOyo domain — Premium subscription (Phase E). The plan catalog itself
-// is a static config (lib/server/subscriptions/plans.ts), not a table —
-// Banani shows a fixed 3-plan catalog and there's no admin-editable-plans
-// requirement yet. This row just tracks a user's subscription lifecycle.
-//
-// `provider` is "stub" today (see lib/server/payments/stub.ts) per the
-// explicit decision to build the Premium Checkout UI against a fake
-// provider first and wire a real Stripe/Moneroo charge later — swapping
-// providers only touches the checkout route, not this model.
+// YeOyo domain — pay-per-use credits (2026-08-25, replaces the old
+// recurring Premium Subscription model). Credit purchases still go
+// through Order/Chariow exactly as subscription purchases did — an Order
+// reaching PAID is what triggers lib/server/credits/ledger.ts's
+// grantCredits() (see lib/server/credits/reconcile.ts). This table is the
+// append-only ledger for every balance change (purchase, spend, admin
+// grant), so a user's consumption history can be shown verbatim; the fast
+// balance check itself lives on User.creditBalance, kept in sync with
+// this ledger inside the same transaction as every mutation.
 // ───────────────────────────────────────────────────────────────────────
-model Subscription {
-  id                String    @id @default(cuid())
-  userId            String
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  planId            String // "monthly" | "semiannual" | "annual" — see plans.ts
-  status            String    @default("PENDING") // PENDING | ACTIVE | CANCELLED | EXPIRED
-  provider          String // "stub" for now; "stripe" | "moneroo" once wired for real
-  orderId           String?   @unique
-  order             Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  currentPeriodEnd  DateTime?
-  cancelAtPeriodEnd Boolean   @default(false)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+model CreditTransaction {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String // PURCHASE | SPEND | ADMIN_GRANT
+  amount         Int // positive for PURCHASE/ADMIN_GRANT, negative for SPEND
+  // e.g. "credit_pack:serieux", "view_visitors", "view_favorited_by",
+  // "boost", "first_message", "admin_grant" — free-form action label,
+  // rendered into a human-readable line on the consumption-history screen.
+  action         String
+  // Set only for type=PURCHASE — no strict FK to Order (this ledger must
+  // never fail to insert because of an Order-side constraint), just a
+  // plain reference id for support/debugging.
+  relatedOrderId String?
+  createdAt      DateTime @default(now())
 
-  @@index([userId, status])
+  @@index([userId, createdAt])
 }
 
 model Withdrawal {

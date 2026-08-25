@@ -15,7 +15,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const CANDIDATE_POOL_SIZE = 20;
 
@@ -72,14 +71,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .sort((a, b) => b.score - a.score);
 
     const top = ranked[0]!;
-    const premiumIds = await getPremiumUserIds(prisma, [top.candidate.userId]);
 
     return NextResponse.json(
       {
-        profile: {
-          ...toProfileCard(top.candidate),
-          isPremium: premiumIds.has(top.candidate.userId),
-        },
+        profile: toProfileCard(top.candidate),
         compatibility: {
           score: top.score,
           sameCommune: top.sameCommune,

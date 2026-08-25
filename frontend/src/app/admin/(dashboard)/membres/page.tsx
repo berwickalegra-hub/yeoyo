@@ -17,7 +17,7 @@ interface AdminUser {
   status: 'ACTIVE' | 'SUSPENDED';
   emailVerifiedAt: string | null;
   createdAt: string;
-  isPremium: boolean;
+  creditBalance: number;
 }
 
 export default function AdminMembresPage() {
@@ -27,6 +27,7 @@ export default function AdminMembresPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
 
   async function load(reset: boolean) {
     setLoading(true);
@@ -68,22 +69,29 @@ export default function AdminMembresPage() {
     }
   }
 
-  // Admin-only test toggle (2026-08-17, explicit user ask): grants/revokes
-  // Premium directly on any account, bypassing Chariow checkout entirely —
-  // lets the account owner preview the Premium UI without paying. Backed by
-  // PATCH /api/admin/users/[id]/premium, which tags the Subscription row
-  // provider: 'admin-grant' so it stays distinguishable from a real payment.
-  async function togglePremium(user: AdminUser) {
-    const nextStatus = user.isPremium ? 'CANCELLED' : 'ACTIVE';
+  // Admin-only credit grant (2026-08-25, replaces the old Premium toggle now
+  // that YeOyo is pay-per-use credits) — credits any account without going
+  // through Chariow checkout. Backed by PATCH /api/admin/users/[id]/credits,
+  // which tags the CreditTransaction row action: 'admin_grant' so it stays
+  // distinguishable from a real purchase. A negative amount corrects a
+  // balance down (never below 0 — the route rejects that).
+  async function grantCredits(user: AdminUser) {
+    const raw = creditInputs[user.id]?.trim();
+    const amount = raw ? Number.parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(amount) || amount === 0) {
+      toast('Entre un nombre de crédits (positif ou négatif) à créditer', 'error');
+      return;
+    }
     try {
-      await api(`/api/admin/users/${user.id}/premium`, {
+      const res = await api<{ balance: number }>(`/api/admin/users/${user.id}/credits`, {
         method: 'PATCH',
-        body: { status: nextStatus },
+        body: { amount },
       });
       setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, isPremium: nextStatus === 'ACTIVE' } : u)),
+        prev.map((u) => (u.id === user.id ? { ...u, creditBalance: res.balance } : u)),
       );
-      toast(nextStatus === 'ACTIVE' ? 'Premium activé' : 'Premium retiré', 'success');
+      setCreditInputs((prev) => ({ ...prev, [user.id]: '' }));
+      toast(`Solde mis à jour : ${res.balance} crédit${res.balance > 1 ? 's' : ''}`, 'success');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     }
@@ -126,7 +134,7 @@ export default function AdminMembresPage() {
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Rôle</th>
                 <th className="px-4 py-3 font-medium">Statut</th>
-                <th className="px-4 py-3 font-medium">Premium</th>
+                <th className="px-4 py-3 font-medium">Crédits</th>
                 <th className="px-4 py-3 font-medium">Inscrit le</th>
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
@@ -148,17 +156,15 @@ export default function AdminMembresPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {u.isPremium && (
-                      <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold">
-                        Premium
-                      </span>
-                    )}
+                    <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-semibold text-gold">
+                      {u.creditBalance}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(u.createdAt).toLocaleDateString('fr-FR')}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {u.role === 'USER' && (
                         <button
                           type="button"
@@ -168,16 +174,21 @@ export default function AdminMembresPage() {
                           {u.status === 'ACTIVE' ? 'Suspendre' : 'Restaurer'}
                         </button>
                       )}
+                      <input
+                        type="number"
+                        placeholder="±crédits"
+                        value={creditInputs[u.id] ?? ''}
+                        onChange={(e) =>
+                          setCreditInputs((prev) => ({ ...prev, [u.id]: e.target.value }))
+                        }
+                        className="w-20 rounded-lg border border-border bg-surface px-2 py-1 font-body text-xs text-foreground"
+                      />
                       <button
                         type="button"
-                        onClick={() => void togglePremium(u)}
-                        className={`btn-press rounded-lg border px-3 py-1 font-body text-xs ${
-                          u.isPremium
-                            ? 'border-border text-muted-foreground'
-                            : 'border-gold/40 text-gold'
-                        }`}
+                        onClick={() => void grantCredits(u)}
+                        className="btn-press rounded-lg border border-gold/40 px-3 py-1 font-body text-xs text-gold"
                       >
-                        {u.isPremium ? 'Retirer Premium' : 'Activer Premium'}
+                        Créditer
                       </button>
                     </div>
                   </td>

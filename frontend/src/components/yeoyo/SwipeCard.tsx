@@ -65,24 +65,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
 import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
-import { PremiumGateModal } from '@/components/yeoyo/PremiumGateModal';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 import { useLikePop } from '@/lib/yeoyo/useLikePop';
-import { usePremium } from '@/contexts/PremiumContext';
 
 const SWIPE_THRESHOLD = 90;
 const CLICK_THRESHOLD = 6;
-// Display copy only — the real limit is enforced server-side in
-// lib/server/conversations/flash-message-quota.ts (FREE_FLASH_MESSAGE_LIMIT),
-// which also resets this count every rolling 24h. Kept in sync manually
-// since that file is `server-only` and can't be imported into this client
-// component.
-const FREE_FLASH_MESSAGE_LIMIT = 5;
 // Display copy only — enforced server-side in
 // lib/server/contact-requests/quota.ts (FREE_MONTHLY_CONTACT_REQUEST_LIMIT).
 const FREE_MONTHLY_CONTACT_REQUEST_LIMIT = 5;
@@ -96,7 +87,6 @@ const EXIT_DURATION_MS = 250;
 export function SwipeCard({
   profile,
   onDismiss,
-  onMessage,
   onLike,
   onFavorite,
   favoriteBusy,
@@ -104,19 +94,15 @@ export function SwipeCard({
 }: {
   profile: ProfileCard;
   onDismiss: (userId: string) => void;
-  onMessage: (userId: string) => void;
   onLike: (userId: string) => void;
   onFavorite?: (userId: string) => void;
   favoriteBusy?: boolean;
   busy?: boolean;
 }) {
   const router = useRouter();
-  const { isPremium } = usePremium();
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [exiting, setExiting] = useState(false);
-  const [messageQuotaBusy, setMessageQuotaBusy] = useState(false);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
   // Gate for the mobile action bar's portal — see file header comment.
@@ -130,34 +116,6 @@ export function SwipeCard({
 
   const liked = profile.liked ?? false;
   const popping = useLikePop(liked);
-
-  // Message is gold-styled as a Premium-flavored action (2026-08-17,
-  // explicit user ask): non-Premium users get FREE_FLASH_MESSAGE_LIMIT free
-  // uses per rolling 24h (checked+consumed atomically server-side, see
-  // /api/profile/flash-message-quota), then PremiumGateModal instead of a
-  // hard redirect — the lock badge stays visible regardless of remaining
-  // quota (it signals "Premium-flavored", not "currently blocked").
-  async function handleMessageTap() {
-    if (isPremium) {
-      onMessage(profile.userId);
-      return;
-    }
-    setMessageQuotaBusy(true);
-    try {
-      const result = await api<{ allowed: boolean }>('/api/profile/flash-message-quota', {
-        method: 'POST',
-      });
-      if (result.allowed) {
-        onMessage(profile.userId);
-      } else {
-        setShowPremiumModal(true);
-      }
-    } catch {
-      setShowPremiumModal(true);
-    } finally {
-      setMessageQuotaBusy(false);
-    }
-  }
 
   // Flies the card fully off-screen (continuing the same transform/
   // transition the drag gesture already uses) before calling the real
@@ -302,12 +260,6 @@ export function SwipeCard({
                     <span className="font-body text-xs font-medium text-white">Vérifié</span>
                   </span>
                 )}
-                {profile.isPremium && (
-                  <span className="flex items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5">
-                    <Icon name="crown" size={12} className="text-gold" />
-                    <span className="font-body text-xs font-medium text-white">Premium</span>
-                  </span>
-                )}
                 {/* Signals this row (unlike the photo above it) is the tap
                     target that leaves the deck for the profile page. */}
                 <Icon
@@ -359,12 +311,6 @@ export function SwipeCard({
           {renderActions()}
         </div>
 
-        <PremiumGateModal
-          open={showPremiumModal}
-          onClose={() => setShowPremiumModal(false)}
-          title="Fonctionnalité Premium"
-          description={`Le Message te permet d'envoyer un message avant même que ta demande soit acceptée. Tu as utilisé tes ${FREE_FLASH_MESSAGE_LIMIT} messages gratuits d'aujourd'hui — reviens demain pour ${FREE_FLASH_MESSAGE_LIMIT} nouveaux, ou passe Premium pour un accès illimité.`}
-        />
         {showLightbox && (
           <PhotoLightbox
             photoUrl={profile.photoUrls[photoIndex] ?? profile.photoUrls[0] ?? null}
@@ -393,8 +339,9 @@ export function SwipeCard({
     </>
   );
 
-  // Circular Passer/Message + pill Demander (2026-08-19, explicit user ask
-  // — modeled directly on the Banani DiscoverScreen.jsx design). Shared
+  // Circular Passer + pill Demander (2026-08-19, modeled on the Banani
+  // DiscoverScreen.jsx design; the Message shortcut was removed 2026-08-25 —
+  // messaging now only opens once a contact request is accepted). Shared
   // between the desktop in-flow footer above and the mobile floating portal
   // below so both stay visually identical.
   function renderActions(): ReactNode {
@@ -411,38 +358,9 @@ export function SwipeCard({
         </button>
         <button
           type="button"
-          onClick={() => void handleMessageTap()}
-          disabled={busy || messageQuotaBusy}
-          aria-label={
-            isPremium ? 'Envoyer un message' : 'Messagerie Premium — passer Premium pour débloquer'
-          }
-          className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gold shadow-md transition-transform active:scale-95 disabled:opacity-50"
-        >
-          {busy || messageQuotaBusy ? (
-            <Icon name="refresh-cw" size={17} className="animate-spin text-gold-foreground" />
-          ) : (
-            <Icon name="message-circle" size={17} className="text-gold-foreground" />
-          )}
-          {/* Crown, not a padlock — a lock reads as "blocked," but tapping
-              this still works below the free quota. Matches the Demander
-              button's badge below so the same freemium concept isn't shown
-              two contradictory ways (2026-08-20, explicit user report: the
-              mismatch read as a bug). */}
-          {!isPremium && (
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gold shadow">
-              <Icon name="crown" size={9} className="text-gold-foreground" fill="currentColor" />
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
           onClick={() => flyOff(1, () => onLike(profile.userId))}
           disabled={busy || liked || exiting}
-          aria-label={
-            isPremium
-              ? 'Demander'
-              : `Demander — ${FREE_MONTHLY_CONTACT_REQUEST_LIMIT} demandes gratuites par mois`
-          }
+          aria-label={`Demander — ${FREE_MONTHLY_CONTACT_REQUEST_LIMIT} demandes gratuites par mois`}
           className={`btn-success-flash relative flex h-14 flex-shrink-0 items-center gap-2 rounded-full px-6 font-body text-sm font-bold shadow-md shadow-secondary/25 transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
         >
           {busy ? (
@@ -455,15 +373,6 @@ export function SwipeCard({
             />
           )}
           <span className="leading-none">{liked ? 'Envoyée' : 'Demander'}</span>
-          {/* Freemium hint (2026-08-19, explicit user ask) — mirrors the
-              Message button's lock badge above: contact requests are also
-              capped for free users (5/mois, contact-requests/quota.ts), this
-              button just never surfaced that anywhere. */}
-          {!isPremium && !liked && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gold shadow">
-              <Icon name="crown" size={11} className="text-gold-foreground" fill="currentColor" />
-            </span>
-          )}
         </button>
       </>
     );

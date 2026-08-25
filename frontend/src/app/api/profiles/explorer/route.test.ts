@@ -65,7 +65,6 @@ beforeEach(() => {
   prismaMock.blockedUser.findMany.mockResolvedValue([]);
   prismaMock.like.findMany.mockResolvedValue([] as never);
   prismaMock.favorite.findMany.mockResolvedValue([] as never);
-  prismaMock.subscription.findMany.mockResolvedValue([] as never);
 });
 
 describe('GET /api/profiles/explorer — already-liked exclusion', () => {
@@ -102,22 +101,5 @@ describe('GET /api/profiles/explorer — already-liked exclusion', () => {
 
     const args = prismaMock.like.findMany.mock.calls[0]?.[0];
     expect(args?.where?.likerId).toBe('me-1');
-  });
-
-  it('Test 4: merges isPremium onto each card from the batched Subscription lookup', async () => {
-    const candidateB = { ...makeProfile({ userId: 'user-b' }), photos: [] };
-    const candidateC = { ...makeProfile({ userId: 'user-c' }), photos: [] };
-    prismaMock.profile.count.mockResolvedValue(2 as never);
-    prismaMock.profile.findMany.mockResolvedValue([candidateB, candidateC] as never);
-    prismaMock.subscription.findMany.mockResolvedValue([{ userId: 'user-b' }] as never);
-
-    const res = await GET(makeGet());
-    const body = await res.json();
-
-    const byId = Object.fromEntries(
-      body.profiles.map((p: { userId: string; isPremium: boolean }) => [p.userId, p.isPremium]),
-    );
-    expect(byId['user-b']).toBe(true);
-    expect(byId['user-c']).toBe(false);
   });
 });

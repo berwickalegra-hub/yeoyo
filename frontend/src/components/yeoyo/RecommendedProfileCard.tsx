@@ -40,20 +40,12 @@ export function RecommendedProfileCard({
             name={profile.firstName}
             aspectRatio="3/4"
           />
-          {(profile.verified || profile.isPremium) && (
+          {profile.verified && (
             <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
-              {profile.verified && (
-                <div className="flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 font-body text-xs font-bold text-secondary-foreground">
-                  <Icon name="shield-check" size={11} />
-                  Vérifié
-                </div>
-              )}
-              {profile.isPremium && (
-                <div className="flex items-center gap-1 rounded-md bg-gold px-2 py-0.5 font-body text-xs font-bold text-gold-foreground">
-                  <Icon name="crown" size={11} />
-                  Premium
-                </div>
-              )}
+              <div className="flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 font-body text-xs font-bold text-secondary-foreground">
+                <Icon name="shield-check" size={11} />
+                Vérifié
+              </div>
             </div>
           )}
           {profile.photoUrls.length > 1 && (

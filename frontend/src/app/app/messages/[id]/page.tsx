@@ -40,7 +40,11 @@
 //     with scroll-position preservation so the view doesn't jump.
 //   - In-composer quota banner ("X messages restants aujourd'hui") reusing
 //     `messageQuotaStatus()` — that data already existed and was shown on
-//     Explorer's side panel, just never in the composer itself.
+//     Explorer's side panel, just never in the composer itself. 2026-08-25:
+//     replaced by a credit-cost banner + CreditConfirmModal — the daily cap
+//     is gone, only the very first message in a new conversation can cost a
+//     credit (men only), gated via GET's `firstMessageCost` and confirmed
+//     before sending (see lib/server/credits/ledger.ts).
 // Deliberately NOT built this pass (documented, not silently skipped):
 // message reactions, edit-message, reply-to/quote a specific message,
 // archive-conversation, and a true app-wide (not per-thread) online status —
@@ -56,11 +60,13 @@ import Ably, { type RealtimeChannel } from 'ably';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
 import { closeAblySafely, installAblyRejectionGuard } from '@/lib/yeoyo/ably-safe-close';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { INTENT_LABELS } from '@/lib/yeoyo/types';
@@ -91,12 +97,6 @@ interface ThreadMessage {
   tempId?: string;
   pending?: boolean;
   failed?: boolean;
-}
-
-interface Quota {
-  remaining: number | null;
-  limit: number | null;
-  resetAt: string | null;
 }
 
 // api.ts doesn't export a CSRF-token getter (protected file), and the
@@ -195,6 +195,11 @@ export default function MessageThreadPage() {
   const user = useUser();
   const router = useRouter();
   const { toast } = useToast();
+  const {
+    balance: creditBalance,
+    unlimited: creditsUnlimited,
+    refresh: refreshCredits,
+  } = useCredits();
   const badgeCounts = useNavCounts();
   const { conversations, reload } = useConversations();
 
@@ -212,7 +217,11 @@ export default function MessageThreadPage() {
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
   );
-  const [quota, setQuota] = useState<Quota | null>(null);
+  const [firstMessageCost, setFirstMessageCost] = useState(0);
+  const [showCreditConfirm, setShowCreditConfirm] = useState(false);
+  const [pendingSend, setPendingSend] = useState<
+    { kind: 'text'; body: string } | { kind: 'image'; file: File; caption: string } | null
+  >(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherPresent, setOtherPresent] = useState(false);
   const [mutedOverride, setMutedOverride] = useState<boolean | null>(null);
@@ -244,13 +253,15 @@ export default function MessageThreadPage() {
   const loadInitial = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api<{ messages: ThreadMessage[]; hasMore: boolean; quota: Quota }>(
-        `/api/conversations/${conversationId}/messages`,
-      );
+      const res = await api<{
+        messages: ThreadMessage[];
+        hasMore: boolean;
+        firstMessageCost: number;
+      }>(`/api/conversations/${conversationId}/messages`);
       seenIds.current = new Set(res.messages.map((m) => m.id));
       setMessages(res.messages);
       setHasMore(res.hasMore);
-      setQuota(res.quota);
+      setFirstMessageCost(res.firstMessageCost);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -406,15 +417,19 @@ export default function MessageThreadPage() {
     }
   }
 
-  function decrementQuota() {
-    setQuota((q) =>
-      q && q.limit !== null ? { ...q, remaining: Math.max((q.remaining ?? 1) - 1, 0) } : q,
-    );
+  // 2026-08-25: the first message in a conversation costs 1 credit for men
+  // (see conversations/[id]/messages/route.ts's computeFirstMessageCost) —
+  // `send()`/`onImageSelected()` intercept before the optimistic bubble so
+  // the cost is confirmed via CreditConfirmModal first, per the product
+  // spec's "afficher une confirmation claire du coût avant toute action
+  // payante". Staff (ADMIN/SUPERADMIN, `creditsUnlimited`) skip the modal —
+  // the server bypasses their charge too.
+  function needsConfirm(): boolean {
+    return firstMessageCost > 0 && !creditsUnlimited;
   }
 
-  async function send() {
-    const body = draft.trim();
-    if (!body || sending || !user) return;
+  async function performTextSend(body: string) {
+    if (!user) return;
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setMessages((prev) => [
       ...prev,
@@ -431,7 +446,6 @@ export default function MessageThreadPage() {
         pending: true,
       },
     ]);
-    setDraft('');
     setSending(true);
     try {
       const res = await api<ThreadMessage>(`/api/conversations/${conversationId}/messages`, {
@@ -440,16 +454,42 @@ export default function MessageThreadPage() {
       });
       seenIds.current.add(res.id);
       setMessages((prev) => prev.map((m) => (m.tempId === tempId ? res : m)));
-      decrementQuota();
+      setFirstMessageCost(0);
+      void refreshCredits();
       void reload();
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) => (m.tempId === tempId ? { ...m, pending: false, failed: true } : m)),
       );
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        void refreshCredits();
+        toast('Solde de crédits insuffisant pour envoyer ce premier message.', 'error');
+      } else {
+        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      }
     } finally {
       setSending(false);
     }
+  }
+
+  function send() {
+    const body = draft.trim();
+    if (!body || sending || !user) return;
+    setDraft('');
+    if (needsConfirm()) {
+      setPendingSend({ kind: 'text', body });
+      setShowCreditConfirm(true);
+      return;
+    }
+    void performTextSend(body);
+  }
+
+  function confirmPendingSend() {
+    setShowCreditConfirm(false);
+    if (!pendingSend) return;
+    if (pendingSend.kind === 'text') void performTextSend(pendingSend.body);
+    else void performImageSend(pendingSend.file, pendingSend.caption);
+    setPendingSend(null);
   }
 
   async function retrySend(tempId: string) {
@@ -465,20 +505,24 @@ export default function MessageThreadPage() {
       });
       seenIds.current.add(res.id);
       setMessages((prev) => prev.map((m) => (m.tempId === tempId ? res : m)));
-      decrementQuota();
+      setFirstMessageCost(0);
+      void refreshCredits();
       void reload();
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) => (m.tempId === tempId ? { ...m, pending: false, failed: true } : m)),
       );
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        void refreshCredits();
+        toast('Solde de crédits insuffisant pour envoyer ce premier message.', 'error');
+      } else {
+        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      }
     }
   }
 
-  async function onImageSelected(file: File) {
+  async function performImageSend(file: File, caption: string) {
     setUploadingImage(true);
-    const caption = draft.trim();
-    setDraft('');
     try {
       const uploadId = await uploadImageWithAuthRetry(file);
 
@@ -490,13 +534,30 @@ export default function MessageThreadPage() {
         seenIds.current.add(res.id);
         setMessages((prev) => [...prev, res]);
       }
-      decrementQuota();
+      setFirstMessageCost(0);
+      void refreshCredits();
       void reload();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Une erreur est survenue', 'error');
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        void refreshCredits();
+        toast('Solde de crédits insuffisant pour envoyer ce premier message.', 'error');
+      } else {
+        toast(err instanceof Error ? err.message : 'Une erreur est survenue', 'error');
+      }
     } finally {
       setUploadingImage(false);
     }
+  }
+
+  function onImageSelected(file: File) {
+    const caption = draft.trim();
+    setDraft('');
+    if (needsConfirm()) {
+      setPendingSend({ kind: 'image', file, caption });
+      setShowCreditConfirm(true);
+      return;
+    }
+    void performImageSend(file, caption);
   }
 
   async function deleteMessage(id: string) {
@@ -900,26 +961,13 @@ export default function MessageThreadPage() {
           </div>
 
           <div className="border-t border-border px-5 py-4">
-            {quota && quota.limit !== null && (
-              <div
-                className={`mb-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2 font-body text-xs ${
-                  (quota.remaining ?? 0) <= 0
-                    ? 'bg-red-500/10 text-red-500'
-                    : 'bg-gold/10 text-gold'
-                }`}
-              >
+            {needsConfirm() && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 font-body text-xs text-gold">
+                <Icon name="gem" size={13} />
                 <span>
-                  {(quota.remaining ?? 0) <= 0
-                    ? 'Limite de messages gratuits atteinte pour aujourd’hui'
-                    : `${quota.remaining} message${(quota.remaining ?? 0) > 1 ? 's' : ''} restant${(quota.remaining ?? 0) > 1 ? 's' : ''} aujourd’hui`}
+                  Ton premier message ici coûtera {firstMessageCost} crédit
+                  {firstMessageCost > 1 ? 's' : ''}
                 </span>
-                <Link
-                  href="/app/premium"
-                  className="flex flex-shrink-0 items-center gap-1 font-semibold"
-                >
-                  <Icon name="crown" size={12} />
-                  Premium
-                </Link>
               </div>
             )}
             {!loading && messages.length === 0 && (
@@ -1081,6 +1129,19 @@ export default function MessageThreadPage() {
           </div>
         )}
       </div>
+
+      <CreditConfirmModal
+        open={showCreditConfirm}
+        onClose={() => {
+          setShowCreditConfirm(false);
+          setPendingSend(null);
+        }}
+        cost={firstMessageCost}
+        balance={creditBalance}
+        actionLabel="Envoyer ce premier message"
+        onConfirm={confirmPendingSend}
+        confirming={sending || uploadingImage}
+      />
     </div>
   );
 }

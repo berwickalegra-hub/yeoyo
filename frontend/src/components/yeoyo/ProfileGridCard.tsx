@@ -3,7 +3,10 @@
 // Full profile card for Explorer's grid view mode (2026-08-10 — user
 // wanted a toggle between the swipe deck and a classic grid, matching a
 // reference app's grey grid-view button). One column on mobile so the
-// 3-button action row has room to breathe (2-up/3-up from sm/lg).
+// action row has room to breathe (2-up/3-up from sm/lg). The direct
+// "Message" shortcut was removed 2026-08-25 — messaging now only opens
+// once a contact request is accepted (see credits/ledger.ts's
+// first_message gate).
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
@@ -14,7 +17,6 @@ import { useCardExit } from '@/lib/yeoyo/useCardExit';
 export function ProfileGridCard({
   profile,
   onLike,
-  onMessage,
   onDismiss,
   onFavorite,
   favoriteBusy,
@@ -22,7 +24,6 @@ export function ProfileGridCard({
 }: {
   profile: ProfileCard;
   onLike: (userId: string) => void;
-  onMessage: (userId: string) => void;
   onDismiss: (userId: string) => void;
   onFavorite?: (userId: string) => void;
   favoriteBusy?: boolean;
@@ -52,12 +53,6 @@ export function ProfileGridCard({
               <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
                 <div className="h-1.5 w-1.5 rounded-full bg-verified" />
                 <span className="font-body text-xs font-medium text-foreground">Vérifié IA</span>
-              </div>
-            )}
-            {profile.isPremium && (
-              <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
-                <div className="h-1.5 w-1.5 rounded-full bg-gold" />
-                <span className="font-body text-xs font-medium text-foreground">Premium</span>
               </div>
             )}
           </div>
@@ -133,23 +128,10 @@ export function ProfileGridCard({
           </button>
           <button
             type="button"
-            onClick={() => onMessage(profile.userId)}
-            disabled={busy}
-            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-border bg-background text-foreground transition-colors hover:border-primary/40 disabled:opacity-50"
-          >
-            {busy ? (
-              <Icon name="refresh-cw" size={15} className="animate-spin" />
-            ) : (
-              <Icon name="message-circle" size={15} />
-            )}
-            <span className="font-body text-sm font-medium">Message</span>
-          </button>
-          <button
-            type="button"
             onClick={() => onLike(profile.userId)}
             disabled={busy || liked}
             aria-label={liked ? 'Déjà aimé' : 'Liker ce profil'}
-            className={`btn-success-flash flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary text-primary-foreground' : 'border-2 border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-primary'}`}
+            className={`btn-success-flash flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg font-body text-sm font-medium transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-primary text-primary-foreground' : 'border-2 border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-primary'}`}
           >
             {busy ? (
               <Icon name="refresh-cw" size={18} className="animate-spin" />
@@ -161,6 +143,7 @@ export function ProfileGridCard({
                 className={popping ? 'animate-heart-pop' : ''}
               />
             )}
+            <span>{liked ? 'Envoyée' : 'Demander'}</span>
           </button>
         </div>
       </div>

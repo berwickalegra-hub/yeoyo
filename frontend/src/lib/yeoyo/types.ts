@@ -9,10 +9,6 @@ export interface ProfileCard {
   photoUrl: string | null;
   photoUrls: string[];
   verified: boolean;
-  // Whether this profile's owner currently has an ACTIVE subscription —
-  // always populated (unlike `liked`/`favorited`/`boosted` below), same
-  // shape as `verified`.
-  isPremium: boolean;
   bio: string | null;
   religion: string | null;
   maritalStatus: string | null;

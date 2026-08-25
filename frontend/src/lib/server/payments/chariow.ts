@@ -1,6 +1,6 @@
 /**
- * Chariow payment adapter — hosted checkout for the YeOyo Premium
- * subscription (single platform account, not per-creator; see
+ * Chariow payment adapter — hosted checkout for YeOyo's credit-pack
+ * purchases (single platform account, not per-creator; see
  * docs/superpowers/specs/2026-08-16-chariow-payment-integration-design.md).
  *
  * Deliberately NOT an implementation of `PaymentProvider` (provider.ts):
@@ -20,7 +20,7 @@
 import 'server-only';
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 import type { WebhookProvider, ParsedIds } from '../webhook/handler';
-import type { SubscriptionPlan } from '../subscriptions/plans';
+import type { CreditPack } from '../credits/packs';
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -132,19 +132,19 @@ export function resolveChariowPhone(input: {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// Product mapping — one Chariow product per plan, configured via env
-// (plans.ts stays a static, non-provider-coupled catalog).
+// Product mapping — one Chariow product per credit pack, configured via
+// env (packs.ts stays a static, non-provider-coupled catalog).
 // ───────────────────────────────────────────────────────────────────────
 
-const PRODUCT_ID_ENV_KEYS: Record<SubscriptionPlan['id'], string> = {
-  '15j': 'CHARIOW_PRODUCT_ID_15J',
-  '1m': 'CHARIOW_PRODUCT_ID_1M',
-  '3m': 'CHARIOW_PRODUCT_ID_3M',
-  '6m': 'CHARIOW_PRODUCT_ID_6M',
+const PRODUCT_ID_ENV_KEYS: Record<CreditPack['id'], string> = {
+  decouverte: 'CHARIOW_PRODUCT_ID_DECOUVERTE',
+  serieux: 'CHARIOW_PRODUCT_ID_SERIEUX',
+  determine: 'CHARIOW_PRODUCT_ID_DETERMINE',
+  engage: 'CHARIOW_PRODUCT_ID_ENGAGE',
 };
 
-export function getChariowProductId(planId: SubscriptionPlan['id']): string | null {
-  return process.env[PRODUCT_ID_ENV_KEYS[planId]] || null;
+export function getChariowProductId(packId: CreditPack['id']): string | null {
+  return process.env[PRODUCT_ID_ENV_KEYS[packId]] || null;
 }
 
 // ───────────────────────────────────────────────────────────────────────

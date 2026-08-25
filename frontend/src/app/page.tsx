@@ -34,6 +34,9 @@ import { YeOyoNav } from '@/components/yeoyo/YeOyoNav';
 import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DownloadAppButton } from '@/components/yeoyo/DownloadAppButton';
 import { FaqItem } from '@/components/yeoyo/FaqItem';
+import { getPack, pricePerCredit } from '@/lib/server/credits/packs';
+
+const FEATURED_PACK = getPack('serieux')!;
 
 const WHY_FEATURES = [
   {
@@ -130,7 +133,7 @@ const FAQ_ITEMS = [
   {
     question: 'Est-ce vraiment gratuit ?',
     answer:
-      'Oui. La création de profil, 3 photos, 5 demandes de contact par jour et la messagerie de base sont gratuites, pour toujours. Premium est optionnel, pour celles et ceux qui veulent aller plus vite.',
+      'Oui. La création de profil, 3 photos, 5 demandes de contact par mois et la messagerie de base sont gratuites, pour toujours. Les crédits sont optionnels, pour celles et ceux qui veulent voir qui les a mis en favori, qui a visité leur profil, ou booster leur visibilité.',
   },
   {
     question: 'Comment fonctionne la vérification des profils ?',
@@ -143,9 +146,9 @@ const FAQ_ITEMS = [
       "Oui. Mode anonyme disponible, photos floutées jusqu'au match. C'est toi qui décides qui voit ton profil et tes photos.",
   },
   {
-    question: 'Comment annuler mon abonnement Premium ?',
+    question: 'Est-ce que mes crédits expirent ?',
     answer:
-      "Depuis Paramètres → Abonnement, en un clic. L'accès Premium reste actif jusqu'à la fin de la période déjà payée, sans reconduction ensuite.",
+      "Non. Un crédit acheté reste sur ton compte tant que tu ne l'utilises pas — pas d'abonnement, pas de reconduction, pas de date limite.",
   },
 ];
 const FOOTER_CITIES = ['Kinshasa', 'Lubumbashi', 'Goma', 'Matadi', 'Kisangani'];
@@ -359,13 +362,15 @@ export default function LandingPage() {
         </Reveal>
       </section>
 
-      {/* Tarifs */}
+      {/* Tarifs — 2026-08-25: crédits à l'usage, achetés une fois, sans
+          expiration, plutôt qu'un abonnement Premium récurrent. */}
       <section id="tarifs" className="px-5 py-12 lg:px-12 lg:py-20">
         <Reveal className="text-center xl:mx-auto xl:max-w-4xl">
           <SectionEyebrow icon="tag" label="Tarifs" />
           <SectionHeading>Simple et transparent</SectionHeading>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-muted-foreground lg:text-base">
-            Commence gratuitement. Passe Premium quand tu es prêt(e).
+            Commence gratuitement. Achète des crédits quand tu en as besoin — ils n&apos;expirent
+            jamais.
           </p>
         </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-6 lg:mt-16 lg:max-w-4xl lg:grid-cols-2 lg:gap-8">
@@ -379,18 +384,16 @@ export default function LandingPage() {
               includedFeatures={[
                 'Création de profil complet',
                 '3 photos de profil',
-                '5 demandes de contact par jour',
+                '5 demandes de contact par mois',
+                'Voir tous les profils',
                 'Répondre aux messages reçus',
-                'Ice Breaker : idées de messages',
-                'Support par email',
+                'Accepter ou refuser une demande',
+                'Coach IA : 3 questions par jour',
               ]}
               lockedFeatures={[
-                'Demandes illimitées',
                 "Voir qui t'a mis en favori",
                 'Voir qui a visité ton profil',
-                'Messages vocaux',
-                'Score de compatibilité IA',
-                'Boosts de profil inclus',
+                'Boost de visibilité (24h)',
               ]}
               ctaLabel="Commencer"
               ctaHref="/onboarding"
@@ -398,30 +401,25 @@ export default function LandingPage() {
           </Reveal>
           <Reveal delayMs={120}>
             <PricingCard
-              variant="premium"
-              badge="Offre de lancement"
-              title="Premium"
-              subtitle="Maximise tes chances de trouver ta moitié"
-              originalPrice="6,99 $"
-              price="3,99"
-              priceSuffix="$ / mois"
+              variant="featured"
+              badge="Pack le plus populaire"
+              title={FEATURED_PACK.name}
+              subtitle={`${FEATURED_PACK.credits} crédits, valables à vie`}
+              originalPrice={`${FEATURED_PACK.originalPriceTotal.toLocaleString('fr-FR')} FCFA`}
+              price={FEATURED_PACK.priceTotal.toLocaleString('fr-FR')}
+              priceSuffix={`FCFA · -${FEATURED_PACK.discountPct}%`}
               paymentMethods="Mobile Money · Carte bancaire"
               includedFeatures={[
-                'Demandes de contact illimitées',
-                "Voir qui t'a mis en favori ★",
-                'Voir qui a visité ton profil',
-                'Jusqu’à 10 photos HD sur ton profil',
-                'Messagerie 100% illimitée',
-                'Messages vocaux — NOUVEAU',
-                'Vois qui est connecté en temps réel',
-                'Score de compatibilité IA détaillé',
-                'Boosts de profil inclus',
-                'Badge Premium vérifié',
-                'Support prioritaire 7j/7',
+                `${FEATURED_PACK.credits} crédits sans date d'expiration`,
+                `Soit ${pricePerCredit(FEATURED_PACK).toLocaleString('fr-FR')} FCFA / crédit`,
+                "Voir qui t'a mis en favori — 1 crédit",
+                'Voir qui a visité ton profil — 1 crédit',
+                'Boost de visibilité 24h — 3 crédits',
+                '1er message après une demande acceptée — 1 crédit',
               ]}
               ctaLabel="Commencer"
               ctaHref="/onboarding"
-              footnote="* Tarif de lancement limité. Prix normal : 6,99 $ / mois"
+              footnote="* 3 autres packs disponibles dans l'app — plus le pack est grand, moins le crédit coûte cher."
             />
           </Reveal>
         </div>

@@ -75,6 +75,7 @@ interface UserListRow {
   role: string;
   status: string;
   emailVerifiedAt: Date | null;
+  creditBalance: number;
   createdAt: Date;
 }
 
@@ -88,6 +89,7 @@ function userRow(overrides: Partial<UserListRow> = {}): UserListRow {
     role: overrides.role ?? 'USER',
     status: overrides.status ?? 'ACTIVE',
     emailVerifiedAt: overrides.emailVerifiedAt ?? new Date('2026-01-01T00:00:00Z'),
+    creditBalance: overrides.creditBalance ?? 0,
     createdAt: overrides.createdAt ?? new Date('2026-05-01T00:00:00Z'),
   };
 }
@@ -99,9 +101,6 @@ beforeEach(() => {
   mockRateLimit.mockResolvedValue(null);
   mockVerifyCsrf.mockReturnValue(null);
   mockLogAdminAction.mockResolvedValue(undefined);
-  // Default: nobody is Premium unless a test overrides it — getPremiumUserIds
-  // calls subscription.findMany for any non-empty user-id list.
-  prismaMock.subscription.findMany.mockResolvedValue([]);
   // Default $transaction passthrough — runs the callback against the prismaMock.
   prismaMock.$transaction.mockImplementation((cb: unknown) => {
     if (typeof cb === 'function') {
@@ -142,18 +141,15 @@ describe('/api/admin/users [Wave 1] — list', () => {
     expect((args?.select as Record<string, unknown> | undefined)?.['passwordHash']).toBeUndefined();
   });
 
-  it('GET tags each item with isPremium from an ACTIVE Subscription batch lookup', async () => {
-    const u1 = userRow({ id: 'u1', email: 'alpha@test.local' });
-    const u2 = userRow({ id: 'u2', email: 'beta@test.local' });
+  it('GET tags each item with its real creditBalance', async () => {
+    const u1 = userRow({ id: 'u1', email: 'alpha@test.local', creditBalance: 12 });
+    const u2 = userRow({ id: 'u2', email: 'beta@test.local', creditBalance: 0 });
     prismaMock.user.findMany.mockResolvedValueOnce([u1, u2] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([{ userId: 'u1' }] as never);
 
     const res = await GET(makeGet('http://test/api/admin/users'));
-    const body = (await res.json()) as { items: (UserListRow & { isPremium: boolean })[] };
-    expect(body.items.find((u) => u.id === 'u1')?.isPremium).toBe(true);
-    expect(body.items.find((u) => u.id === 'u2')?.isPremium).toBe(false);
-    const args = prismaMock.subscription.findMany.mock.calls[0]?.[0];
-    expect(args?.where).toEqual({ userId: { in: ['u1', 'u2'] }, status: 'ACTIVE' });
+    const body = (await res.json()) as { items: (UserListRow & { creditBalance: number })[] };
+    expect(body.items.find((u) => u.id === 'u1')?.creditBalance).toBe(12);
+    expect(body.items.find((u) => u.id === 'u2')?.creditBalance).toBe(0);
   });
 
   it('GET returns empty 200 (never 404) on no rows', async () => {

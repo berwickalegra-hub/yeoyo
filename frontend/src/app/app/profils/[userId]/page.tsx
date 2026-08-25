@@ -14,15 +14,11 @@
 // Signaler/Bloquer, moved out of the main flow but still de-emphasized —
 // keeps the original "not competing with the primary actions" intent while
 // giving desktop a real second column instead of one narrow stacked card).
-// Three real actions, each backed by an existing endpoint, none invented:
+// Two real actions, each backed by an existing endpoint, none invented:
 //   - "Demander" (heart) — POST /api/likes. Per that route's own header
 //     comment, liking auto-creates a PENDING ContactRequest AND upserts a
 //     Conversation in the same transaction, so this is the literal
 //     "demander à se connecter" action.
-//   - "Message" — same POST /api/likes (idempotent — safe to call after
-//     "Demander" already ran), then navigates straight into the now-real
-//     conversation. Mirrors the "message request" pattern of modern dating
-//     apps: you can write before the other side formally accepts.
 //   - "Favori" (star) — NEW on this page, POST/DELETE /api/favorites. This
 //     project already ships this exact bookmark pattern on Explorer's grid
 //     card (ProfileGridCard's star button); this page was the one place a
@@ -30,7 +26,13 @@
 //     /api/profiles/[userId] route now also returns `favorited` (mirroring
 //     the existing `liked` sibling field) so this button can render its
 //     initial state correctly.
-// Signaler/Bloquer kept small and separate from the three primary actions.
+// Signaler/Bloquer kept small and separate from the primary actions.
+//
+// 2026-08-25: the direct "Message" shortcut (send a message before the
+// contact request is accepted) was removed — messaging now only opens once
+// "Demander" is accepted, and the first message costs a credit for men (see
+// lib/server/credits/ledger.ts). The public Premium badge is also gone —
+// credit balance is private, not a status shown on other members' profiles.
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
@@ -38,7 +40,6 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
-import { usePremium } from '@/contexts/PremiumContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
@@ -52,7 +53,6 @@ import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export default function ProfileDetailPage() {
   const user = useUser();
-  const { isPremium } = usePremium();
   const router = useRouter();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
@@ -105,23 +105,6 @@ export default function ProfileDetailPage() {
       await api('/api/likes', { method: 'POST', body: { targetUserId: profile.userId } });
       setLiked(true);
       toast('Demande envoyée — une demande de contact a été envoyée', 'success');
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onMessage() {
-    if (!profile) return;
-    setBusy(true);
-    try {
-      const res = await api<{ conversationId: string }>('/api/likes', {
-        method: 'POST',
-        body: { targetUserId: profile.userId },
-      });
-      setLiked(true);
-      router.push(`/app/messages/${res.conversationId}`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -239,26 +222,16 @@ export default function ProfileDetailPage() {
                   heightPx={420}
                   onIndexChange={setActivePhotoIndex}
                 />
-                {(profile.verified || profile.isPremium) && (
+                {profile.verified && (
                   <div
                     className={`absolute left-3 flex flex-col items-start gap-1.5 ${profile.photoUrls.length > 1 ? 'top-6' : 'top-3'}`}
                   >
-                    {profile.verified && (
-                      <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
-                        <div className="h-1.5 w-1.5 rounded-full bg-verified" />
-                        <span className="font-body text-xs font-medium text-foreground">
-                          Vérifié IA
-                        </span>
-                      </div>
-                    )}
-                    {profile.isPremium && (
-                      <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
-                        <div className="h-1.5 w-1.5 rounded-full bg-gold" />
-                        <span className="font-body text-xs font-medium text-foreground">
-                          Premium
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1">
+                      <div className="h-1.5 w-1.5 rounded-full bg-verified" />
+                      <span className="font-body text-xs font-medium text-foreground">
+                        Vérifié IA
+                      </span>
+                    </div>
                   </div>
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14">
@@ -290,11 +263,10 @@ export default function ProfileDetailPage() {
               </div>
 
               <div className="flex flex-col gap-5 p-4 lg:p-6">
-                {/* Primary actions — Favori (bookmark, no side effect),
-                    Message (send a chat message), Demander (send a contact
-                    request — the same backend call Message makes, kept
-                    separate for a user who wants to signal interest without
-                    opening a conversation yet). */}
+                {/* Primary actions — Favori (bookmark, no side effect) and
+                    Demander (send a contact request; messaging opens once
+                    it's accepted, see the conversation thread's own
+                    first_message credit gate). */}
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -311,22 +283,9 @@ export default function ProfileDetailPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void onMessage()}
-                    disabled={busy}
-                    className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-background text-foreground disabled:opacity-50"
-                  >
-                    {busy ? (
-                      <Icon name="refresh-cw" size={17} className="animate-spin" />
-                    ) : (
-                      <Icon name="message-circle" size={17} />
-                    )}
-                    <span className="font-body text-sm font-semibold">Message</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => void onLike()}
                     disabled={busy || liked}
-                    className={`btn-success-flash relative flex h-12 flex-shrink-0 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+                    className={`btn-success-flash flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
                   >
                     {busy ? (
                       <Icon name="refresh-cw" size={17} className="animate-spin" />
@@ -341,20 +300,6 @@ export default function ProfileDetailPage() {
                     <span className="font-body text-sm font-semibold">
                       {liked ? 'Envoyée' : 'Demander'}
                     </span>
-                    {/* Freemium hint (2026-08-19, explicit user ask) — contact
-                        requests are capped for free users (5/mois, see
-                        contact-requests/quota.ts), same gold-crown treatment
-                        as the swipe card's equivalent button. */}
-                    {!isPremium && !liked && (
-                      <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gold shadow">
-                        <Icon
-                          name="crown"
-                          size={11}
-                          className="text-gold-foreground"
-                          fill="currentColor"
-                        />
-                      </span>
-                    )}
                   </button>
                 </div>
 
@@ -376,22 +321,6 @@ export default function ProfileDetailPage() {
                     </p>
                     <p className="font-body text-xs text-muted-foreground">
                       L&rsquo;identité de {profile.firstName} a été contrôlée par notre équipe.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {profile.isPremium && (
-                <div className="flex items-start gap-3 rounded-xl border border-gold/30 bg-gold/5 p-4">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
-                    <Icon name="crown" size={16} />
-                  </div>
-                  <div>
-                    <p className="font-body text-sm font-semibold text-foreground">
-                      Membre Premium
-                    </p>
-                    <p className="font-body text-xs text-muted-foreground">
-                      {profile.firstName} fait partie des membres Premium de YeOyo.
                     </p>
                   </div>
                 </div>

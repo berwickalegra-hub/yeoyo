@@ -35,6 +35,16 @@ export function welcomeNotification(userId: string, email: string): CreateNotifi
  * Example: notification dispatched after a successful payment.
  * Called from the Bictorys webhook handler's `onPaid` post-commit hook.
  */
+/**
+ * YeOyo — a credit-pack purchase settled (see
+ * lib/server/credits/reconcile.ts). Kept as `paymentReceived` with its
+ * original (userId, orderId, amount, currency) signature deliberately —
+ * outbox/dispatcher.ts (PROTECTED) calls this by name with those exact
+ * args, so the copy is updated in place rather than adding a new template
+ * that would require editing the protected dispatcher. dedupeKey is the
+ * Order's own id, so a late duplicate reconcile (webhook + cron both
+ * catching the same settlement) can't double-notify.
+ */
 export function paymentReceived(
   userId: string,
   orderId: string,
@@ -44,8 +54,8 @@ export function paymentReceived(
   return {
     userId,
     type: 'PAYMENT_RECEIVED',
-    title: 'Payment received',
-    body: `Order ${orderId} for ${amount} ${currency} confirmed.`,
+    title: 'Paiement confirmé',
+    body: `Ton paiement de ${amount} ${currency} est confirmé — tes crédits ont été ajoutés à ton solde.`,
     data: { orderId, amount, currency },
     dedupeKey: `payment-received:${orderId}`,
   };

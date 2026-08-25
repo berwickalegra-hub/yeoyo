@@ -3,9 +3,11 @@ import { Icon } from '@/components/ui/Icon';
 
 // New component — the "Tarifs" section of the "Rencontres Sérieuses Congo"
 // landing redesign (2026-08-13) has no equivalent card in the existing
-// inventory. `variant` drives the border/badge treatment; free/premium
+// inventory. `variant` drives the border/badge treatment; free/featured
 // share the same layout otherwise (locked-feature list is free-only,
-// originalPrice/paymentMethods/footnote are premium-only).
+// originalPrice/paymentMethods/footnote are featured-only). 2026-08-25:
+// 'premium' renamed to 'featured' — the featured card now sells a credit
+// pack, not a recurring Premium subscription.
 export function PricingCard({
   variant,
   title,
@@ -21,7 +23,7 @@ export function PricingCard({
   footnote,
   badge,
 }: {
-  variant: 'free' | 'premium';
+  variant: 'free' | 'featured';
   title: string;
   subtitle: string;
   price: string;
@@ -35,11 +37,11 @@ export function PricingCard({
   footnote?: string;
   badge?: string;
 }) {
-  const isPremium = variant === 'premium';
+  const isFeatured = variant === 'featured';
   return (
     <div
       className={`relative flex flex-col rounded-2xl bg-surface p-6 lg:p-8 ${
-        isPremium ? 'border-2 border-primary' : 'border border-border'
+        isFeatured ? 'border-2 border-primary' : 'border border-border'
       }`}
     >
       {badge && (
@@ -85,7 +87,7 @@ export function PricingCard({
       <Link
         href={ctaHref}
         className={`mt-6 flex items-center justify-center gap-2 rounded-xl py-3 font-body text-sm font-semibold transition-opacity active:scale-[0.98] ${
-          isPremium
+          isFeatured
             ? 'bg-primary text-primary-foreground hover:opacity-90'
             : 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground'
         }`}

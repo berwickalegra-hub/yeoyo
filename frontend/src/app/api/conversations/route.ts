@@ -11,7 +11,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { otherParticipant, isMutedBy } from '@/lib/server/conversations/lib';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 import { blockedUserIds } from '@/lib/server/blocks';
 
 const profileInclude = {
@@ -53,10 +52,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         })
       : [];
     const unreadByConversation = new Map(unreadCounts.map((u) => [u.conversationId, u._count.id]));
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      conversations.map((c) => otherParticipant(c, selfId)),
-    );
     // A block (either direction) hides the conversation from the inbox —
     // messaging is already refused server-side once blocked (see
     // conversations/[id]/messages/route.ts's isBlockedEitherWay check), so
@@ -73,7 +68,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         const lastMessage = c.messages[0];
         return {
           id: c.id,
-          otherUser: { ...toProfileCard(other.profile), isPremium: premiumIds.has(otherId) },
+          otherUser: toProfileCard(other.profile),
           lastMessage: lastMessage
             ? {
                 body: lastMessage.deletedAt ? '' : lastMessage.body,

@@ -2,19 +2,23 @@
 
 // Desktop-first horizontal top navigation, replacing Sidebar.tsx per the
 // "Rencontres Sérieuses Congo" Banani re-theme (2026-08-13) — reproduces
-// Banani's TopNav.jsx (logo, 5 primary tabs, gold Premium tab, Boost
-// button, Messages icon+badge, notification bell, avatar dropdown).
+// Banani's TopNav.jsx (logo, 5 primary tabs, Boost button, Messages
+// icon+badge, notification bell, avatar dropdown).
 // Banani only exported a desktop bar; the `md:hidden` block below is this
-// session's own compact mobile top strip (logo + messages + bell + avatar
-// link — no dropdown, no Boost button, kept deliberately light since the
-// 5 primary tabs move to MobileTabBar.tsx's bottom bar on mobile and Boost
-// is also reachable from the Accueil dashboard).
+// session's own compact mobile top strip (logo + credits badge + messages +
+// bell + avatar link — no dropdown, kept deliberately light since the 5
+// primary tabs move to MobileTabBar.tsx's bottom bar on mobile and Boost is
+// also reachable from the Accueil dashboard).
+// 2026-08-25: the gold "Premium" tab was replaced by a persistent credits
+// balance badge (id 'credits', see nav-items.ts's CREDITS_ITEM) — the
+// recurring subscription is gone in favor of a pay-per-use credit system
+// (see lib/server/credits/ledger.ts).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePremium } from '@/contexts/PremiumContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -24,7 +28,7 @@ import { NotificationBell } from './NotificationBell';
 import { useIsAdmin } from '@/lib/yeoyo/useIsAdmin';
 import {
   TOPNAV_ITEMS,
-  PREMIUM_ITEM,
+  CREDITS_ITEM,
   ACCOUNT_MENU_ITEMS,
   SETTINGS_MENU_ITEMS,
   badgeFor,
@@ -42,12 +46,14 @@ export interface SidebarUser {
 
 interface BoostStatus {
   active: boolean;
-  canBoost: boolean;
-  isPremium: boolean;
+  boostedUntil: string | null;
+  cost: number;
 }
 
 function BoostButton() {
+  const router = useRouter();
   const { toast } = useToast();
+  const { refresh: refreshCredits } = useCredits();
   const [status, setStatus] = useState<BoostStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -60,15 +66,17 @@ function BoostButton() {
   }, []);
 
   async function activate() {
-    if (busy) return;
+    if (busy || !status) return;
     setBusy(true);
     try {
       await api('/api/profile/boost', { method: 'POST' });
-      toast('Ton profil est boosté pour 30 minutes !', 'success');
-      setStatus((s) => (s ? { ...s, active: true, canBoost: s.isPremium } : s));
+      toast('Ton profil est boosté pour 24h !', 'success');
+      setStatus((s) => (s ? { ...s, active: true } : s));
+      void refreshCredits();
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'BOOST_COOLDOWN_ACTIVE') {
-        toast('Ton prochain boost gratuit revient dans 24h — ou passe Premium.', 'error');
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        toast('Solde de crédits insuffisant pour booster ton profil.', 'error');
+        router.push('/app/credits');
       } else {
         toast('Impossible de lancer le boost pour le moment.', 'error');
       }
@@ -84,7 +92,7 @@ function BoostButton() {
       type="button"
       onClick={() => void activate()}
       disabled={busy || status.active}
-      aria-label="Booster mon profil"
+      aria-label={`Booster mon profil — ${status.cost} crédits`}
       className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-body text-sm font-medium transition-colors ${
         status.active
           ? 'border-primary/40 bg-primary/10 text-primary'
@@ -92,7 +100,7 @@ function BoostButton() {
       } ${busy ? 'opacity-50' : ''}`}
     >
       <Icon name="zap" size={15} />
-      {status.active ? 'En avant' : 'Boost'}
+      {status.active ? 'En avant' : `Boost · ${status.cost}`}
     </button>
   );
 }
@@ -172,7 +180,7 @@ function AccountMenu({ user }: { user: SidebarUser }) {
   // (2026-08-17, explicit user ask) — sits next to the avatar itself, not
   // buried in the dropdown, since the whole point is a one-tap jump.
   const isAdmin = useIsAdmin();
-  const { isPremium } = usePremium();
+  const { balance, unlimited } = useCredits();
 
   useEffect(() => {
     if (!open) return;
@@ -232,12 +240,10 @@ function AccountMenu({ user }: { user: SidebarUser }) {
                 <p className="truncate font-headings text-sm font-semibold text-foreground">
                   {user.name}
                 </p>
-                {isPremium && (
-                  <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 font-body text-[10px] font-bold text-gold">
-                    <Icon name="crown" size={10} fill="currentColor" />
-                    Premium
-                  </span>
-                )}
+                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 font-body text-[10px] font-bold text-gold">
+                  <Icon name="gem" size={10} />
+                  {unlimited ? 'Illimité' : `${balance} crédit${balance > 1 ? 's' : ''}`}
+                </span>
               </div>
               {user.verified && (
                 <div className="mt-0.5 flex items-center gap-1">
@@ -356,11 +362,9 @@ export function TopNav({
    * scrolling. Desktop's bar is never affected (it isn't cramped there). */
   hideMobileStrip?: boolean;
 }) {
-  const { isPremium } = usePremium();
+  const { balance, unlimited, loading: creditsLoading } = useCredits();
   return (
-    <header
-      className={`sticky top-0 z-30 border-b border-border bg-surface ${isPremium ? 'premium-header-gradient' : ''}`}
-    >
+    <header className="sticky top-0 z-30 border-b border-border bg-surface">
       {/* Desktop / tablet bar (md+) */}
       <div className="mx-auto hidden max-w-7xl items-center justify-between gap-4 px-6 py-3 md:flex lg:px-8">
         <Link href="/app/decouvrir" className="flex flex-shrink-0 items-center gap-2">
@@ -416,16 +420,18 @@ export function TopNav({
             );
           })}
           <Link
-            href={PREMIUM_ITEM.href}
-            className="relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium text-gold lg:px-4"
+            href={CREDITS_ITEM.href}
+            aria-label={unlimited ? 'Crédits illimités' : `Crédits — solde de ${balance}`}
+            className={`relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium lg:px-4 ${
+              active === 'credits' ? 'text-primary' : 'text-muted-foreground'
+            }`}
           >
-            <Icon name={PREMIUM_ITEM.icon} size={18} fill={isPremium ? 'currentColor' : 'none'} />
-            <span className="hidden lg:inline">{PREMIUM_ITEM.label}</span>
-            {isPremium && (
-              <span
-                aria-label="Membre Premium"
-                className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-gold"
-              />
+            <Icon name={CREDITS_ITEM.icon} size={18} />
+            <span className="hidden lg:inline">{CREDITS_ITEM.label}</span>
+            {!creditsLoading && (
+              <span className="absolute -right-1.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 font-body text-[10px] font-bold text-gold-foreground">
+                {unlimited ? '∞' : balance > 99 ? '99+' : balance}
+              </span>
             )}
           </Link>
         </nav>
@@ -462,6 +468,18 @@ export function TopNav({
             <span className="font-headings text-lg font-bold text-foreground">YeOyo</span>
           </Link>
           <div className="flex items-center gap-2">
+            <Link
+              href={CREDITS_ITEM.href}
+              aria-label={unlimited ? 'Crédits illimités' : `Crédits — solde de ${balance}`}
+              className="flex h-9 items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2.5 text-gold"
+            >
+              <Icon name={CREDITS_ITEM.icon} size={14} />
+              {!creditsLoading && (
+                <span className="font-body text-xs font-bold">
+                  {unlimited ? '∞' : balance > 99 ? '99+' : balance}
+                </span>
+              )}
+            </Link>
             <Link
               href="/app/messages"
               aria-label="Messages"

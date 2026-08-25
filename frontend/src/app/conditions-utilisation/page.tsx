@@ -4,12 +4,13 @@
 // Real first-draft content (2026-08-24, explicit user ask after comparing
 // against Farata's onboarding checkbox — user didn't know what to put here
 // and asked for a genuine draft rather than a placeholder). Tailored to
-// what YeOyo actually does: Chariow/M-Pesa Premium billing (see
-// lib/server/subscriptions/plans.ts for the real prices referenced below),
-// the 3-report auto-suspend, and the /reglement community rules it
-// incorporates by reference. Not yet reviewed by a lawyer — see the note
-// at the bottom of the page — but this is real, substantive content, not
-// a stand-in.
+// what YeOyo actually does: Chariow Mobile Money/card billing for credit
+// packs (see lib/server/credits/packs.ts for the real catalog referenced
+// below — updated 2026-08-25 when the recurring Premium subscription was
+// replaced by pay-per-use credits), the 3-report auto-suspend, and the
+// /reglement community rules it incorporates by reference. Not yet
+// reviewed by a lawyer — see the note at the bottom of the page — but this
+// is real, substantive content, not a stand-in.
 import Link from 'next/link';
 import { BrandMark } from '@/components/yeoyo/BrandMark';
 
@@ -96,27 +97,28 @@ export default function ConditionsUtilisationPage() {
 
           <div>
             <h2 className="mb-1.5 font-headings text-base font-bold text-foreground">
-              4. Abonnement Premium et paiement
+              4. Crédits et paiement
             </h2>
             <p className="mb-2">
               La création de compte et un usage de base (dont 5 demandes de contact gratuites par
-              jour) sont gratuits. Un abonnement Premium débloque les messages illimités et des
-              fonctionnalités additionnelles (boosts, visibilité). Les formules et prix en vigueur
-              sont affichés dans l&rsquo;application avant tout paiement — actuellement 15 jours
-              (3,99 $), 1 mois (offre de lancement), 3 mois (11,99 $) et 6 mois (18,00 $).
+              mois, répondre aux messages reçus, et consulter les profils) sont gratuits. Certaines
+              actions supplémentaires — voir qui t&rsquo;a mis en favori, voir qui a visité ton
+              profil, booster la visibilité de ton profil pendant 24h, ou envoyer le premier message
+              d&rsquo;une conversation — consomment des crédits, achetés une seule fois sous forme
+              de packs. Les packs et prix en vigueur sont affichés dans l&rsquo;application avant
+              tout paiement. Un crédit acheté n&rsquo;expire pas et reste sur ton compte
+              jusqu&rsquo;à ce que tu l&rsquo;utilises.
             </p>
             <p className="mb-2">
-              Le paiement s&rsquo;effectue via notre prestataire Chariow (Mobile Money M-Pesa ou
-              carte bancaire). Chaque abonnement correspond à un paiement unique pour la durée
-              choisie : il ne se renouvelle pas automatiquement à son terme, sauf mention contraire
-              affichée clairement au moment du paiement. Le prix payé au moment de l&rsquo;achat
-              reste garanti jusqu&rsquo;à la fin de la période en cours, même si nos tarifs évoluent
-              ensuite.
+              Le paiement s&rsquo;effectue via notre prestataire Chariow (Mobile Money ou carte
+              bancaire). Chaque achat de pack est un paiement unique : il n&rsquo;y a pas
+              d&rsquo;abonnement ni de reconduction automatique. Le prix payé au moment de
+              l&rsquo;achat correspond au pack choisi, même si nos tarifs évoluent ensuite.
             </p>
             <p>
-              Un abonnement activé n&rsquo;est en principe pas remboursable. Nous procédons
+              Un achat de crédits confirmé n&rsquo;est en principe pas remboursable. Nous procédons
               toutefois à un remboursement en cas d&rsquo;erreur technique de notre part (double
-              débit, service Premium non fourni après paiement confirmé) — contacte{' '}
+              débit, crédits non ajoutés après paiement confirmé) — contacte{' '}
               <a
                 href="mailto:contact@yeoyo.app"
                 className="font-medium text-primary hover:underline"

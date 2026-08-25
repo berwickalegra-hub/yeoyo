@@ -8,7 +8,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -39,15 +38,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const likedBackSet = new Set(likedBackIds.map((l) => l.likedId));
 
     const eligible = rows.filter((row) => row.liker.profile);
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      eligible.map((row) => row.likerId),
-    );
     const likes = eligible.map((row) => ({
       likeId: row.id,
       createdAt: row.createdAt.toISOString(),
       likedBack: likedBackSet.has(row.likerId),
-      profile: { ...toProfileCard(row.liker.profile!), isPremium: premiumIds.has(row.likerId) },
+      profile: toProfileCard(row.liker.profile!),
     }));
 
     return NextResponse.json(

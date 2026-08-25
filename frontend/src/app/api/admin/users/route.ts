@@ -24,7 +24,6 @@ import { prisma } from '@/lib/server/prisma';
 import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const USER_SELECT = {
   id: true,
@@ -34,6 +33,7 @@ const USER_SELECT = {
   role: true,
   status: true,
   emailVerifiedAt: true,
+  creditBalance: true,
   createdAt: true,
   // Ville, for the admin dashboard's "Membres récents" table (Banani
   // AdminDashboard.jsx) — profile is optional (onboarding not required
@@ -95,16 +95,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     const page = buildPage(rows, limit);
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      page.items.map((u) => u.id),
-    );
     return NextResponse.json(
       {
         ...page,
         items: page.items.map(({ profile, ...u }) => ({
           ...u,
-          isPremium: premiumIds.has(u.id),
           city: profile?.commune ?? profile?.city ?? null,
         })),
       },

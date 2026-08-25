@@ -49,9 +49,10 @@ describe('/api/admin/users/[id] — detail', () => {
       role: 'USER',
       status: 'ACTIVE',
       emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
+      creditBalance: 0,
       createdAt: new Date('2026-05-01T00:00:00Z'),
     } as never);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    prismaMock.creditTransaction.findMany.mockResolvedValueOnce([]);
 
     const res = await GET(makeGet('http://test/api/admin/users/u1'), ctxWith('u1'));
     expect(res.status).toBe(200);
@@ -60,7 +61,7 @@ describe('/api/admin/users/[id] — detail', () => {
     expect(body.user).not.toHaveProperty('passwordHash');
   });
 
-  it("GET includes the caller's most recent Subscription (Premium status)", async () => {
+  it("GET includes the caller's recent credit transactions", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'u1',
       email: 'u1@test.local',
@@ -69,21 +70,27 @@ describe('/api/admin/users/[id] — detail', () => {
       role: 'USER',
       status: 'ACTIVE',
       emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
+      creditBalance: 30,
       createdAt: new Date('2026-05-01T00:00:00Z'),
     } as never);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce({
-      status: 'ACTIVE',
-      provider: 'admin-grant',
-      planId: '6m',
-      currentPeriodEnd: new Date('2027-02-01T00:00:00Z'),
-    } as never);
+    prismaMock.creditTransaction.findMany.mockResolvedValueOnce([
+      {
+        id: 'ct1',
+        userId: 'u1',
+        type: 'ADMIN_GRANT',
+        amount: 30,
+        action: 'admin_grant',
+        relatedOrderId: null,
+        createdAt: new Date('2027-02-01T00:00:00Z'),
+      },
+    ] as never);
 
     const res = await GET(makeGet('http://test/api/admin/users/u1'), ctxWith('u1'));
     const body = (await res.json()) as {
-      subscription: { status: string; provider: string } | null;
+      recentCreditTransactions: { type: string; amount: number }[];
     };
-    expect(body.subscription).toEqual(
-      expect.objectContaining({ status: 'ACTIVE', provider: 'admin-grant' }),
+    expect(body.recentCreditTransactions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'ADMIN_GRANT', amount: 30 })]),
     );
   });
 

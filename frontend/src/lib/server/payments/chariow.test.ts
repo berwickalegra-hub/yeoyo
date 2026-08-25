@@ -64,16 +64,16 @@ describe('resolveChariowPhone', () => {
 
 describe('getChariowProductId', () => {
   beforeEach(() => {
-    vi.stubEnv('CHARIOW_PRODUCT_ID_1M', 'prod_123');
+    vi.stubEnv('CHARIOW_PRODUCT_ID_SERIEUX', 'prod_123');
   });
   afterEach(() => {
     vi.unstubAllEnvs();
   });
-  it('reads the plan-specific env var', () => {
-    expect(getChariowProductId('1m')).toBe('prod_123');
+  it('reads the pack-specific env var', () => {
+    expect(getChariowProductId('serieux')).toBe('prod_123');
   });
   it('returns null when unset', () => {
-    expect(getChariowProductId('3m')).toBeNull();
+    expect(getChariowProductId('determine')).toBeNull();
   });
 });
 

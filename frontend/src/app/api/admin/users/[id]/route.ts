@@ -4,6 +4,11 @@
 // → enforceAdminRateLimit → prisma.user.findUnique with the same PII-safe
 // USER_SELECT shape as the list endpoint. 404 on miss with stable code
 // USER_NOT_FOUND.
+//
+// 2026-08-25: `subscription` (recurring-Premium status) replaced by
+// `creditBalance` + `recentCreditTransactions` (last 10, newest first) now
+// that YeOyo is pay-per-use credits, not a subscription — see
+// lib/server/credits/ledger.ts.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -22,6 +27,7 @@ const USER_SELECT = {
   role: true,
   status: true,
   emailVerifiedAt: true,
+  creditBalance: true,
   createdAt: true,
 } as const satisfies Prisma.UserSelect;
 
@@ -38,12 +44,13 @@ export async function GET(
     if (limited) return limited;
 
     const { id } = await ctx.params;
-    const [user, subscription] = await Promise.all([
+    const [user, recentCreditTransactions] = await Promise.all([
       prisma.user.findUnique({ where: { id }, select: USER_SELECT }),
-      prisma.subscription.findFirst({
+      prisma.creditTransaction.findMany({
         where: { userId: id },
         orderBy: { createdAt: 'desc' },
-        select: { status: true, provider: true, planId: true, currentPeriodEnd: true },
+        take: 10,
+        select: { id: true, type: true, amount: true, action: true, createdAt: true },
       }),
     ]);
     if (!user) {
@@ -55,14 +62,13 @@ export async function GET(
     return NextResponse.json(
       {
         user,
-        subscription: subscription
-          ? {
-              status: subscription.status,
-              provider: subscription.provider,
-              planId: subscription.planId,
-              currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
-            }
-          : null,
+        recentCreditTransactions: recentCreditTransactions.map((t) => ({
+          id: t.id,
+          type: t.type,
+          amount: t.amount,
+          action: t.action,
+          createdAt: t.createdAt.toISOString(),
+        })),
       },
       { headers: { 'x-request-id': reqCtx.requestId } },
     );

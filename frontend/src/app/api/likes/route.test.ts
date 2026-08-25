@@ -1,7 +1,8 @@
-// POST/DELETE /api/likes — focused on the new monthly contact-request quota
-// (2026-08-17: the landing page advertised "5 demandes / mois" free vs
-// "Illimitées" Premium, but nothing enforced it server-side until now) plus
-// the core happy-path/guard behaviour this route had no test coverage for.
+// POST/DELETE /api/likes — focused on the monthly contact-request quota
+// (2026-08-17: the landing page advertised "5 demandes / mois" free, but
+// nothing enforced it server-side until now; the bypass is staff-role only
+// since 2026-08-25, see lib/server/contact-requests/quota.ts) plus the core
+// happy-path/guard behaviour this route had no test coverage for.
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -62,9 +63,9 @@ beforeEach(() => {
 });
 
 describe('POST /api/likes — monthly quota', () => {
-  it('allows a new request for a free user under quota (no active subscription, < 5 sent this month)', async () => {
+  it('allows a new request for a free user under quota (< 5 sent this month)', async () => {
     prismaMock.contactRequest.findUnique.mockResolvedValueOnce(null);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
     prismaMock.contactRequest.count.mockResolvedValueOnce(3);
 
     const res = await POST(makePost({ targetUserId: 'target-1' }));
@@ -74,7 +75,7 @@ describe('POST /api/likes — monthly quota', () => {
 
   it('blocks a NEW request once the free user has hit 5 this month', async () => {
     prismaMock.contactRequest.findUnique.mockResolvedValueOnce(null);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
     prismaMock.contactRequest.count.mockResolvedValueOnce(5);
 
     const res = await POST(makePost({ targetUserId: 'target-1' }));
@@ -91,17 +92,17 @@ describe('POST /api/likes — monthly quota', () => {
     const res = await POST(makePost({ targetUserId: 'target-1' }));
     expect(res.status).toBe(201);
     // Quota must never even be consulted for an existing request.
-    expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.contactRequest.count).not.toHaveBeenCalled();
   });
 
-  it('ACTIVE subscriber is never blocked regardless of how many sent this month', async () => {
+  it('ADMIN/SUPERADMIN staff are never blocked regardless of how many sent this month', async () => {
     prismaMock.contactRequest.findUnique.mockResolvedValueOnce(null);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce({ id: 'sub-1' } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'ADMIN' } as never);
 
     const res = await POST(makePost({ targetUserId: 'target-1' }));
     expect(res.status).toBe(201);
-    // Premium short-circuits before counting this month's requests at all.
+    // Staff short-circuits before counting this month's requests at all.
     expect(prismaMock.contactRequest.count).not.toHaveBeenCalled();
   });
 });

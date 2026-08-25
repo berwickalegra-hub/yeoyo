@@ -1,11 +1,12 @@
 // GET /api/profile/favorited-by — "X personnes apprécient ton profil"
 // teaser (Banani's WhoLikedBanner.jsx): a few real profiles who favorited
 // me, most recent first, deduped, blocked-either-way excluded. Mirrors
-// /api/profile/visitors' shape/pattern. Free users see the blurred avatar
-// count only (client-side blur, per WhoLikedBanner) — Premium unlocks who,
-// so this route intentionally returns real profile data regardless of the
-// caller's plan; the paywall is a display-layer decision, not a data-access
-// one (consistent with how /api/likes already works).
+// /api/profile/visitors' shape/pattern. Everyone sees the blurred avatar
+// count only (client-side blur, per WhoLikedBanner) until they spend a
+// credit via POST /api/credits/spend { action: 'view_favorited_by' } — this
+// route intentionally returns real profile data regardless of the caller's
+// balance; the paywall is a display-layer decision, not a data-access one
+// (consistent with how /api/likes already works).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -15,7 +16,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const MAX_RESULTS = 3;
 
@@ -43,15 +43,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
     });
     const byUserId = new Map(profiles.map((p) => [p.userId, p]));
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      profiles.map((p) => p.userId),
-    );
 
     const preview = favorites
       .map((f) => byUserId.get(f.userId))
       .filter((p): p is NonNullable<typeof p> => !!p)
-      .map((p) => ({ ...toProfileCard(p), isPremium: premiumIds.has(p.userId) }));
+      .map((p) => toProfileCard(p));
 
     const total = await prisma.favorite.count({
       where: { targetId: auth.user.sub, userId: { notIn: blocked } },

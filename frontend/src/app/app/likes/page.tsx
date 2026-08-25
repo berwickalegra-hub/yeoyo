@@ -1,6 +1,12 @@
 // Mes likes — profiles that liked me (GET /api/likes/received). Liking one
 // back reuses the existing POST /api/likes — same auto-ContactRequest
 // behaviour as Découverte/Explorer, so accepting still happens via Demandes.
+// 2026-08-25: the Premium-only paywall (blurred preview, "Passe Premium
+// pour voir qui") is gone — a Like auto-creates a ContactRequest (see
+// /api/likes' own header comment), so this list was always the same people
+// already visible for free on Demandes → Reçues; per the new credit-system
+// spec, "voir un profil / accepter une demande" stays free for everyone,
+// and this page duplicates exactly that.
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
@@ -9,12 +15,10 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { usePremium } from '@/contexts/PremiumContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
-import { PremiumGateModal } from '@/components/yeoyo/PremiumGateModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
 import { useLikePop } from '@/lib/yeoyo/useLikePop';
@@ -65,13 +69,10 @@ export default function LikesPage() {
   const user = useUser();
   const router = useRouter();
   const { toast } = useToast();
-  const { isPremium, loading: premiumLoading } = usePremium();
   const badgeCounts = useNavCounts();
   const [likes, setLikes] = useState<LikeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [likingId, setLikingId] = useState<string | null>(null);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const locked = !premiumLoading && !isPremium;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,122 +145,50 @@ export default function LikesPage() {
             </p>
           </div>
         )}
-        {!loading && locked && likes.length > 0 && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20">
-                <Icon name="crown" size={18} className="text-gold" />
-              </div>
-              <div>
-                <p className="font-body text-sm font-bold text-foreground">
-                  {likes.length} {likes.length > 1 ? 'personnes ont aimé' : 'personne a aimé'} ton
-                  profil
-                </p>
-                <p className="font-body text-xs text-muted-foreground">
-                  Passe Premium pour voir qui
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPremiumModal(true)}
-              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-gold px-4 py-2 font-body text-sm font-bold text-gold-foreground transition-transform active:scale-95"
-            >
-              <Icon name="crown" size={14} />
-              Débloquer
-            </button>
-          </div>
-        )}
         {likes.map((l, i) => (
           <div
             key={l.likeId}
             className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4 animate-fade-in-up"
             style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
           >
-            {locked ? (
-              <button
-                type="button"
-                onClick={() => setShowPremiumModal(true)}
-                className="flex min-w-0 flex-1 items-center gap-4 text-left"
-              >
-                <div className="blur-sm select-none">
-                  <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
+            <Link
+              href={`/app/profils/${l.profile.userId}`}
+              className="flex min-w-0 flex-1 items-center gap-4"
+            >
+              <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-headings text-base font-bold text-foreground">
+                    {l.profile.firstName}
+                  </span>
+                  <span className="font-body text-sm text-muted-foreground">
+                    {l.profile.age} ans
+                  </span>
+                  {l.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
                 </div>
-                <div className="min-w-0 flex-1 select-none blur-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-headings text-base font-bold text-foreground">
-                      {l.profile.firstName}
-                    </span>
-                    <span className="font-body text-sm text-muted-foreground">
-                      {l.profile.age} ans
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-                    <Icon name="gem" size={11} />
-                    <span className="font-body text-xs">
-                      {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
-                    </span>
-                  </div>
+                <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
+                  <Icon name="gem" size={11} />
+                  <span className="font-body text-xs">
+                    {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
+                  </span>
+                  {l.profile.commune && (
+                    <>
+                      <span className="text-border">•</span>
+                      <Icon name="map-pin" size={11} />
+                      <span className="font-body text-xs">{l.profile.commune}</span>
+                    </>
+                  )}
                 </div>
-              </button>
-            ) : (
-              <Link
-                href={`/app/profils/${l.profile.userId}`}
-                className="flex min-w-0 flex-1 items-center gap-4"
-              >
-                <UserAvatar name={l.profile.firstName} avatarUrl={l.profile.photoUrl} size={56} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-headings text-base font-bold text-foreground">
-                      {l.profile.firstName}
-                    </span>
-                    <span className="font-body text-sm text-muted-foreground">
-                      {l.profile.age} ans
-                    </span>
-                    {l.profile.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
-                  </div>
-                  <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
-                    <Icon name="gem" size={11} />
-                    <span className="font-body text-xs">
-                      {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
-                    </span>
-                    {l.profile.commune && (
-                      <>
-                        <span className="text-border">•</span>
-                        <Icon name="map-pin" size={11} />
-                        <span className="font-body text-xs">{l.profile.commune}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            )}
-            {locked ? (
-              <button
-                type="button"
-                onClick={() => setShowPremiumModal(true)}
-                className="flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gold px-2.5 text-gold-foreground transition-transform active:scale-95 sm:px-4"
-              >
-                <Icon name="crown" size={15} />
-                <span className="hidden font-body text-sm font-semibold sm:inline">Premium</span>
-              </button>
-            ) : (
-              <LikeBackButton
-                liked={l.likedBack}
-                busy={likingId === l.profile.userId}
-                onClick={() => likeBack(l.profile.userId, l.likedBack)}
-              />
-            )}
+              </div>
+            </Link>
+            <LikeBackButton
+              liked={l.likedBack}
+              busy={likingId === l.profile.userId}
+              onClick={() => likeBack(l.profile.userId, l.likedBack)}
+            />
           </div>
         ))}
       </div>
-
-      <PremiumGateModal
-        open={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        title="Qui t’a aimé(e) ?"
-        description="Découvre qui a aimé ton profil et deviens Premium pour leur répondre directement."
-      />
     </AppShell>
   );
 }

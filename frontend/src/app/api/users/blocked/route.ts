@@ -8,7 +8,6 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -33,13 +32,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     const eligible = rows.filter((r) => r.blocked.profile);
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      eligible.map((r) => r.blockedId),
-    );
     const blocked = eligible.map((r) => ({
       userId: r.blockedId,
-      profile: { ...toProfileCard(r.blocked.profile!), isPremium: premiumIds.has(r.blockedId) },
+      profile: toProfileCard(r.blocked.profile!),
     }));
 
     return NextResponse.json(

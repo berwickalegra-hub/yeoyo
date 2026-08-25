@@ -380,31 +380,10 @@ body {
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
-/* Premium accent — gold liseré/gradient layered on top of whichever
-   Standard palette (`data-theme`) is active, toggled automatically by
-   PremiumContext based on subscription status. `--color-gold` already
-   exists app-wide (see @theme above); these two rules are the only places
-   it's applied outside badges/pills. */
-[data-premium='true'] .avatar-ring {
-  border-color: var(--color-gold);
-}
-[data-premium='true'] .premium-header-gradient {
-  /* Soft tint, not a solid banner — "signale un statut, pas une interface
-     luxe tape-à-l'œil" (2026-08-17 spec). Bumped slightly (2026-08-19,
-     explicit user ask for a more noticeable premium interface). */
-  background-image: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
-    color-mix(in srgb, var(--color-gold) 20%, transparent) 100%
-  );
-}
-
-/* Premium sales page (/app/premium) — bolder gold than the subtle in-app
-   accent above. This page's whole job is to sell Premium, so a richer gold
-   wash is appropriate here specifically, unlike the restrained accent used
-   once a user already has Premium (2026-08-19, explicit user ask: "vraiment
-   rempli de doré"). */
-.premium-sales-hero {
+/* Credits shop hero (/app/credits) — bolder gold wash for the page whose
+   whole job is to sell credit packs (2026-08-25, reused from the old
+   Premium sales page's same treatment — "vraiment rempli de doré"). */
+.credits-sales-hero {
   background-image:
     radial-gradient(
       ellipse 120% 100% at 50% 0%,

@@ -1294,12 +1294,12 @@ export default function ProfilPage() {
                       </div>
                     </div>
                     <Link
-                      href="/app/premium"
+                      href="/app/credits"
                       className="mt-4 flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/10 p-3"
                     >
-                      <Icon name="crown" size={14} className="text-gold" />
+                      <Icon name="zap" size={14} className="text-gold" />
                       <p className="font-body text-xs text-foreground">
-                        Premium = plus de visibilité
+                        Booste ton profil pour plus de visibilité
                       </p>
                     </Link>
                   </div>

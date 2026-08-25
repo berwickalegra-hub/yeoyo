@@ -4,9 +4,14 @@
 //
 // Free tier: FREE_DAILY_MESSAGE_LIMIT USER-role messages per UTC calendar
 // day (counted via a createdAt range query — no separate counter row to
-// keep in sync). ACTIVE subscribers are unlimited. Inert (503
-// COACH_NOT_CONFIGURED) without ANTHROPIC_API_KEY, same optional-provider
-// pattern as the rest of this kit — see lib/server/coach/anthropic.ts.
+// keep in sync). ADMIN/SUPERADMIN are unlimited (2026-08-25: this used to
+// bypass for ACTIVE Premium subscribers — the Subscription model is gone in
+// favor of the credit system, and Coach isn't part of the new credit grid,
+// so the bypass now follows the same staff-only pattern as
+// lib/server/credits/ledger.ts instead of reintroducing a paid tier here).
+// Inert (503 COACH_NOT_CONFIGURED) without ANTHROPIC_API_KEY, same
+// optional-provider pattern as the rest of this kit — see
+// lib/server/coach/anthropic.ts.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -25,8 +30,9 @@ const HISTORY_LIMIT = 50;
 async function quotaStatus(
   userId: string,
 ): Promise<{ remaining: number | null; limit: number | null; resetAt: string | null }> {
-  const activeSub = await prisma.subscription.findFirst({ where: { userId, status: 'ACTIVE' } });
-  if (activeSub) return { remaining: null, limit: null, resetAt: null };
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const isStaff = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  if (isStaff) return { remaining: null, limit: null, resetAt: null };
 
   const usedToday = await prisma.coachMessage.count({
     where: { userId, role: 'USER', createdAt: { gte: startOfUtcDay() } },

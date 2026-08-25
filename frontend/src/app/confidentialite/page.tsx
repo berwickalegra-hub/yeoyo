@@ -66,10 +66,10 @@ export default function ConfidentialitePage() {
               les signalements que tu émets ou reçois, ton statut de vérification de profil.
             </p>
             <p>
-              <strong>Paiement :</strong> si tu souscris à Premium, notre prestataire Chariow traite
-              le paiement (Mobile Money M-Pesa ou carte) — nous ne recevons et ne stockons jamais
-              ton numéro de carte ou tes identifiants Mobile Money, seulement la confirmation que le
-              paiement a réussi.
+              <strong>Paiement :</strong> si tu achètes un pack de crédits, notre prestataire
+              Chariow traite le paiement (Mobile Money ou carte) — nous ne recevons et ne stockons
+              jamais ton numéro de carte ou tes identifiants Mobile Money, seulement la confirmation
+              que le paiement a réussi.
             </p>
           </div>
 
@@ -81,7 +81,7 @@ export default function ConfidentialitePage() {
               Pour faire fonctionner YeOyo : te proposer des profils pertinents dans Découvrir,
               permettre la messagerie une fois une demande acceptée, vérifier les profils et traiter
               les signalements, t&rsquo;envoyer les emails nécessaires (code de vérification,
-              notifications importantes), traiter tes paiements Premium, et diagnostiquer les
+              notifications importantes), traiter tes achats de crédits, et diagnostiquer les
               erreurs techniques quand quelque chose ne fonctionne pas comme prévu. Nous
               n&rsquo;utilisons jamais tes données pour de la publicité ciblée.
             </p>
@@ -98,8 +98,8 @@ export default function ConfidentialitePage() {
             <p>
               Au-delà des autres membres, nous ne partageons tes données qu&rsquo;avec les
               prestataires techniques strictement nécessaires au fonctionnement de YeOyo :
-              Cloudinary (hébergement des photos), Resend (envoi des emails), Chariow (paiement
-              Premium), Sentry (suivi des erreurs techniques — jamais le contenu de tes
+              Cloudinary (hébergement des photos), Resend (envoi des emails), Chariow (paiement des
+              packs de crédits), Sentry (suivi des erreurs techniques — jamais le contenu de tes
               conversations), Upstash (limitation du trafic et mise en cache), et Google si tu te
               connectes via Google. Nous ne vendons jamais tes données à des tiers.
             </p>

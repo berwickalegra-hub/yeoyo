@@ -19,7 +19,7 @@ export type SidebarTab =
   | 'visiteurs'
   | 'favoris'
   | 'demandes'
-  | 'premium'
+  | 'credits'
   | 'messages'
   | 'likes'
   | 'profil'
@@ -56,11 +56,11 @@ export const TOPNAV_ITEMS: NavItem[] = [
   { id: 'visiteurs', icon: 'menu', label: 'Activité', href: '/app/visiteurs' },
 ];
 
-export const PREMIUM_ITEM: NavItem = {
-  id: 'premium',
-  icon: 'crown',
-  label: 'Premium',
-  href: '/app/premium',
+export const CREDITS_ITEM: NavItem = {
+  id: 'credits',
+  icon: 'gem',
+  label: 'Crédits',
+  href: '/app/credits',
 };
 
 // Reachable from TopNav's avatar dropdown (desktop) / a "Compte" row in the

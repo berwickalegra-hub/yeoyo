@@ -50,6 +50,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
@@ -84,15 +85,10 @@ interface LikeRow {
   profile: ProfileCard;
 }
 
-interface SubscriptionInfo {
-  status: string;
-}
-
 interface BoostStatus {
   active: boolean;
-  canBoost: boolean;
-  isPremium: boolean;
-  cooldownEndsAt: string | null;
+  boostedUntil: string | null;
+  cost: number;
 }
 
 interface FavoritedBy {
@@ -126,10 +122,10 @@ const TRUST_ITEMS = [
     icon: 'smartphone' as const,
     title: 'Paiement Mobile Money',
     // Generic on purpose — the hosted payment page decides which operators
-    // are actually offered (same framing as /app/premium).
+    // are actually offered (same framing as /app/credits).
     desc: 'Mobile Money · Carte bancaire',
     // Banani uses text-accent here, but this project's accent token has no
-    // usable foreground pair (see premium/page.tsx's bg-accent/10
+    // usable foreground pair (see credits/page.tsx's bg-accent/10
     // text-primary icon tile for the same substitution).
     tint: 'bg-accent/10 text-primary',
   },
@@ -196,12 +192,16 @@ function matchNote(me: MyProfile, p: ProfileCard): string | undefined {
 export default function DecouvrirPage() {
   const user = useUser();
   const { toast } = useToast();
+  const {
+    balance: creditBalance,
+    unlimited: creditsUnlimited,
+    refresh: refreshCredits,
+  } = useCredits();
   const badgeCounts = useNavCounts();
 
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [recommended, setRecommended] = useState<ProfileCard[]>([]);
   const [likes, setLikes] = useState<LikeRow[]>([]);
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [favoritedBy, setFavoritedBy] = useState<FavoritedBy>({ preview: [], total: 0 });
   const [newNearby, setNewNearby] = useState<NewNearbyCount | null>(null);
@@ -222,11 +222,10 @@ export default function DecouvrirPage() {
     try {
       const profileRes = await api<{ profile: MyProfile }>('/api/profile');
       setProfile(profileRes.profile);
-      const [recRes, likesRes, subRes, visitorsRes, favoritedByRes, boostRes, newNearbyRes] =
+      const [recRes, likesRes, visitorsRes, favoritedByRes, boostRes, newNearbyRes] =
         await Promise.all([
           api<{ profiles: ProfileCard[] }>('/api/profiles/explorer?page=1&pageSize=6'),
           api<{ likes: LikeRow[] }>('/api/likes/received'),
-          api<{ subscription: SubscriptionInfo | null }>('/api/subscriptions/me'),
           api<{ total: number }>('/api/profile/visitors'),
           api<FavoritedBy>('/api/profile/favorited-by'),
           api<BoostStatus>('/api/profile/boost'),
@@ -234,7 +233,6 @@ export default function DecouvrirPage() {
         ]);
       setRecommended(recRes.profiles);
       setLikes(likesRes.likes);
-      setSubscription(subRes.subscription);
       setVisitorsCount(visitorsRes.total);
       setFavoritedBy(favoritedByRes);
       setBoost(boostRes);
@@ -302,11 +300,12 @@ export default function DecouvrirPage() {
     setBoosting(true);
     try {
       await api('/api/profile/boost', { method: 'POST' });
-      toast('Ton profil est boosté pour 30 minutes !', 'success');
+      toast('Ton profil est boosté pour 24h !', 'success');
       setBoost((b) => (b ? { ...b, active: true } : b));
+      void refreshCredits();
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'BOOST_COOLDOWN_ACTIVE') {
-        toast('Ton prochain boost gratuit revient dans 24h — ou passe Premium.', 'error');
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        toast('Solde de crédits insuffisant pour booster ton profil.', 'error');
       } else {
         toast('Impossible de lancer le boost pour le moment.', 'error');
       }
@@ -407,22 +406,23 @@ export default function DecouvrirPage() {
                 )}
               </div>
 
-              {subscription?.status !== 'ACTIVE' && !premiumBannerDismissed && (
+              {!creditsUnlimited && !premiumBannerDismissed && (
                 <div className={`animate-fade-in-up relative ${premiumBannerExit.exitClassName}`}>
                   <Link
-                    href="/app/premium"
+                    href="/app/credits"
                     className="flex w-full items-center justify-between gap-3 rounded-xl border border-gold/30 bg-gradient-to-r from-gold/15 to-gold/5 px-5 py-4 pr-10"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold">
-                        <Icon name="crown" size={18} />
+                        <Icon name="gem" size={18} />
                       </div>
                       <div>
                         <p className="font-headings text-sm font-semibold text-foreground">
-                          Passe Premium
+                          {creditBalance} crédit{creditBalance > 1 ? 's' : ''}
                         </p>
                         <p className="font-body text-xs text-muted-foreground">
-                          Demandes illimitées, profil mis en avant
+                          Achète des crédits pour voir qui t&apos;a mis en favori, qui a visité ton
+                          profil, ou booster ta visibilité
                         </p>
                       </div>
                     </div>
@@ -454,10 +454,8 @@ export default function DecouvrirPage() {
                   <button
                     type="button"
                     onClick={() => void activateBoost()}
-                    disabled={boosting || !boost.canBoost}
-                    className={`flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 pr-10 text-left ${
-                      !boost.canBoost ? 'opacity-60' : ''
-                    }`}
+                    disabled={boosting}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 pr-10 text-left"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold">
@@ -468,17 +466,14 @@ export default function DecouvrirPage() {
                           Booste ton profil
                         </p>
                         <p className="font-body text-xs text-muted-foreground">
-                          {boost.canBoost
-                            ? 'Sois plus visible pendant 30 minutes'
-                            : 'Ton prochain boost gratuit revient bientôt'}
+                          Sois plus visible pendant 24h — {boost.cost} crédit
+                          {boost.cost > 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
-                    {boost.canBoost && (
-                      <span className="flex-shrink-0 font-body text-xs font-semibold text-primary">
-                        {boosting ? '…' : 'Booster'}
-                      </span>
-                    )}
+                    <span className="flex-shrink-0 font-body text-xs font-semibold text-primary">
+                      {boosting ? '…' : 'Booster'}
+                    </span>
                   </button>
                   <button
                     type="button"

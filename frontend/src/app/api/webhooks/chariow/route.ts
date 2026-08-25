@@ -28,7 +28,7 @@ import crypto from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createWebhookHandler, type WebhookHandlerResult } from '@/lib/server/webhook/handler';
 import { chariowWebhookProvider, type ChariowWebhookPayload } from '@/lib/server/payments/chariow';
-import { reconcileChariowOrder } from '@/lib/server/subscriptions/reconcile';
+import { reconcileChariowOrder } from '@/lib/server/credits/reconcile';
 import { prisma } from '@/lib/server/prisma';
 
 function timingSafeStringEqual(a: string, b: string): boolean {

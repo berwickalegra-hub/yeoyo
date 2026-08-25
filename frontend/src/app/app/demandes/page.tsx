@@ -281,18 +281,12 @@ export default function DemandesPage() {
             <div className="mt-2 border-t border-border pt-5">
               <div className="rounded-xl border border-border bg-background p-4">
                 <p className="mb-1 font-headings text-sm font-semibold text-foreground">
-                  Débloquer plus de demandes
+                  Demandes de contact
                 </p>
-                <p className="mb-3 font-body text-xs text-muted-foreground">
-                  Le plan gratuit permet 5 demandes de contact par mois. Passe Premium pour envoyer
-                  des demandes en illimité.
+                <p className="font-body text-xs text-muted-foreground">
+                  5 demandes de contact gratuites par mois. Répondre à une demande reçue et discuter
+                  reste toujours gratuit.
                 </p>
-                <a
-                  href="/app/premium"
-                  className="block w-full rounded-lg bg-gold py-2.5 text-center font-body text-xs font-semibold text-gold-foreground"
-                >
-                  Passer Premium — Mobile Money
-                </a>
               </div>
             </div>
           </div>

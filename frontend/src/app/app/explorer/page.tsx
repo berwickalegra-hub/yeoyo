@@ -12,7 +12,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -27,7 +26,7 @@ type ViewMode = 'swipe' | 'grid';
 
 interface StatsToday {
   likesToday: number;
-  messages: { remaining: number | null; limit: number | null };
+  messagesToday: number;
 }
 
 interface Filters {
@@ -87,7 +86,6 @@ function buildQuery(filters: Filters, page: number): string {
 
 export default function ExplorerPage() {
   const user = useUser();
-  const router = useRouter();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
 
@@ -212,21 +210,6 @@ export default function ExplorerPage() {
     }
   }
 
-  async function onMessage(targetUserId: string) {
-    setBusyUserId(targetUserId);
-    try {
-      const res = await api<{ conversationId: string }>('/api/likes', {
-        method: 'POST',
-        body: { targetUserId },
-      });
-      router.push(`/app/messages/${res.conversationId}`);
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
-    } finally {
-      setBusyUserId(null);
-    }
-  }
-
   // Grid mode — no single-card pointer, so actions don't "advance"; dismiss
   // just removes the card from the currently-loaded grid.
   function onDismissGrid(targetUserId: string) {
@@ -242,21 +225,6 @@ export default function ExplorerPage() {
       // pending request never sits there with a toggleable heart.
       setDeck((prev) => prev.filter((p) => p.userId !== targetUserId));
       toast('Profil aimé — une demande de contact a été envoyée', 'success');
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
-    } finally {
-      setBusyUserId(null);
-    }
-  }
-
-  async function onMessageGrid(targetUserId: string) {
-    setBusyUserId(targetUserId);
-    try {
-      const res = await api<{ conversationId: string }>('/api/likes', {
-        method: 'POST',
-        body: { targetUserId },
-      });
-      router.push(`/app/messages/${res.conversationId}`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -366,7 +334,6 @@ export default function ExplorerPage() {
                   key={current.userId}
                   profile={current}
                   onDismiss={onDismiss}
-                  onMessage={onMessage}
                   onLike={onLike}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
@@ -435,21 +402,10 @@ export default function ExplorerPage() {
                           </div>
                           <span>Messages envoyés</span>
                           <span className="ml-auto font-semibold text-foreground">
-                            {stats.messages.limit === null
-                              ? 'Illimité'
-                              : `${stats.messages.limit - (stats.messages.remaining ?? 0)} / ${stats.messages.limit}`}
+                            {stats.messagesToday}
                           </span>
                         </div>
                       </div>
-                      {stats.messages.limit !== null && (
-                        <Link
-                          href="/app/premium"
-                          className="mt-3 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 font-body text-xs font-medium text-gold"
-                        >
-                          <Icon name="crown" size={13} />
-                          Premium = messages illimités
-                        </Link>
-                      )}
                     </div>
                   )}
                 </div>
@@ -629,7 +585,6 @@ export default function ExplorerPage() {
                   key={current.userId}
                   profile={current}
                   onDismiss={onDismiss}
-                  onMessage={onMessage}
                   onLike={onLike}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
@@ -669,7 +624,6 @@ export default function ExplorerPage() {
                       <ProfileGridCard
                         profile={p}
                         onLike={onLikeGrid}
-                        onMessage={onMessageGrid}
                         onDismiss={onDismissGrid}
                         onFavorite={onFavorite}
                         favoriteBusy={favoritingUserId === p.userId}

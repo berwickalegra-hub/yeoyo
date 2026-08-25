@@ -15,7 +15,7 @@ vi.mock('@/lib/server/prisma', () => ({
   prisma: { $transaction, order: { findFirst: (...a: unknown[]) => orderFindFirst(...a) } },
 }));
 
-vi.mock('@/lib/server/subscriptions/reconcile', () => ({
+vi.mock('@/lib/server/credits/reconcile', () => ({
   reconcileChariowOrder: (...args: unknown[]) => reconcileMock(...args),
 }));
 
@@ -55,7 +55,7 @@ describe('POST /api/webhooks/chariow', () => {
   it('accepts a valid secret, dedups via WebhookLog, and reconciles the matching Order after commit', async () => {
     findUnique.mockResolvedValueOnce(null);
     orderFindFirst.mockResolvedValueOnce({ id: 'order-1' });
-    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', creditsGranted: 25 });
 
     const { POST } = await import('./route');
     const res = await POST(req('test-secret', { event: 'settled.sale', data: { id: 'sale_1' } }));
@@ -73,7 +73,7 @@ describe('POST /api/webhooks/chariow', () => {
   ])('also reconciles on a %s event instead of dropping it', async (_label, event) => {
     findUnique.mockResolvedValueOnce(null);
     orderFindFirst.mockResolvedValueOnce({ id: 'order-1' });
-    reconcileMock.mockResolvedValueOnce({ orderStatus: 'FAILED', subscriptionStatus: 'CANCELLED' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'FAILED', creditsGranted: null });
 
     const { POST } = await import('./route');
     const res = await POST(req('test-secret', { event, data: { id: 'sale_1' } }));
@@ -86,7 +86,7 @@ describe('POST /api/webhooks/chariow', () => {
   it('never reads the payload status/amount — a forged failed body still defers to reconcile', async () => {
     findUnique.mockResolvedValueOnce(null);
     orderFindFirst.mockResolvedValueOnce({ id: 'order-1' });
-    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', creditsGranted: 25 });
 
     const { POST } = await import('./route');
     await POST(

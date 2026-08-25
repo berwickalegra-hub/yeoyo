@@ -11,7 +11,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const MAX_VISITORS = 50;
 
@@ -50,16 +49,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
     });
     const byUserId = new Map(profiles.map((p) => [p.userId, p]));
-    const premiumIds = await getPremiumUserIds(
-      prisma,
-      profiles.map((p) => p.userId),
-    );
 
     const visitors = orderedVisitorIds
       .map((id) => byUserId.get(id))
       .filter((p): p is NonNullable<typeof p> => !!p)
       .map((p) => ({
-        profile: { ...toProfileCard(p), isPremium: premiumIds.has(p.userId) },
+        profile: toProfileCard(p),
         viewedAt: lastViewedAt.get(p.userId)!.toISOString(),
       }));
 

@@ -19,8 +19,10 @@
 // member photos via the shared `UserAvatar` primitive (image-or-initials,
 // already used everywhere else in the app) instead of fake initials
 // circles; KPI tiles now solid fills matching Banani exactly instead of
-// tinted badges (Abonnés Premium reverted primary→gold back to Banani's
-// literal `bg-primary`; Signalements' dynamic red/green tone replaced with
+// tinted badges (this KPI tile reverted primary→gold back to Banani's
+// literal `bg-primary`; 2026-08-25: relabeled "Packs de crédits vendus" now
+// that YeOyo is pay-per-use credits, not a Premium subscription — see
+// stats/overview route.ts). Signalements' dynamic red/green tone replaced with
 // Banani's static neutral tile); chart series recolored to the actual
 // green/primary pair Banani uses (was primary/gold — no green anywhere,
 // likely the real "colors don't look like Banani" complaint); chart +
@@ -42,17 +44,17 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 interface Overview {
   kpis: {
     totalMembers: number;
-    premiumSubscribers: number;
+    creditPacksSold: number;
     pendingReports: number;
     revenueCentsTotal: number;
     deltas: {
       totalMembers: number | null;
-      premiumSubscribers: number | null;
+      creditPacksSold: number | null;
       pendingReports: number | null;
       revenueCentsTotal: number | null;
     };
   };
-  signupsByMonth: { month: string; count: number; subscriptions: number }[];
+  signupsByMonth: { month: string; count: number; creditPacksSold: number }[];
   memberBreakdown: {
     active: number;
     verified: number;
@@ -64,7 +66,7 @@ interface Overview {
     messagesSent: number;
     matchesCreated: number;
     accountsSuspended: number;
-    subscriptionsPaid: number;
+    creditPacksPaid: number;
   };
 }
 
@@ -163,7 +165,7 @@ export default function AdminDashboardPage() {
   }
 
   const { kpis, signupsByMonth, memberBreakdown, today } = overview;
-  const maxSignups = Math.max(1, ...signupsByMonth.flatMap((s) => [s.count, s.subscriptions]));
+  const maxSignups = Math.max(1, ...signupsByMonth.flatMap((s) => [s.count, s.creditPacksSold]));
   const breakdownTotal =
     memberBreakdown.active +
     memberBreakdown.verified +
@@ -229,11 +231,11 @@ export default function AdminDashboardPage() {
           delta={kpis.deltas.totalMembers}
         />
         <KpiCard
-          label="Abonnés Premium"
-          value={kpis.premiumSubscribers.toLocaleString('fr-FR')}
-          icon="crown"
+          label="Packs de crédits vendus"
+          value={kpis.creditPacksSold.toLocaleString('fr-FR')}
+          icon="gem"
           tone="primary"
-          delta={kpis.deltas.premiumSubscribers}
+          delta={kpis.deltas.creditPacksSold}
         />
         <KpiCard
           label="Signalements"
@@ -268,7 +270,7 @@ export default function AdminDashboardPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-2 w-3 rounded-sm bg-primary/50" />
-                Abonnés
+                Packs vendus
               </span>
             </div>
           </div>
@@ -277,7 +279,7 @@ export default function AdminDashboardPage() {
               <div
                 key={s.month}
                 className="group flex flex-1 flex-col items-end justify-end gap-0.5"
-                title={`${s.month} — ${s.count} inscription(s), ${s.subscriptions} abonnement(s)`}
+                title={`${s.month} — ${s.count} inscription(s), ${s.creditPacksSold} pack(s) vendu(s)`}
               >
                 <div className="flex w-full items-end gap-0.5">
                   <div
@@ -286,7 +288,7 @@ export default function AdminDashboardPage() {
                   />
                   <div
                     className="flex-1 rounded-t-sm bg-primary/50 transition-colors group-hover:bg-primary/70"
-                    style={{ height: `${(s.subscriptions / maxSignups) * 128}px`, minHeight: 3 }}
+                    style={{ height: `${(s.creditPacksSold / maxSignups) * 128}px`, minHeight: 3 }}
                   />
                 </div>
               </div>
@@ -332,8 +334,8 @@ export default function AdminDashboardPage() {
             />
             <TodayStatRow
               icon="credit-card"
-              label="Abonnements payés"
-              value={today.subscriptionsPaid}
+              label="Packs de crédits payés"
+              value={today.creditPacksPaid}
             />
           </div>
         </div>
@@ -675,7 +677,7 @@ function activityIcon(action: string): IconName {
   if (a.includes('restore') || a.includes('verify') || a.includes('approve')) return 'check-circle';
   if (a.includes('role') || a.includes('admin')) return 'shield-check';
   if (a.includes('2fa') || a.includes('auth')) return 'smartphone';
-  if (a.includes('premium') || a.includes('subscription')) return 'crown';
+  if (a.includes('credit')) return 'gem';
   if (a.includes('report')) return 'shield';
   return 'zap';
 }

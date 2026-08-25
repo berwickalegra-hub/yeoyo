@@ -1,4 +1,4 @@
-// Safety-net cron for Chariow Premium checkouts. The primary confirmation
+// Safety-net cron for Chariow credit-pack checkouts. The primary confirmation
 // paths are the user-return poll (verify-checkout) and the webhook; this
 // catches Orders where BOTH were missed (closed tab, dropped webhook).
 //
@@ -25,7 +25,7 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyCronSecret } from '@/lib/server/cron/auth';
 import { withLease } from '@/lib/server/leader-lease';
-import { reconcileChariowOrder } from '@/lib/server/subscriptions/reconcile';
+import { reconcileChariowOrder } from '@/lib/server/credits/reconcile';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { createLogger } from '@/lib/server/logger';

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const reconcileMock = vi.fn();
-vi.mock('@/lib/server/subscriptions/reconcile', () => ({
+vi.mock('@/lib/server/credits/reconcile', () => ({
   reconcileChariowOrder: (...args: unknown[]) => reconcileMock(...args),
 }));
 
@@ -39,7 +39,7 @@ describe('POST /api/cron/chariow-reconcile', () => {
 
   it('reconciles every PENDING *and* EXPIRED chariow Order and reports how many it processed', async () => {
     orderFindMany.mockResolvedValueOnce([{ id: 'o1' }, { id: 'o2' }]);
-    reconcileMock.mockResolvedValue({ orderStatus: 'PENDING', subscriptionStatus: 'PENDING' });
+    reconcileMock.mockResolvedValue({ orderStatus: 'PENDING', creditsGranted: null });
 
     const { POST } = await import('./route');
     const res = await POST(req('Bearer cron-secret'));
@@ -84,7 +84,7 @@ describe('POST /api/cron/chariow-reconcile', () => {
   it('keeps going and does not count a row whose reconcile call throws', async () => {
     orderFindMany.mockResolvedValueOnce([{ id: 'o1' }, { id: 'o2' }]);
     reconcileMock.mockRejectedValueOnce(new Error('Chariow API down'));
-    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', subscriptionStatus: 'ACTIVE' });
+    reconcileMock.mockResolvedValueOnce({ orderStatus: 'PAID', creditsGranted: 25 });
 
     const { POST } = await import('./route');
     const res = await POST(req('Bearer cron-secret'));

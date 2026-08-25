@@ -1,8 +1,11 @@
 // GET /api/profile/stats-today — "Mes stats du jour" side panel on
 // Explorer (Banani's DiscoverScreen). `likesToday` = Like rows the caller
-// gave today (a real, cheap count — not the fabricated "Ajouts" figure
-// Banani's own mock hardcodes). `messages` reuses the same daily quota
-// POST /api/conversations/[id]/messages enforces, so the two never drift.
+// gave today, `messagesToday` = Message rows the caller sent today — both
+// real, cheap counts (not the fabricated "Ajouts" figure Banani's own mock
+// hardcodes). 2026-08-25: messaging has no daily cap anymore (credits only
+// gate the first message in a new conversation, see
+// lib/server/credits/ledger.ts), so this is now a plain informational
+// count, not a quota.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -11,7 +14,6 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { startOfUtcDay } from '@/lib/server/daily-quota';
-import { messageQuotaStatus } from '@/lib/server/conversations/message-quota';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -19,15 +21,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const [likesToday, messages] = await Promise.all([
+    const [likesToday, messagesToday] = await Promise.all([
       prisma.like.count({
         where: { likerId: auth.user.sub, createdAt: { gte: startOfUtcDay() } },
       }),
-      messageQuotaStatus(auth.user.sub),
+      prisma.message.count({
+        where: { senderId: auth.user.sub, createdAt: { gte: startOfUtcDay() } },
+      }),
     ]);
 
     return NextResponse.json(
-      { likesToday, messages },
+      { likesToday, messagesToday },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });

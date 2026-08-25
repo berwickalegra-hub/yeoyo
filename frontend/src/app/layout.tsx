@@ -3,7 +3,7 @@ import { DM_Sans, PT_Serif } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { PremiumProvider } from '@/contexts/PremiumContext';
+import { CreditsProvider } from '@/contexts/CreditsContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { InstallPwaPrompt } from '@/components/yeoyo/InstallPwaPrompt';
 
@@ -71,7 +71,7 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <PremiumProvider>
+              <CreditsProvider>
                 {/* `dvh` (not `vh`) so mobile Safari's collapsing address/
                     toolbar chrome is accounted for from the very first
                     paint — `100vh` there is the LARGER "toolbar collapsed"
@@ -87,7 +87,7 @@ export default function RootLayout({
                   <InstallPwaPrompt />
                   {children}
                 </div>
-              </PremiumProvider>
+              </CreditsProvider>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>

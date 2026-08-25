@@ -6,12 +6,12 @@
 // gestures, one floating element too many, 2026-08-17 explicit user
 // report). Inspired by a competitor app's coach bubble (2026-08-10,
 // user-driven). Free tier: 3 questions/day (server-enforced, see
-// /api/coach/messages); ACTIVE subscribers are unlimited. Entirely inert
+// /api/coach/messages); ADMIN/SUPERADMIN are unlimited (2026-08-25: no more
+// Premium-subscriber bypass — Coach isn't part of the credit system). Entirely inert
 // (friendly "not configured" state, no crash) when the backend has no
 // ANTHROPIC_API_KEY — same optional-provider pattern as Cloudinary/Resend/
 // Ably elsewhere in this kit.
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
 
@@ -208,19 +208,16 @@ export function CoachWidget() {
             {quota.configured !== false && (
               <p className="mb-2 text-center font-body text-xs text-muted-foreground">
                 {quota.limit === null
-                  ? 'Questions illimitées — Premium'
+                  ? 'Questions illimitées'
                   : `${Math.max(0, quota.remaining ?? 0)} question(s) restante(s) aujourd’hui`}
               </p>
             )}
 
             {quota.configured !== false && limitReached ? (
-              <Link
-                href="/app/premium"
-                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-gold font-headings text-sm font-semibold text-gold-foreground"
-              >
-                <Icon name="crown" size={16} />
-                Passer Premium pour continuer
-              </Link>
+              <p className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-background font-body text-sm text-muted-foreground">
+                <Icon name="clock" size={16} />
+                Limite atteinte — reviens demain
+              </p>
             ) : (
               <div className="flex items-center gap-2">
                 <input

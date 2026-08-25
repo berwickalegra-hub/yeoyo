@@ -22,7 +22,7 @@ interface MonthlySignup {
   count: bigint;
 }
 
-interface MonthlySubscriptions {
+interface MonthlyCreditPacksSold {
   month: Date;
   count: bigint;
 }
@@ -47,38 +47,40 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const [
       totalMembers,
-      premiumSubscribers,
+      creditPacksSold,
       pendingReports,
       revenueAgg,
       verifiedCount,
       pendingVerificationCount,
       suspendedCount,
       signupsRaw,
-      subscriptionsRaw,
+      creditPacksSoldRaw,
       // KPI deltas — "value as of the start of this month" for each of the 4
       // KPIs above, so the dashboard can show real "vs mois dernier" growth
-      // instead of Banani's mocked percentages. For premiumSubscribers and
-      // pendingReports (status-based, not append-only) this is an
-      // approximation — a subscription/report created before this month but
-      // whose status changed since can't be reconstructed exactly without
-      // event history — but it's a real derived number, not fabricated.
+      // instead of Banani's mocked percentages. For pendingReports
+      // (status-based, not append-only) this is an approximation — a
+      // report created before this month but whose status changed since
+      // can't be reconstructed exactly without event history — but it's a
+      // real derived number, not fabricated.
       totalMembersPrevMonth,
-      premiumSubscribersPrevMonth,
+      creditPacksSoldPrevMonth,
       pendingReportsPrevMonth,
       revenuePrevMonthAgg,
       newSignupsToday,
       messagesToday,
       matchesToday,
       suspensionsToday,
-      paidSubscriptionsToday,
+      creditPacksPaidToday,
     ] = await Promise.all([
       prisma.user.count(),
-      // Excludes provider: 'admin-grant' (2026-08-17) — the admin-always-
-      // Premium self-heal (see /api/subscriptions/me) and the admin panel's
-      // own grant toggle both tag their Subscription rows this way
-      // precisely so this KPI keeps meaning "paying subscribers", not
-      // "accounts flagged Premium for any reason".
-      prisma.subscription.count({ where: { status: 'ACTIVE', provider: { not: 'admin-grant' } } }),
+      // 2026-08-25: replaces the old "premiumSubscribers" KPI now that
+      // YeOyo is pay-per-use credits, not a recurring subscription — a
+      // PURCHASE CreditTransaction is written once per paid checkout (see
+      // lib/server/credits/reconcile.ts), so this counts real pack sales.
+      // Excludes ADMIN_GRANT rows the same way the old KPI excluded
+      // provider: 'admin-grant' Subscription rows — this stays "paying
+      // customers", not "accounts credited for any reason".
+      prisma.creditTransaction.count({ where: { type: 'PURCHASE' } }),
       prisma.report.count({ where: { status: 'PENDING' } }),
       prisma.order.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
       prisma.profile.count({ where: { verificationStatus: 'VERIFIED' } }),
@@ -93,21 +95,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         ORDER BY month DESC
         LIMIT 12
       `,
-      prisma.$queryRaw<MonthlySubscriptions[]>`
+      prisma.$queryRaw<MonthlyCreditPacksSold[]>`
         SELECT date_trunc('month', "createdAt") AS month, count(*)::bigint AS count
-        FROM "Subscription"
-        WHERE "provider" != 'admin-grant'
+        FROM "CreditTransaction"
+        WHERE "type" = 'PURCHASE'
         GROUP BY month
         ORDER BY month DESC
         LIMIT 12
       `,
       prisma.user.count({ where: { createdAt: { lt: startOfThisMonth } } }),
-      prisma.subscription.count({
-        where: {
-          status: 'ACTIVE',
-          provider: { not: 'admin-grant' },
-          createdAt: { lt: startOfThisMonth },
-        },
+      prisma.creditTransaction.count({
+        where: { type: 'PURCHASE', createdAt: { lt: startOfThisMonth } },
       }),
       prisma.report.count({ where: { status: 'PENDING', createdAt: { lt: startOfThisMonth } } }),
       prisma.order.aggregate({
@@ -130,20 +128,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const revenueCentsTotal = revenueAgg._sum.amount ?? 0;
     const revenueCentsPrevMonth = revenuePrevMonthAgg._sum.amount ?? 0;
 
-    const subscriptionsByMonthMap = new Map(
-      subscriptionsRaw.map((r) => [r.month.toISOString().slice(0, 7), Number(r.count)]),
+    const creditPacksSoldByMonthMap = new Map(
+      creditPacksSoldRaw.map((r) => [r.month.toISOString().slice(0, 7), Number(r.count)]),
     );
 
     return NextResponse.json(
       {
         kpis: {
           totalMembers,
-          premiumSubscribers,
+          creditPacksSold,
           pendingReports,
           revenueCentsTotal,
           deltas: {
             totalMembers: pctDelta(totalMembers, totalMembersPrevMonth),
-            premiumSubscribers: pctDelta(premiumSubscribers, premiumSubscribersPrevMonth),
+            creditPacksSold: pctDelta(creditPacksSold, creditPacksSoldPrevMonth),
             pendingReports: pctDelta(pendingReports, pendingReportsPrevMonth),
             revenueCentsTotal: pctDelta(revenueCentsTotal, revenueCentsPrevMonth),
           },
@@ -154,7 +152,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             return {
               month,
               count: Number(r.count),
-              subscriptions: subscriptionsByMonthMap.get(month) ?? 0,
+              creditPacksSold: creditPacksSoldByMonthMap.get(month) ?? 0,
             };
           })
           .reverse(),
@@ -169,7 +167,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           messagesSent: messagesToday,
           matchesCreated: matchesToday,
           accountsSuspended: suspensionsToday,
-          subscriptionsPaid: paidSubscriptionsToday,
+          creditPacksPaid: creditPacksPaidToday,
         },
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

@@ -3,6 +3,11 @@
 // Banani re-theme (2026-08-13) — no dedicated Banani screen was fetched for
 // this list view, so it follows the existing /app/likes list pattern for
 // consistency rather than a pixel-matched mockup.
+// 2026-08-25: Premium replaced by pay-per-use credits — "Débloquer" spends
+// 1 credit via POST /api/credits/spend { action: 'view_visitors' },
+// confirmed first through CreditConfirmModal. `unlocked` is local component
+// state, not persisted — reloading this page re-blurs the list, matching
+// the product spec's "consommé à l'usage, pas un déblocage permanent".
 'use client';
 
 import Link from 'next/link';
@@ -10,14 +15,16 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { usePremium } from '@/contexts/PremiumContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
-import { PremiumGateModal } from '@/components/yeoyo/PremiumGateModal';
+import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { INTENT_LABELS, type ProfileCard } from '@/lib/yeoyo/types';
+
+const COST = 1;
 
 interface VisitorRow {
   profile: ProfileCard;
@@ -38,12 +45,36 @@ function timeAgo(iso: string): string {
 export default function VisiteursPage() {
   const user = useUser();
   const { toast } = useToast();
-  const { isPremium, loading: premiumLoading } = usePremium();
+  const { balance, unlimited, refresh: refreshCredits } = useCredits();
   const badgeCounts = useNavCounts();
   const [visitors, setVisitors] = useState<VisitorRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const locked = !premiumLoading && !isPremium;
+  const [unlocked, setUnlocked] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [spending, setSpending] = useState(false);
+  const locked = !unlocked && !unlimited;
+
+  async function unlock() {
+    setSpending(true);
+    try {
+      await api('/api/credits/spend', { method: 'POST', body: { action: 'view_visitors' } });
+      setUnlocked(true);
+      setShowConfirm(false);
+      void refreshCredits();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setSpending(false);
+    }
+  }
+
+  function reveal() {
+    if (unlimited) {
+      void unlock();
+      return;
+    }
+    setShowConfirm(true);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -106,16 +137,16 @@ export default function VisiteursPage() {
                   profil
                 </p>
                 <p className="font-body text-xs text-muted-foreground">
-                  Passe Premium pour voir qui
+                  {COST} crédit pour voir qui
                 </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setShowPremiumModal(true)}
+              onClick={reveal}
               className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-gold px-4 py-2 font-body text-sm font-bold text-gold-foreground transition-transform active:scale-95"
             >
-              <Icon name="crown" size={14} />
+              <Icon name="gem" size={14} />
               Débloquer
             </button>
           </div>
@@ -127,7 +158,7 @@ export default function VisiteursPage() {
                 <button
                   key={v.profile.userId}
                   type="button"
-                  onClick={() => setShowPremiumModal(true)}
+                  onClick={reveal}
                   className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4 text-left"
                 >
                   <div className="blur-sm select-none">
@@ -157,7 +188,7 @@ export default function VisiteursPage() {
                       </span>
                     </div>
                   </div>
-                  <Icon name="crown" size={18} className="flex-shrink-0 text-gold" />
+                  <Icon name="gem" size={18} className="flex-shrink-0 text-gold" />
                 </button>
               ) : (
                 <Link
@@ -201,11 +232,14 @@ export default function VisiteursPage() {
         )}
       </div>
 
-      <PremiumGateModal
-        open={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        title="Qui a consulté ton profil ?"
-        description="Découvre qui s'intéresse à toi et deviens Premium pour voir tous tes visiteurs."
+      <CreditConfirmModal
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        cost={COST}
+        balance={balance}
+        actionLabel="Voir qui a visité ton profil"
+        onConfirm={unlock}
+        confirming={spending}
       />
     </AppShell>
   );

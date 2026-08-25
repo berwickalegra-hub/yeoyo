@@ -72,7 +72,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRequireAuth.mockResolvedValue(authedCtx);
   groupByMock.mockResolvedValue([]);
-  prismaMock.subscription.findMany.mockResolvedValue([] as never);
   prismaMock.blockedUser.findMany.mockResolvedValue([] as never);
 });
 

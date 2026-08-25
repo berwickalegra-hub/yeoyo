@@ -47,7 +47,6 @@ export function ContactRequestCard({
             </span>
             <span className="font-body text-sm text-muted-foreground">{otherUser.age} ans</span>
             {otherUser.verified && <div className="h-1.5 w-1.5 rounded-full bg-verified" />}
-            {otherUser.isPremium && <div className="h-1.5 w-1.5 rounded-full bg-gold" />}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-muted-foreground">
             <Icon name="gem" size={11} />

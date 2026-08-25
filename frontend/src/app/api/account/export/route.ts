@@ -15,23 +15,31 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const [user, profile, likesGiven, contactRequests, subscriptions, orders] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: auth.user.sub },
-        select: { id: true, email: true, name: true, role: true, createdAt: true },
-      }),
-      prisma.profile.findUnique({ where: { userId: auth.user.sub }, include: { photos: true } }),
-      prisma.like.findMany({
-        where: { likerId: auth.user.sub },
-        select: { likedId: true, createdAt: true },
-      }),
-      prisma.contactRequest.findMany({
-        where: { OR: [{ requesterId: auth.user.sub }, { targetId: auth.user.sub }] },
-        select: { requesterId: true, targetId: true, status: true, createdAt: true },
-      }),
-      prisma.subscription.findMany({ where: { userId: auth.user.sub } }),
-      prisma.order.findMany({ where: { userId: auth.user.sub } }),
-    ]);
+    const [user, profile, likesGiven, contactRequests, creditTransactions, orders] =
+      await Promise.all([
+        prisma.user.findUnique({
+          where: { id: auth.user.sub },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            creditBalance: true,
+            createdAt: true,
+          },
+        }),
+        prisma.profile.findUnique({ where: { userId: auth.user.sub }, include: { photos: true } }),
+        prisma.like.findMany({
+          where: { likerId: auth.user.sub },
+          select: { likedId: true, createdAt: true },
+        }),
+        prisma.contactRequest.findMany({
+          where: { OR: [{ requesterId: auth.user.sub }, { targetId: auth.user.sub }] },
+          select: { requesterId: true, targetId: true, status: true, createdAt: true },
+        }),
+        prisma.creditTransaction.findMany({ where: { userId: auth.user.sub } }),
+        prisma.order.findMany({ where: { userId: auth.user.sub } }),
+      ]);
 
     return NextResponse.json(
       {
@@ -40,7 +48,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         profile,
         likesGiven,
         contactRequests,
-        subscriptions,
+        creditTransactions,
         orders,
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

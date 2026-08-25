@@ -16,7 +16,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
-import { getPremiumUserIds } from '@/lib/server/subscriptions/premium-status';
 
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 24;
@@ -132,16 +131,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     ]);
     const profiles = [...boostedProfiles, ...restProfiles];
 
-    const [favoriteRows, premiumIds] = await Promise.all([
-      prisma.favorite.findMany({
-        where: { userId: auth.user.sub, targetId: { in: profiles.map((p) => p.userId) } },
-        select: { targetId: true },
-      }),
-      getPremiumUserIds(
-        prisma,
-        profiles.map((p) => p.userId),
-      ),
-    ]);
+    const favoriteRows = await prisma.favorite.findMany({
+      where: { userId: auth.user.sub, targetId: { in: profiles.map((p) => p.userId) } },
+      select: { targetId: true },
+    });
     const favorited = new Set(favoriteRows.map((f) => f.targetId));
 
     return NextResponse.json(
@@ -155,7 +148,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           liked: false,
           favorited: favorited.has(p.userId),
           boosted: p.boostedUntil ? p.boostedUntil > now : false,
-          isPremium: premiumIds.has(p.userId),
         })),
         page: q.page,
         pageSize: q.pageSize,
