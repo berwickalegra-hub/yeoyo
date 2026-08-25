@@ -94,6 +94,58 @@ export class EmailQueue extends JobQueue<EmailJobPayload> {
   }
 
   /**
+   * Send the most recently enqueued PENDING job addressed to `to`, right
+   * now, bypassing the Redis FIFO order.
+   *
+   * 2026-08-26: `drainOne()` always pops whatever is at the HEAD of the
+   * shared queue — under any backlog (which the once-daily Vercel Hobby
+   * cron guarantees will exist, see drain-now.ts's file header), a caller
+   * who just enqueued their own code and immediately asked for an
+   * immediate send would instead trigger delivery of someone ELSE's older
+   * queued email, while their own sits at the back waiting for the next
+   * trigger. Confirmed against prod: a user's signup code sat PENDING for
+   * hours while each of their own follow-up actions (resend, a later
+   * signup) kept flushing a different, older backlogged recipient's email
+   * instead of their own. This targets the specific row instead, so the
+   * person actively watching a "check your email" screen reliably gets
+   * their own code, independent of backlog size or FIFO position.
+   *
+   * The Redis pointer pushed by `enqueue()` for this row is left in place —
+   * when it's eventually popped (by `drainOne()` or the cron), the
+   * status === 'SENT' guard below (same one `drainOne()` checks) makes that
+   * a no-op, so there's no double-send.
+   *
+   * Returns true if a job was found and sent (or terminally failed), false
+   * if there was nothing PENDING for `to`.
+   */
+  async sendPendingFor(to: string): Promise<boolean> {
+    const row = await this.prisma.emailJob.findFirst({
+      where: { to, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return false;
+
+    try {
+      const sendInput: SendEmailInput = { to: row.to, subject: row.subject, html: row.html };
+      if (row.text !== null) sendInput.text = row.text;
+
+      await this.mailer.send(sendInput);
+
+      await this.prisma.emailJob.update({
+        where: { id: row.id },
+        data: { status: 'SENT', sentAt: new Date(), attempts: row.attempts + 1 },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.emailJob.update({
+        where: { id: row.id },
+        data: { status: 'FAILED', lastError: message, attempts: row.attempts + 1 },
+      });
+    }
+    return true;
+  }
+
+  /**
    * Drain one job from the queue. Returns true if a job was processed
    * (success OR failure), false if the queue was empty. Wrap in a loop +
    * setInterval at the call site.

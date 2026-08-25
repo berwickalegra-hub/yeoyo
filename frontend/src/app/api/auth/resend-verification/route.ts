@@ -112,7 +112,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       // Same reasoning as signup: don't make the user wait for the once-daily
       // cron fallback (see drain-now.ts) — best-effort, never blocks/fails
       // this response.
-      await drainOutboxNow();
+      await drainOutboxNow(user.email);
     } else {
       // No user, OR already verified — log without leaking which case it is.
       log.info('resend-verification: noop branch (enumeration-resist)');

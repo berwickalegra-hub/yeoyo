@@ -153,7 +153,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // The user is staring at a "check your email" screen right now — don't
     // make them wait for the once-daily cron (see drain-now.ts). Best-effort:
     // never blocks or fails the signup response.
-    await drainOutboxNow();
+    await drainOutboxNow(email);
 
     log.info('signup new user');
     const res = NextResponse.json({ ok: true }, { status: 201 });

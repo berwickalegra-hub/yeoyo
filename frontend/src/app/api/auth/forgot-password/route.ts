@@ -113,7 +113,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Unconditional (both branches) so this never becomes a timing side
     // channel — see drain-now.ts for why the once-daily cron alone isn't
     // enough for a code the user is actively waiting on.
-    await drainOutboxNow();
+    await drainOutboxNow(email);
 
     // CR-01 — wall-clock floor: pad to TARGET_LATENCY_MS so residual jitter
     // (Neon cold-start, outbox latency spikes) cannot reveal the branch.

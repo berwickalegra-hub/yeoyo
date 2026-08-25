@@ -21,6 +21,18 @@
 // PENDING/attempts:0 forever locally, and up to ~24h in prod, even after
 // this function's first version "fixed" the outbox stage. Draining the
 // EmailQueue itself right after closes that second gap the same way.
+//
+// 2026-08-26 follow-up: that first version drained the queue's HEAD
+// (`queue.drainOne()`), which is FIFO across every recipient, not scoped to
+// the caller's own just-enqueued email. Under any backlog — which the
+// Hobby-plan daily cron guarantees will build up — that meant each of a
+// user's own actions (signup, resend) kept flushing a different, older
+// backlogged recipient's email while the caller's own code sat PENDING,
+// confusingly landing hours later exactly when someone ELSE next took an
+// action. `to` now lets this target the caller's own row directly via
+// `EmailQueue.sendPendingFor` (see its doc comment) — the opportunistic
+// backlog drain below still runs afterward, best-effort, so old backlog
+// still shrinks over time.
 import 'server-only';
 import { prisma } from '../prisma';
 import { drainOutbox } from './dispatcher';
@@ -51,7 +63,7 @@ const IMMEDIATE_EMAIL_SEND_LIMIT = 1;
 // comfortably clear the observed latency instead of guaranteeing a loss.
 const MAX_WAIT_MS = 12000;
 
-export async function drainOutboxNow(): Promise<void> {
+export async function drainOutboxNow(to: string): Promise<void> {
   try {
     const queue = getEmailQueue();
     await Promise.race([
@@ -63,6 +75,9 @@ export async function drainOutboxNow(): Promise<void> {
         // Outbox stage above only wrote EmailJob row(s) + a Redis pointer —
         // actually call the mailer now instead of waiting for the daily cron.
         if (queue) {
+          // The caller's own email first — see this file's 2026-08-26
+          // comment for why this must not be a plain FIFO drainOne().
+          await queue.sendPendingFor(to);
           for (let i = 0; i < IMMEDIATE_EMAIL_SEND_LIMIT; i++) {
             const handled = await queue.drainOne();
             if (!handled) break; // queue empty
