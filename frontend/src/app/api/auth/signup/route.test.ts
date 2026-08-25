@@ -62,6 +62,8 @@ describe('POST /api/auth/signup', () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({ id: 'u-new' } as never);
     prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
 
     const res = await POST(makeReq({ email: 'new@example.com', password: 'a-strong-passphrase' }));
     expect(res.status).toBe(201);
@@ -77,6 +79,21 @@ describe('POST /api/auth/signup', () => {
     const outboxArg = (enqueueOutbox as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1];
     expect(outboxArg?.kind).toBe('email.verification_code');
     expect(outboxArg?.payload?.to).toBe('new@example.com');
+
+    // One-time welcome gift — 5 credits, granted in the same transaction.
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-new' },
+      data: { creditBalance: { increment: 5 } },
+      select: { creditBalance: true },
+    });
+    const grantArg = prismaMock.creditTransaction.create.mock.calls[0]?.[0];
+    expect(grantArg?.data).toEqual({
+      userId: 'u-new',
+      type: 'WELCOME_GIFT',
+      amount: 5,
+      action: 'welcome_gift',
+      relatedOrderId: null,
+    });
   });
 
   it('returns identical 201 + dummy-bcrypts on existing email (enumeration-resist)', async () => {
@@ -124,6 +141,8 @@ describe('POST /api/auth/signup', () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({ id: 'u-rate' } as never);
     prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
 
     const calls = await Promise.all(
       Array.from({ length: 6 }, () =>

@@ -25,6 +25,7 @@ import { isPwned } from '@/lib/server/auth/hibp';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { drainOutboxNow } from '@/lib/server/outbox/drain-now';
+import { grantCredits, WELCOME_GIFT_CREDITS } from '@/lib/server/credits/ledger';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
 const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) * 60 * 1000;
@@ -147,6 +148,18 @@ export async function POST(req: NextRequest): Promise<Response> {
           code,
           expiresAt: expiresAt.toISOString(),
         },
+      });
+      // One-time welcome gift — every new account, regardless of gender,
+      // gets this exactly once (same transaction as user creation, so it's
+      // impossible for the account to exist without it). Usable exactly
+      // like purchased credits (spendCredits doesn't distinguish origin);
+      // never re-granted (no other call site references WELCOME_GIFT) and
+      // never combined with a purchase beyond landing in the same balance.
+      await grantCredits(tx, {
+        userId: user.id,
+        amount: WELCOME_GIFT_CREDITS,
+        type: 'WELCOME_GIFT',
+        action: 'welcome_gift',
       });
     });
 

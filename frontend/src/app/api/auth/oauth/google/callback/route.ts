@@ -34,6 +34,7 @@ import {
 import { prisma } from '@/lib/server/prisma';
 import { createNotification } from '@/lib/server/notifications';
 import { welcomeNotification } from '@/lib/server/notifications/templates';
+import { grantCredits, WELCOME_GIFT_CREDITS } from '@/lib/server/credits/ledger';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
 
@@ -190,8 +191,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // D-03: welcome notification on first OAuth account creation.
     // NOTIF-05 invariant — go through createNotification (never prisma.notification.create directly).
+    // 2026-08-26: same gate also grants the one-time signup credit gift
+    // (see signup/route.ts's identical grant for the email/password path) —
+    // isNewUser is only ever true once per account (set in the find-or-create
+    // block above), so this can't double-grant on a returning OAuth login.
     if (isNewUser) {
       await createNotification(prisma, welcomeNotification(u.id, u.email));
+      await grantCredits(prisma, {
+        userId: u.id,
+        amount: WELCOME_GIFT_CREDITS,
+        type: 'WELCOME_GIFT',
+        action: 'welcome_gift',
+      });
     }
 
     // Consume next cookie (defense-in-depth re-validation against same-origin).

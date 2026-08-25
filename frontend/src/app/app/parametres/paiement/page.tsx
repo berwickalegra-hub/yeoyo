@@ -21,7 +21,7 @@ interface OrderRow {
 
 interface CreditTransactionRow {
   id: string;
-  type: 'PURCHASE' | 'SPEND' | 'ADMIN_GRANT';
+  type: 'PURCHASE' | 'SPEND' | 'ADMIN_GRANT' | 'WELCOME_GIFT';
   amount: number;
   action: string;
   createdAt: string;
@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
   boost: 'Boost de visibilité (24h)',
   first_message: 'Premier message envoyé',
   admin_grant: 'Ajustement par YeOyo',
+  welcome_gift: 'Cadeau de bienvenue',
 };
 
 function creditActionLabel(action: string): string {

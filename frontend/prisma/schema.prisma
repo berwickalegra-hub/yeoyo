@@ -668,7 +668,7 @@ model CreditTransaction {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type           String // PURCHASE | SPEND | ADMIN_GRANT
+  type           String // PURCHASE | SPEND | ADMIN_GRANT | WELCOME_GIFT
   amount         Int // positive for PURCHASE/ADMIN_GRANT, negative for SPEND
   // e.g. "credit_pack:serieux", "view_visitors", "view_favorited_by",
   // "boost", "first_message", "admin_grant" — free-form action label,

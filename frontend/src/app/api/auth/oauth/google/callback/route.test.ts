@@ -245,6 +245,8 @@ describe('GET /api/auth/oauth/google/callback', () => {
       } as never); // re-fetch for token issuance
     prismaMock.user.create.mockResolvedValue({ id: 'u-new' } as never);
     prismaMock.oAuthAccount.create.mockResolvedValue({ id: 'oa-2' } as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
 
     const res = await GET(makeReq({ code: 'c', state: STATE }));
     expect(res.status).toBe(302);
@@ -278,6 +280,21 @@ describe('GET /api/auth/oauth/google/callback', () => {
         dedupeKey: 'welcome:u-new',
       }),
     );
+
+    // One-time welcome credit gift — same isNewUser gate as the notification.
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-new' },
+      data: { creditBalance: { increment: 5 } },
+      select: { creditBalance: true },
+    });
+    const grantArg = prismaMock.creditTransaction.create.mock.calls[0]?.[0];
+    expect(grantArg?.data).toEqual({
+      userId: 'u-new',
+      type: 'WELCOME_GIFT',
+      amount: 5,
+      action: 'welcome_gift',
+      relatedOrderId: null,
+    });
   });
 
   it('existing OAuth user (provider lookup hits): no User update, no welcome, just 3 cookies', async () => {

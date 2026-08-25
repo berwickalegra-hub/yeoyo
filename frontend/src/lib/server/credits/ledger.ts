@@ -37,6 +37,14 @@ export const CREDIT_COSTS = {
 
 export type CreditAction = keyof typeof CREDIT_COSTS;
 
+// 2026-08-26 — one-time, non-renewable signup gift. Granted exactly once,
+// at account-creation time (see signup/route.ts and the OAuth Google
+// callback), never re-granted, never combined with a purchase beyond the
+// same flat +5 landing in the same balance a purchase would land in — it's
+// just an ordinary CreditTransaction row with its own `type` so the
+// history (Paramètres > Paiement) can label it distinctly from a purchase.
+export const WELCOME_GIFT_CREDITS = 5;
+
 export interface SpendResult {
   ok: boolean;
   /** true when an ADMIN/SUPERADMIN bypassed the charge — no ledger row was written. */
@@ -77,7 +85,7 @@ export async function spendCredits(
 export interface GrantInput {
   userId: string;
   amount: number;
-  type: 'PURCHASE' | 'ADMIN_GRANT';
+  type: 'PURCHASE' | 'ADMIN_GRANT' | 'WELCOME_GIFT';
   action: string;
   relatedOrderId?: string;
 }
