@@ -18,6 +18,7 @@
     "db:migrate:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "db:make-superadmin": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/make-superadmin.ts",
+    "dev:verification-code": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/get-verification-code.ts",
     "seed:dev": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-dev.ts",
     "seed:yeoyo": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-yeoyo-profiles.ts",
     "seed:yeoyo-women": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-yeoyo-women.ts",

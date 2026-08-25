@@ -15,6 +15,15 @@
 // only) — see CLAUDE.md-adjacent decision note: no numeric-radius search
 // exists in this app; country + commune equality is the whole "proximity"
 // model by design (avoids a geo-coordinates dependency for launch).
+//
+// 2026-08-26 fix: the implicit me.country default also matches target
+// profiles with country: null (legacy, pre-2026-08-25 — the overwhelming
+// majority at launch). Without this, the moment a viewer's own profile has
+// a country set, strict equality silently hid every profile that hasn't
+// been through the new country step yet — verified against prod data (90
+// of 92 profiles had country: null). An EXPLICIT ?country= from the filter
+// panel stays strict equality — that's a deliberate user choice, not a
+// convenience default, so it should not surface unlabeled profiles.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -71,19 +80,30 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // `gender` override via the filter panel.
     const defaultGender =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
-    const defaultCountry = q.country ?? me.country ?? undefined;
     const [blocked, alreadyLiked] = await Promise.all([
       blockedUserIds(auth.user.sub),
       prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
     ]);
     const excluded = [auth.user.sub, ...blocked, ...alreadyLiked.map((l) => l.likedId)];
 
+    // An explicit ?country= is a deliberate filter choice from the panel —
+    // strict equality. The implicit me.country default must NOT exclude
+    // profiles with country: null (every profile created before 2026-08-25,
+    // the vast majority at launch) — otherwise the "same-country by
+    // default" convenience silently hides almost the entire user base the
+    // moment a viewer's own profile has a country on it.
+    const countryFilter: Prisma.ProfileWhereInput = q.country
+      ? { country: q.country }
+      : me.country
+        ? { OR: [{ country: me.country }, { country: null }] }
+        : {};
+
     const where: Prisma.ProfileWhereInput = {
       userId: { notIn: excluded },
       ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
       onboardingCompletedAt: { not: null },
-      ...(defaultCountry ? { country: defaultCountry } : {}),
+      ...countryFilter,
       ...(q.commune ? { commune: q.commune } : {}),
       ...(q.intent ? { intent: q.intent } : {}),
       ...(q.childrenCount ? { childrenCount: q.childrenCount } : {}),

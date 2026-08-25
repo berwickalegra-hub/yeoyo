@@ -54,8 +54,8 @@ function makeProfile(overrides: Partial<Profile> & { userId: string }): Profile 
   } as Profile;
 }
 
-function makeGet(): NextRequest {
-  return new NextRequest('http://test/api/profiles/explorer', { method: 'GET' });
+function makeGet(qs = ''): NextRequest {
+  return new NextRequest(`http://test/api/profiles/explorer${qs}`, { method: 'GET' });
 }
 
 beforeEach(() => {
@@ -101,5 +101,48 @@ describe('GET /api/profiles/explorer — already-liked exclusion', () => {
 
     const args = prismaMock.like.findMany.mock.calls[0]?.[0];
     expect(args?.where?.likerId).toBe('me-1');
+  });
+});
+
+describe('GET /api/profiles/explorer — same-country default (2026-08-26 fix)', () => {
+  it('when the caller has a country, the implicit default also matches legacy country: null profiles', async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(
+      makeProfile({ userId: 'me-1', gender: 'HOMME', country: 'CD' }),
+    );
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    expect(args?.where?.OR).toEqual([{ country: 'CD' }, { country: null }]);
+  });
+
+  it('an explicit ?country= filter stays strict equality (no null fallback)', async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(
+      makeProfile({ userId: 'me-1', gender: 'HOMME', country: 'CD' }),
+    );
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet('?country=SN'));
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    expect(args?.where?.country).toBe('SN');
+    expect(args?.where?.OR).toBeUndefined();
+  });
+
+  it('when the caller has no country set, no country filter is applied at all', async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(
+      makeProfile({ userId: 'me-1', gender: 'HOMME' }),
+    );
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    expect(args?.where?.country).toBeUndefined();
+    expect(args?.where?.OR).toBeUndefined();
   });
 });
