@@ -278,6 +278,13 @@ model Profile {
   firstName             String
   lastName              String?
   dateOfBirth           DateTime
+  // ISO2, one of the 6 payment-supported countries (see
+  // lib/yeoyo/constants.ts's COUNTRIES — kept in sync with Chariow's
+  // configured checkout countries on purpose, never edit one list without
+  // the other). Nullable: existing profiles predate this field. Drives the
+  // Explorer same-country default filter and the credits shop's local-price
+  // estimate.
+  country               String?
   city                  String    @default("Kinshasa")
   commune               String? // Kinshasa neighborhood, e.g. "Gombe"
   religion              String? // CHRETIEN | CATHOLIQUE | PROTESTANT | MUSULMAN
@@ -348,6 +355,7 @@ model Profile {
   @@index([verifiedAt])
   @@index([verificationStatus])
   @@index([gender, city])
+  @@index([gender, country])
   @@index([boostedUntil])
 }
 

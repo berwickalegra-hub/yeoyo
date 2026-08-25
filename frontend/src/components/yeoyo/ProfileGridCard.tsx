@@ -101,10 +101,12 @@ export function ProfileGridCard({
                 {profile.age} ans
               </span>
             </div>
-            {profile.commune && (
+            {(profile.city || profile.commune) && (
               <div className="mt-0.5 flex items-center gap-1 text-muted-foreground">
                 <Icon name="map-pin" size={12} />
-                <span className="font-body text-xs">{profile.commune}</span>
+                <span className="font-body text-xs">
+                  {[profile.city, profile.commune].filter(Boolean).join(', ')}
+                </span>
               </div>
             )}
           </div>

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }),
       prisma.profile.findUnique({
         where: { userId: auth.user.sub },
-        select: { phone: true, phoneCountry: true },
+        select: { phone: true, phoneCountry: true, country: true },
       }),
     ]);
 
@@ -37,7 +37,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const unlimited = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
 
     return NextResponse.json(
-      { balance: user?.creditBalance ?? 0, unlimited, savedPhone },
+      {
+        balance: user?.creditBalance ?? 0,
+        unlimited,
+        savedPhone,
+        profileCountry: profile?.country ?? null,
+      },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });

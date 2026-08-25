@@ -84,10 +84,12 @@ export function RecommendedProfileCard({
           </span>
           <span className="font-body text-sm text-muted-foreground">{profile.age}</span>
         </div>
-        {profile.commune && (
+        {(profile.city || profile.commune) && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Icon name="map-pin" size={11} />
-            <span className="font-body">{profile.commune}</span>
+            <span className="font-body">
+              {[profile.city, profile.commune].filter(Boolean).join(', ')}
+            </span>
           </div>
         )}
         {profile.job && (

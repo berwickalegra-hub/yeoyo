@@ -30,7 +30,7 @@ import { GoogleIcon } from '@/components/ui/GoogleIcon';
 import { PasswordInput } from '@/components/yeoyo/PasswordInput';
 import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DateOfBirthFields } from '@/components/yeoyo/DateOfBirthFields';
-import { KINSHASA_COMMUNES } from '@/lib/yeoyo/constants';
+import { COUNTRIES, KINSHASA_COMMUNES, MAJOR_CITIES_BY_COUNTRY } from '@/lib/yeoyo/constants';
 import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
 import { BIO_SUGGESTIONS } from '@/lib/yeoyo/content';
 
@@ -115,6 +115,8 @@ interface WizardData {
   interestedIn: string | null;
   firstName: string;
   dateOfBirth: string;
+  country: string | null;
+  city: string;
   commune: string;
   religion: string | null;
   maritalStatus: string | null;
@@ -130,6 +132,8 @@ const INITIAL_DATA: WizardData = {
   interestedIn: null,
   firstName: '',
   dateOfBirth: '',
+  country: null,
+  city: '',
   commune: '',
   religion: null,
   maritalStatus: null,
@@ -512,6 +516,8 @@ export default function OnboardingPage() {
           interestedIn: data.interestedIn || undefined,
           firstName: data.firstName,
           dateOfBirth: data.dateOfBirth,
+          country: data.country,
+          city: data.city.trim(),
           commune: data.commune || undefined,
           religion: data.religion || undefined,
           maritalStatus: data.maritalStatus || undefined,
@@ -915,16 +921,57 @@ export default function OnboardingPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="font-body text-sm text-foreground">Ta commune à Kinshasa</label>
+            <label className="font-body text-sm text-foreground">Ton pays</label>
             <CustomSelect
-              ariaLabel="Ta commune à Kinshasa"
-              placeholder="Choisis ta commune"
-              value={data.commune}
-              searchable
-              options={KINSHASA_COMMUNES.map((c) => ({ value: c, label: c }))}
-              onChange={(v) => setData((d) => ({ ...d, commune: v }))}
+              ariaLabel="Ton pays"
+              placeholder="Choisis ton pays"
+              value={data.country ?? ''}
+              options={COUNTRIES.map((c) => ({ value: c.value, label: c.label }))}
+              onChange={(v) =>
+                setData((d) => ({
+                  ...d,
+                  country: v,
+                  // A commune only makes sense for RDC (Kinshasa neighborhoods)
+                  // — switching country clears a stale one from another pick.
+                  commune: v === 'CD' ? d.commune : '',
+                }))
+              }
             />
           </div>
+
+          <label className="flex flex-col gap-2 font-body text-sm text-foreground">
+            Ta ville
+            <input
+              type="text"
+              list="onboarding-city-suggestions"
+              value={data.city}
+              onChange={(e) => setData((d) => ({ ...d, city: e.target.value }))}
+              placeholder="ex. Kinshasa"
+              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <datalist id="onboarding-city-suggestions">
+              {(data.country
+                ? MAJOR_CITIES_BY_COUNTRY[data.country as keyof typeof MAJOR_CITIES_BY_COUNTRY]
+                : undefined
+              )?.map((city) => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
+          </label>
+
+          {data.country === 'CD' && (
+            <div className="flex flex-col gap-2">
+              <label className="font-body text-sm text-foreground">Ta commune à Kinshasa</label>
+              <CustomSelect
+                ariaLabel="Ta commune à Kinshasa"
+                placeholder="Choisis ta commune (optionnel)"
+                value={data.commune}
+                searchable
+                options={KINSHASA_COMMUNES.map((c) => ({ value: c, label: c }))}
+                onChange={(v) => setData((d) => ({ ...d, commune: v }))}
+              />
+            </div>
+          )}
 
           <div>
             <label className="mb-2 block font-body text-sm text-foreground">
@@ -1026,7 +1073,9 @@ export default function OnboardingPage() {
 
           <button
             type="button"
-            disabled={!data.commune || !data.maritalStatus || !data.childrenCount}
+            disabled={
+              !data.country || !data.city.trim() || !data.maritalStatus || !data.childrenCount
+            }
             onClick={() => setStep(3)}
             className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >

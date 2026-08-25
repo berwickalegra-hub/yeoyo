@@ -28,6 +28,56 @@ export const KINSHASA_COMMUNES = [
   'Selembao',
 ];
 
+// The 6 countries YeOyo's payment integration actually supports (Chariow
+// checkout + phone parsing, see lib/server/payments/chariow.ts). This ISO2
+// list is the single source of truth for country selection anywhere in the
+// app — the onboarding country step, the credits shop's phone-country
+// picker, and the profile.country Zod validation (api/profile/route.ts) all
+// derive from it, so those lists can never drift apart.
+export const COUNTRY_CODES = ['CD', 'SN', 'CI', 'BJ', 'TG', 'CM'] as const;
+export type CountryCode = (typeof COUNTRY_CODES)[number];
+
+const COUNTRY_LABELS: Record<CountryCode, string> = {
+  CD: 'RD Congo',
+  SN: 'Sénégal',
+  CI: "Côte d'Ivoire",
+  BJ: 'Bénin',
+  TG: 'Togo',
+  CM: 'Cameroun',
+};
+
+const COUNTRY_DIAL_LABELS: Record<CountryCode, string> = {
+  CD: 'RD Congo (+243)',
+  SN: 'Sénégal (+221)',
+  CI: "Côte d'Ivoire (+225)",
+  BJ: 'Bénin (+229)',
+  TG: 'Togo (+228)',
+  CM: 'Cameroun (+237)',
+};
+
+export const COUNTRIES = COUNTRY_CODES.map((value) => ({ value, label: COUNTRY_LABELS[value] }));
+
+// Same list, with each country's dial code — the exact shape the credits
+// shop's phone-country <select> needs (`"Name (+dial)"` labels).
+export const PHONE_COUNTRIES = COUNTRY_CODES.map((value) => ({
+  value,
+  label: COUNTRY_DIAL_LABELS[value],
+}));
+
+// Basic autocomplete suggestions for the onboarding city field — a short,
+// hand-picked list of major cities per supported country, NOT a geographic
+// database. The field stays free text; this only populates the browser's
+// native <datalist> so typing "Lub" can suggest "Lubumbashi" without any
+// geocoding dependency.
+export const MAJOR_CITIES_BY_COUNTRY: Record<CountryCode, string[]> = {
+  CD: ['Kinshasa', 'Lubumbashi', 'Goma', 'Bukavu', 'Kisangani', 'Kananga', 'Mbuji-Mayi', 'Matadi'],
+  SN: ['Dakar', 'Thiès', 'Touba', 'Rufisque', 'Saint-Louis', 'Ziguinchor', 'Kaolack'],
+  CI: ['Abidjan', 'Bouaké', 'Yamoussoukro', 'San-Pédro', 'Korhogo', 'Daloa'],
+  BJ: ['Cotonou', 'Porto-Novo', 'Parakou', 'Abomey-Calavi', 'Djougou'],
+  TG: ['Lomé', 'Sokodé', 'Kara', 'Kpalimé', 'Atakpamé'],
+  CM: ['Douala', 'Yaoundé', 'Garoua', 'Bamenda', 'Bafoussam', 'Maroua'],
+};
+
 export const INTENT_OPTIONS = [
   { value: 'COURT_TERME', label: 'Mariage à court terme' },
   { value: 'MOYEN_TERME', label: 'Mariage à moyen terme' },

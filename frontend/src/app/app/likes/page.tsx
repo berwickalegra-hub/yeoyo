@@ -171,11 +171,13 @@ export default function LikesPage() {
                   <span className="font-body text-xs">
                     {INTENT_LABELS[l.profile.intent] ?? l.profile.intent}
                   </span>
-                  {l.profile.commune && (
+                  {(l.profile.city || l.profile.commune) && (
                     <>
                       <span className="text-border">•</span>
                       <Icon name="map-pin" size={11} />
-                      <span className="font-body text-xs">{l.profile.commune}</span>
+                      <span className="font-body text-xs">
+                        {[l.profile.city, l.profile.commune].filter(Boolean).join(', ')}
+                      </span>
                     </>
                   )}
                 </div>

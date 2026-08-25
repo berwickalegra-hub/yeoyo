@@ -241,10 +241,12 @@ export default function ProfileDetailPage() {
                     </span>
                     <span className="font-body text-base text-white/80">{profile.age} ans</span>
                   </div>
-                  {profile.commune && (
+                  {(profile.city || profile.commune) && (
                     <div className="mt-1 flex items-center gap-1 text-white/80">
                       <Icon name="map-pin" size={13} />
-                      <span className="font-body text-sm">{profile.commune}</span>
+                      <span className="font-body text-sm">
+                        {[profile.city, profile.commune].filter(Boolean).join(', ')}
+                      </span>
                     </div>
                   )}
                   {profile.tags.length > 0 && (

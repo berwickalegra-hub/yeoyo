@@ -65,11 +65,13 @@ function FavoriteRowCard({
           <span className="font-body text-xs">
             {INTENT_LABELS[row.profile.intent] ?? row.profile.intent}
           </span>
-          {row.profile.commune && (
+          {(row.profile.city || row.profile.commune) && (
             <>
               <span className="text-border">•</span>
               <Icon name="map-pin" size={11} />
-              <span className="font-body text-xs">{row.profile.commune}</span>
+              <span className="font-body text-xs">
+                {[row.profile.city, row.profile.commune].filter(Boolean).join(', ')}
+              </span>
             </>
           )}
         </div>

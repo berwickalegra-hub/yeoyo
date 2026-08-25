@@ -1065,11 +1065,13 @@ export default function MessageThreadPage() {
                   À propos
                 </p>
                 <div className="flex flex-col gap-2">
-                  {active.otherUser.commune && (
+                  {(active.otherUser.city || active.otherUser.commune) && (
                     <div className="flex items-center gap-2">
                       <Icon name="map-pin" size={14} />
                       <span className="font-body text-sm text-foreground">
-                        {active.otherUser.commune}
+                        {[active.otherUser.city, active.otherUser.commune]
+                          .filter(Boolean)
+                          .join(', ')}
                       </span>
                     </div>
                   )}

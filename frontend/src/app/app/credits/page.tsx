@@ -17,7 +17,8 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
-import { formatLocalPrice, type LocalCurrency } from '@/lib/currency';
+import { estimateLocalPrice, formatLocalPrice, type LocalCurrency } from '@/lib/currency';
+import { PHONE_COUNTRIES } from '@/lib/yeoyo/constants';
 
 interface Pack {
   id: 'decouverte' | 'serieux' | 'determine' | 'engage';
@@ -30,15 +31,6 @@ interface Pack {
   popular?: boolean;
   pricePerCredit: number;
 }
-
-const PHONE_COUNTRIES = [
-  { value: 'CD', label: 'RD Congo (+243)' },
-  { value: 'SN', label: 'Sénégal (+221)' },
-  { value: 'CI', label: "Côte d'Ivoire (+225)" },
-  { value: 'BJ', label: 'Bénin (+229)' },
-  { value: 'TG', label: 'Togo (+228)' },
-  { value: 'CM', label: 'Cameroun (+237)' },
-] as const;
 
 const USES: { icon: IconName; title: string; cost: string }[] = [
   { icon: 'star', title: "Voir qui t'a mis en favori", cost: '1 crédit' },
@@ -76,6 +68,7 @@ export default function CreditsPage() {
   const [selectedPackId, setSelectedPackId] = useState<Pack['id']>('serieux');
   const [phoneCountry, setPhoneCountry] = useState<(typeof PHONE_COUNTRIES)[number]['value']>('CD');
   const [phoneLocal, setPhoneLocal] = useState('');
+  const [profileCountry, setProfileCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,16 +77,25 @@ export default function CreditsPage() {
     try {
       const [packsRes, meRes] = await Promise.all([
         api<{ packs: Pack[] }>('/api/credits/packs'),
-        api<{ savedPhone: { phone: string; phoneCountry: string } | null }>('/api/credits/me'),
+        api<{
+          savedPhone: { phone: string; phoneCountry: string } | null;
+          profileCountry: string | null;
+        }>('/api/credits/me'),
       ]);
       setPacks(packsRes.packs);
       const popular = packsRes.packs.find((p) => p.popular);
       if (popular) setSelectedPackId(popular.id);
+      setProfileCountry(meRes.profileCountry);
       const savedPhone = meRes.savedPhone;
       if (savedPhone) {
         const knownCountry = PHONE_COUNTRIES.find((c) => c.value === savedPhone.phoneCountry);
         if (knownCountry) setPhoneCountry(knownCountry.value);
         setPhoneLocal(savedPhone.phone);
+      } else {
+        // No saved Chariow phone yet — default the country picker to the
+        // buyer's own onboarding country instead of always "RD Congo".
+        const knownCountry = PHONE_COUNTRIES.find((c) => c.value === meRes.profileCountry);
+        if (knownCountry) setPhoneCountry(knownCountry.value);
       }
       void refreshCredits();
     } catch (err) {
@@ -207,6 +209,16 @@ export default function CreditsPage() {
                       <p className="font-body text-[11px] text-muted-foreground">
                         Soit {formatLocalPrice(pack.pricePerCredit, pack.currency)} / crédit
                       </p>
+                      {(() => {
+                        const est = estimateLocalPrice(pack.priceTotal, profileCountry);
+                        if (est.currency === pack.currency) return null;
+                        return (
+                          <p className="font-body text-[11px] text-muted-foreground">
+                            {est.approximate ? '≈ ' : ''}
+                            {formatLocalPrice(est.amount, est.currency)}
+                          </p>
+                        );
+                      })()}
                       <div
                         className={`mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 ${
                           active ? 'border-gold bg-gold' : 'border-border'

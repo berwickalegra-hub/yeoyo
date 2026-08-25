@@ -5,6 +5,16 @@
 // gender, same as before that preference existed. Accepts an explicit
 // `gender` query param override since Explorer's own chip row exposes a
 // Femmes/Hommes/Tous toggle independent of the stored preference.
+//
+// Same-country default (2026-08-25): defaults to `me.country` — set at
+// onboarding, see api/profile/route.ts — same "stored preference, explicit
+// query param overrides it" pattern as gender above. A caller whose profile
+// predates this field (`me.country === null`) sees an unfiltered (all-
+// country) feed rather than an impossible "match nothing" filter. `commune`
+// stays the one further manual narrowing control (Kinshasa neighborhoods
+// only) — see CLAUDE.md-adjacent decision note: no numeric-radius search
+// exists in this app; country + commune equality is the whole "proximity"
+// model by design (avoids a geo-coordinates dependency for launch).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -24,6 +34,7 @@ const Query = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   gender: z.enum(['HOMME', 'FEMME']).optional(),
+  country: z.string().length(2).optional(),
   commune: z.string().optional(),
   ageMin: z.coerce.number().int().min(18).optional(),
   ageMax: z.coerce.number().int().min(18).optional(),
@@ -60,6 +71,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // `gender` override via the filter panel.
     const defaultGender =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
+    const defaultCountry = q.country ?? me.country ?? undefined;
     const [blocked, alreadyLiked] = await Promise.all([
       blockedUserIds(auth.user.sub),
       prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
@@ -71,6 +83,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
       onboardingCompletedAt: { not: null },
+      ...(defaultCountry ? { country: defaultCountry } : {}),
       ...(q.commune ? { commune: q.commune } : {}),
       ...(q.intent ? { intent: q.intent } : {}),
       ...(q.childrenCount ? { childrenCount: q.childrenCount } : {}),

@@ -19,6 +19,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { ageInYears } from '@/lib/server/profile/card';
 import { cloudinaryUrlForKey } from '@/lib/server/storage';
+import { COUNTRY_CODES } from '@/lib/yeoyo/constants';
 
 const MIN_AGE_YEARS = 18;
 
@@ -54,6 +55,8 @@ const Body = z.object({
   firstName: z.string().trim().min(1).max(60),
   lastName: z.string().trim().max(60).optional(),
   dateOfBirth: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date'),
+  country: z.enum(COUNTRY_CODES),
+  city: z.string().trim().min(1).max(60),
   commune: z.string().trim().max(60).optional(),
   religion: z.enum(['CHRETIEN', 'CATHOLIQUE', 'PROTESTANT', 'MUSULMAN']).optional(),
   maritalStatus: z.enum(['CELIBATAIRE', 'DIVORCE', 'VEUF_VEUVE']).optional(),
@@ -74,6 +77,8 @@ const PatchBody = z
   .object({
     visibilityPublic: z.boolean().optional(),
     onlineStatusVisible: z.boolean().optional(),
+    country: z.enum(COUNTRY_CODES).optional(),
+    city: z.string().trim().min(1).max(60).optional(),
     commune: z.string().trim().max(60).nullable().optional(),
     intent: z.enum(['COURT_TERME', 'MOYEN_TERME', 'LONG_TERME']).optional(),
     bio: z.string().trim().max(500).nullable().optional(),
@@ -179,6 +184,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         firstName: input.firstName,
         ...(input.lastName ? { lastName: input.lastName } : {}),
         dateOfBirth,
+        country: input.country,
+        city: input.city,
         ...(input.commune ? { commune: input.commune } : {}),
         ...(input.religion ? { religion: input.religion } : {}),
         ...(input.maritalStatus ? { maritalStatus: input.maritalStatus } : {}),
@@ -234,6 +241,8 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     const {
       visibilityPublic,
       onlineStatusVisible,
+      country,
+      city,
       commune,
       intent,
       bio,
@@ -254,6 +263,8 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       data: {
         ...(visibilityPublic !== undefined ? { visibilityPublic } : {}),
         ...(onlineStatusVisible !== undefined ? { onlineStatusVisible } : {}),
+        ...(country !== undefined ? { country } : {}),
+        ...(city !== undefined ? { city } : {}),
         ...(commune !== undefined ? { commune } : {}),
         ...(intent !== undefined ? { intent } : {}),
         ...(bio !== undefined ? { bio } : {}),

@@ -3,6 +3,8 @@ export interface ProfileCard {
   firstName: string;
   age: number;
   job: string | null;
+  country: string | null;
+  city: string;
   commune: string | null;
   intent: string;
   tags: string[];

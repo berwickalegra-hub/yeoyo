@@ -53,11 +53,13 @@ export function ContactRequestCard({
             <span className="font-body text-xs">
               {INTENT_LABELS[otherUser.intent] ?? otherUser.intent}
             </span>
-            {otherUser.commune && (
+            {(otherUser.city || otherUser.commune) && (
               <>
                 <span className="text-border">•</span>
                 <Icon name="map-pin" size={11} />
-                <span className="font-body text-xs">{otherUser.commune}</span>
+                <span className="font-body text-xs">
+                  {[otherUser.city, otherUser.commune].filter(Boolean).join(', ')}
+                </span>
               </>
             )}
           </div>
