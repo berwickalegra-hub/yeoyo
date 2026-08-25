@@ -375,10 +375,11 @@ export default function ProfilPage() {
   }
 
   async function saveInfo() {
+    if (!infoDraft.country) return;
     setSavingInfo(true);
     try {
       const body = {
-        ...(infoDraft.country ? { country: infoDraft.country } : {}),
+        country: infoDraft.country,
         ...(infoDraft.city.trim() ? { city: infoDraft.city.trim() } : {}),
         commune: infoDraft.commune || null,
         religion: infoDraft.religion || null,
@@ -931,8 +932,11 @@ export default function ProfilPage() {
                     <div className="flex flex-col gap-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <label className="flex flex-col gap-1">
-                          <span className="font-body text-xs text-muted-foreground">Pays</span>
+                          <span className="font-body text-xs text-muted-foreground">
+                            Pays <span className="text-destructive">*</span>
+                          </span>
                           <select
+                            required
                             value={infoDraft.country}
                             onChange={(e) =>
                               setInfoDraft((d) => ({
@@ -944,7 +948,9 @@ export default function ProfilPage() {
                             }
                             className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground"
                           >
-                            <option value="">Non précisé</option>
+                            <option value="" disabled>
+                              Choisir un pays
+                            </option>
                             {COUNTRIES.map((c) => (
                               <option key={c.value} value={c.value}>
                                 {c.label}
@@ -1095,7 +1101,7 @@ export default function ProfilPage() {
                         <button
                           type="button"
                           onClick={() => void saveInfo()}
-                          disabled={savingInfo}
+                          disabled={savingInfo || !infoDraft.country}
                           className="rounded-lg bg-primary px-4 py-1.5 font-body text-xs font-bold text-primary-foreground disabled:opacity-50"
                         >
                           {savingInfo ? 'Enregistrement…' : 'Enregistrer'}

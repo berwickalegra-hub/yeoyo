@@ -37,22 +37,34 @@ export const KINSHASA_COMMUNES = [
 export const COUNTRY_CODES = ['CD', 'SN', 'CI', 'BJ', 'TG', 'CM'] as const;
 export type CountryCode = (typeof COUNTRY_CODES)[number];
 
+// Regional-indicator flag emoji per country — rendered as plain text, so it
+// flows into any list built from COUNTRIES/PHONE_COUNTRIES below without
+// touching the <select>/<CustomSelect> components themselves.
+const COUNTRY_FLAGS: Record<CountryCode, string> = {
+  CD: '🇨🇩',
+  SN: '🇸🇳',
+  CI: '🇨🇮',
+  BJ: '🇧🇯',
+  TG: '🇹🇬',
+  CM: '🇨🇲',
+};
+
 const COUNTRY_LABELS: Record<CountryCode, string> = {
-  CD: 'RD Congo',
-  SN: 'Sénégal',
-  CI: "Côte d'Ivoire",
-  BJ: 'Bénin',
-  TG: 'Togo',
-  CM: 'Cameroun',
+  CD: `${COUNTRY_FLAGS.CD} RD Congo`,
+  SN: `${COUNTRY_FLAGS.SN} Sénégal`,
+  CI: `${COUNTRY_FLAGS.CI} Côte d'Ivoire`,
+  BJ: `${COUNTRY_FLAGS.BJ} Bénin`,
+  TG: `${COUNTRY_FLAGS.TG} Togo`,
+  CM: `${COUNTRY_FLAGS.CM} Cameroun`,
 };
 
 const COUNTRY_DIAL_LABELS: Record<CountryCode, string> = {
-  CD: 'RD Congo (+243)',
-  SN: 'Sénégal (+221)',
-  CI: "Côte d'Ivoire (+225)",
-  BJ: 'Bénin (+229)',
-  TG: 'Togo (+228)',
-  CM: 'Cameroun (+237)',
+  CD: `${COUNTRY_FLAGS.CD} RD Congo (+243)`,
+  SN: `${COUNTRY_FLAGS.SN} Sénégal (+221)`,
+  CI: `${COUNTRY_FLAGS.CI} Côte d'Ivoire (+225)`,
+  BJ: `${COUNTRY_FLAGS.BJ} Bénin (+229)`,
+  TG: `${COUNTRY_FLAGS.TG} Togo (+228)`,
+  CM: `${COUNTRY_FLAGS.CM} Cameroun (+237)`,
 };
 
 export const COUNTRIES = COUNTRY_CODES.map((value) => ({ value, label: COUNTRY_LABELS[value] }));
