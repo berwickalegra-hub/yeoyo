@@ -67,7 +67,11 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
 import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
-import { closeAblySafely, installAblyRejectionGuard } from '@/lib/yeoyo/ably-safe-close';
+import {
+  closeAblySafely,
+  installAblyRejectionGuard,
+  isRealtimeConfigured,
+} from '@/lib/yeoyo/ably-safe-close';
 import { COOKIE_PREFIX } from '@/lib/constants';
 import { INTENT_LABELS } from '@/lib/yeoyo/types';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
@@ -298,87 +302,99 @@ export default function MessageThreadPage() {
   useEffect(() => {
     if (!user) return;
     // Realtime is a progressive enhancement — the thread already works via
-    // plain GET/POST above. Without ABLY_API_KEY configured server-side,
-    // /api/realtime/token returns 503 and this connection never
-    // authenticates (state 'failed'); closeAblySafely skips the close()
-    // call in that case instead of letting the SDK throw an unhandled
-    // rejection on unmount.
-    installAblyRejectionGuard();
-    const ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
-    ably.connection.on('failed', () => {
-      // no-op — sending/receiving still works over REST, just not live-pushed
-    });
-    try {
-      const channel = ably.channels.get(`conversation:${conversationId}`);
-      channelRef.current = channel;
+    // plain GET/POST above. isRealtimeConfigured() is checked first so an
+    // unconfigured environment never constructs an Ably client at all
+    // (see that helper's doc comment — without this gate, a missing
+    // ABLY_API_KEY meant the SDK kept re-POSTing /api/realtime/token every
+    // few seconds forever for as long as a thread stayed open).
+    let cancelled = false;
+    let ably: Ably.Realtime | null = null;
 
-      channel.subscribe('message', (msg) => {
-        const data = msg.data as ThreadMessage;
-        if (seenIds.current.has(data.id)) return;
-        seenIds.current.add(data.id);
-        setMessages((prev) => [...prev, { ...data, fromSelf: data.senderId === user.id }]);
-      });
+    void (async () => {
+      const configured = await isRealtimeConfigured();
+      if (!configured || cancelled) return;
 
-      channel.subscribe('read', (msg) => {
-        const data = msg.data as { readerId: string; readAt: string };
-        if (data.readerId === user.id) return;
-        setMessages((prev) =>
-          prev.map((m) => (m.fromSelf && !m.readAt ? { ...m, readAt: data.readAt } : m)),
-        );
+      installAblyRejectionGuard();
+      ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
+      ably.connection.on('failed', () => {
+        // no-op — sending/receiving still works over REST, just not live-pushed
       });
-
-      channel.subscribe('delete', (msg) => {
-        const data = msg.data as { id: string };
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === data.id ? { ...m, deleted: true, body: '', imageUrl: null } : m,
-          ),
-        );
-      });
-
-      channel.subscribe('typing', (msg) => {
-        const data = msg.data as { userId: string };
-        if (data.userId === user.id) return;
-        setOtherTyping(true);
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(
-          () => setOtherTyping(false),
-          TYPING_DISPLAY_TIMEOUT_MS,
-        );
-      });
-
-      channel.presence.enter().catch(() => {
-        // ignore — presence is a progressive enhancement (see comment above)
-      });
-      channel.presence.subscribe('enter', (member) => {
-        if (member.clientId === otherUserIdRef.current) setOtherPresent(true);
-      });
-      channel.presence.subscribe('leave', (member) => {
-        if (member.clientId === otherUserIdRef.current) setOtherPresent(false);
-      });
-      channel.presence
-        .get()
-        .then((members) => {
-          if (members?.some((m) => m.clientId === otherUserIdRef.current)) setOtherPresent(true);
-        })
-        .catch(() => {
-          // ignore
-        });
-    } catch {
-      // ignore — see comment above
-    }
-    return () => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      channelRef.current = null;
       try {
-        ably.channels
-          .get(`conversation:${conversationId}`)
-          .presence.leave()
-          .catch(() => {});
+        const channel = ably.channels.get(`conversation:${conversationId}`);
+        channelRef.current = channel;
+
+        channel.subscribe('message', (msg) => {
+          const data = msg.data as ThreadMessage;
+          if (seenIds.current.has(data.id)) return;
+          seenIds.current.add(data.id);
+          setMessages((prev) => [...prev, { ...data, fromSelf: data.senderId === user.id }]);
+        });
+
+        channel.subscribe('read', (msg) => {
+          const data = msg.data as { readerId: string; readAt: string };
+          if (data.readerId === user.id) return;
+          setMessages((prev) =>
+            prev.map((m) => (m.fromSelf && !m.readAt ? { ...m, readAt: data.readAt } : m)),
+          );
+        });
+
+        channel.subscribe('delete', (msg) => {
+          const data = msg.data as { id: string };
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.id ? { ...m, deleted: true, body: '', imageUrl: null } : m,
+            ),
+          );
+        });
+
+        channel.subscribe('typing', (msg) => {
+          const data = msg.data as { userId: string };
+          if (data.userId === user.id) return;
+          setOtherTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(
+            () => setOtherTyping(false),
+            TYPING_DISPLAY_TIMEOUT_MS,
+          );
+        });
+
+        channel.presence.enter().catch(() => {
+          // ignore — presence is a progressive enhancement (see comment above)
+        });
+        channel.presence.subscribe('enter', (member) => {
+          if (member.clientId === otherUserIdRef.current) setOtherPresent(true);
+        });
+        channel.presence.subscribe('leave', (member) => {
+          if (member.clientId === otherUserIdRef.current) setOtherPresent(false);
+        });
+        channel.presence
+          .get()
+          .then((members) => {
+            if (members?.some((m) => m.clientId === otherUserIdRef.current)) setOtherPresent(true);
+          })
+          .catch(() => {
+            // ignore
+          });
       } catch {
         // ignore — see comment above
       }
-      closeAblySafely(ably);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      channelRef.current = null;
+      if (ably) {
+        try {
+          ably.channels
+            .get(`conversation:${conversationId}`)
+            .presence.leave()
+            .catch(() => {});
+        } catch {
+          // ignore — see comment above
+        }
+        closeAblySafely(ably);
+      }
     };
   }, [conversationId, user]);
 

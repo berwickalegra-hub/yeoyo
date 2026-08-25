@@ -40,3 +40,40 @@ export function installAblyRejectionGuard(): void {
     if (reason?.message === 'Connection closed') event.preventDefault();
   });
 }
+
+// 2026-08-26 — when ABLY_API_KEY is missing, `new Ably.Realtime({ authUrl })`
+// doesn't just fail once: the SDK's own reconnection logic treats a failed
+// auth as a retryable connection problem and keeps re-POSTing
+// /api/realtime/token every few seconds, forever, for as long as the
+// component consuming it stays mounted (found live: a user idling on
+// /app/messages saw a 503 + an Ably auth-error log line every ~5-10s
+// indefinitely). Callers await this ONCE before ever constructing an
+// Ably.Realtime client, and skip creating it entirely when unconfigured —
+// stopping the retry loop from ever starting is far simpler than getting
+// an already-started SDK reconnection loop to stop (see this file's other
+// two guards above for how fragile fighting the SDK's internal state
+// machine after the fact turned out to be). Memoized at module scope so
+// every realtime consumer on the page (inbox list, open thread, …) shares
+// one check instead of each firing its own.
+let cachedConfigured: boolean | null = null;
+
+export async function isRealtimeConfigured(): Promise<boolean> {
+  if (cachedConfigured !== null) return cachedConfigured;
+  try {
+    const res = await fetch('/api/realtime/token', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    // Any non-503 response (200 with a real token, or even an auth/5xx
+    // hiccup unrelated to configuration) means ABLY_API_KEY is set — only
+    // the specific "not configured" signal permanently disables realtime
+    // for this page session; anything else lets the real Ably client's own
+    // retry/backoff handle transient failures as designed.
+    cachedConfigured = res.status !== 503;
+  } catch {
+    // Network blip on the pre-check itself — don't permanently disable
+    // realtime over it; let the real connection attempt decide.
+    cachedConfigured = true;
+  }
+  return cachedConfigured;
+}

@@ -5,7 +5,11 @@ import Ably from 'ably';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useUser } from '@/contexts/AuthContext';
-import { closeAblySafely, installAblyRejectionGuard } from '@/lib/yeoyo/ably-safe-close';
+import {
+  closeAblySafely,
+  installAblyRejectionGuard,
+  isRealtimeConfigured,
+} from '@/lib/yeoyo/ably-safe-close';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 export interface ConversationRow {
@@ -58,29 +62,43 @@ export function useConversations() {
   useEffect(() => {
     if (!user || conversations.length === 0) return;
     // Ably is a progressive enhancement here too — a missing ABLY_API_KEY
-    // (or a failed connection) just means the list stays fetch-once, same
-    // graceful degrade as the thread view.
-    installAblyRejectionGuard();
-    const ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
-    ably.connection.on('failed', () => {
-      // no-op
-    });
-    const channels = conversations.map((c) => ably.channels.get(`conversation:${c.id}`));
+    // just means the list stays fetch-once, same graceful degrade as the
+    // thread view. isRealtimeConfigured() is checked first so an
+    // unconfigured environment never constructs an Ably client at all
+    // (see that helper's doc comment for why — the SDK retries forever
+    // otherwise).
+    let cancelled = false;
+    let ably: Ably.Realtime | null = null;
+
+    void (async () => {
+      const configured = await isRealtimeConfigured();
+      if (!configured || cancelled) return;
+
+      installAblyRejectionGuard();
+      ably = new Ably.Realtime({ authUrl: '/api/realtime/token', authMethod: 'POST' });
+      ably.connection.on('failed', () => {
+        // no-op
+      });
+      const channels = conversations.map((c) => ably!.channels.get(`conversation:${c.id}`));
+      try {
+        for (const channel of channels) {
+          channel.subscribe('message', scheduleReload);
+          channel.subscribe('delete', scheduleReload);
+        }
+      } catch {
+        // ignore — see comment above
+      }
+    })();
+
     function scheduleReload() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => void load(), RELOAD_DEBOUNCE_MS);
     }
-    try {
-      for (const channel of channels) {
-        channel.subscribe('message', scheduleReload);
-        channel.subscribe('delete', scheduleReload);
-      }
-    } catch {
-      // ignore — see comment above
-    }
+
     return () => {
+      cancelled = true;
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      closeAblySafely(ably);
+      if (ably) closeAblySafely(ably);
     };
     // Deliberately keyed on `conversations.length`, not `conversations` —
     // re-subscribing on every field change (a new message bumps almost
