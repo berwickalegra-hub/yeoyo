@@ -107,6 +107,10 @@ export function AdminSidebar({
               },
             ],
           },
+          {
+            label: 'Finance',
+            items: [{ href: '/admin/affilies', label: 'Affiliés', icon: 'users' as IconName }],
+          },
         ]
       : []),
   ];
