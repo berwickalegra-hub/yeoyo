@@ -184,3 +184,91 @@ describe('POST /api/auth/signup', () => {
     expect(src).toMatch(/export\s+const\s+runtime\s*=\s*['"]nodejs['"]/);
   });
 });
+
+describe('POST /api/auth/signup — promoCode', () => {
+  it('sets referredByAffiliateId when promoCode matches an AFFILIATE account', async () => {
+    // First findUnique call = existing-email check (email lookup),
+    // second = promo-code lookup by affiliateCode.
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'affiliate_1', role: 'AFFILIATE' } as never);
+    prismaMock.user.create.mockResolvedValue({ id: 'new_user_1' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makeReq({
+        email: 'ref@test.local',
+        password: 'a-strong-enough-password',
+        promoCode: 'aff00001',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ referredByAffiliateId: 'affiliate_1' }),
+      }),
+    );
+  });
+
+  it('never blocks signup on an unknown promoCode, and sets no referral', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'new_user_2' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makeReq({
+        email: 'noref@test.local',
+        password: 'a-strong-enough-password',
+        promoCode: 'BOGUS999',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ referredByAffiliateId: expect.anything() }),
+      }),
+    );
+  });
+
+  it('ignores a code that resolves to a non-AFFILIATE user', async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'someone', role: 'USER' } as never);
+    prismaMock.user.create.mockResolvedValue({ id: 'new_user_3' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makeReq({
+        email: 'noref2@test.local',
+        password: 'a-strong-enough-password',
+        promoCode: 'NOTANAFF',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ referredByAffiliateId: expect.anything() }),
+      }),
+    );
+  });
+
+  it('signup with no promoCode at all still works, no promo lookup performed', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'new_user_4' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makeReq({ email: 'plain@test.local', password: 'a-strong-enough-password' }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
+  });
+});

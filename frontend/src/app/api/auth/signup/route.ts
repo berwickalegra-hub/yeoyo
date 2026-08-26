@@ -33,6 +33,11 @@ const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) 
 const Body = z.object({
   email: zEmail,
   password: z.string().min(1),
+  // Optional affiliate referral code from the signup form (prefilled from
+  // ?promo= on the onboarding URL, or typed manually). Case-insensitive —
+  // normalized to uppercase before lookup since generateUniqueAffiliateCode
+  // only ever produces uppercase codes.
+  promoCode: z.string().trim().optional(),
 });
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       res.headers.set('x-request-id', ctx.requestId);
       return res;
     }
-    const { email, password } = parsed.data;
+    const { email, password, promoCode } = parsed.data;
 
     // 2. Password policy gates BEFORE looking up user (D-22 — keep the no-user
     //    and existing-user branches symmetric below).
@@ -128,9 +133,23 @@ export async function POST(req: NextRequest): Promise<Response> {
     const code = generateVerificationCode();
     const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
 
+    // Resolve the referring affiliate BEFORE the transaction — a bad/unknown
+    // code must NEVER block or error signup, so this is a plain best-effort
+    // lookup, not a guard. Only an AFFILIATE-role account can refer.
+    let referredByAffiliateId: string | undefined;
+    if (promoCode) {
+      const affiliate = await prisma.user.findUnique({
+        where: { affiliateCode: promoCode.toUpperCase() },
+        select: { id: true, role: true },
+      });
+      if (affiliate && affiliate.role === 'AFFILIATE') {
+        referredByAffiliateId = affiliate.id;
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { email, passwordHash },
+        data: { email, passwordHash, ...(referredByAffiliateId ? { referredByAffiliateId } : {}) },
         select: { id: true },
       });
       await tx.verificationCode.create({
