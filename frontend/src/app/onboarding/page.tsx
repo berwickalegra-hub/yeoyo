@@ -546,6 +546,12 @@ export default function OnboardingPage() {
           photoUploadId,
         },
       });
+      // AuthContext's cached `user.profileCompleted` is still false at this
+      // point (it was fetched before the profile existed) — without this,
+      // AppShell's redirect gate on /app/decouvrir sees the stale flag and
+      // bounces straight back to /onboarding, which then finds the
+      // now-existing profile and pushes forward again: an infinite loop.
+      await refresh();
       router.push('/app/decouvrir');
     } catch (err) {
       const msg =
