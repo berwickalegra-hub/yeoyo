@@ -40,7 +40,10 @@ export async function POST(
       );
     }
 
-    const profile = await prisma.profile.findUnique({ where: { id } });
+    const profile = await prisma.profile.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, referredByAffiliateId: true } } },
+    });
     if (!profile) {
       return NextResponse.json(
         { error: 'PROFILE_NOT_FOUND', message: 'Profile not found' },
@@ -55,20 +58,60 @@ export async function POST(
     }
 
     const approve = parsed.data.action === 'APPROVE';
-    const updated = await prisma.profile.update({
-      where: { id },
-      data: {
-        verificationStatus: approve ? 'VERIFIED' : 'REJECTED',
-        ...(approve ? { verifiedAt: new Date() } : {}),
-      },
-    });
 
-    await logAdminAction(prisma, {
-      actorId: auth.admin.id,
-      action: approve ? 'profile.verify' : 'profile.reject',
-      targetType: 'Profile',
-      targetId: id,
-      metadata: { userId: profile.userId },
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedProfile = await tx.profile.update({
+        where: { id },
+        data: {
+          verificationStatus: approve ? 'VERIFIED' : 'REJECTED',
+          ...(approve ? { verifiedAt: new Date() } : {}),
+        },
+      });
+
+      // Affiliate verification bonus — approve-only, and only when this
+      // profile's account was referred. Never runs on REJECT.
+      if (approve && profile.user.referredByAffiliateId) {
+        const existingBonus = await tx.affiliateEarning.findFirst({
+          where: { referredUserId: profile.userId, type: 'VERIFICATION_BONUS' },
+          select: { id: true },
+        });
+        if (!existingBonus) {
+          try {
+            await tx.affiliateEarning.create({
+              data: {
+                affiliateId: profile.user.referredByAffiliateId,
+                referredUserId: profile.userId,
+                type: 'VERIFICATION_BONUS',
+                amount: profile.gender === 'FEMME' ? 1500 : 300,
+              },
+            });
+          } catch (err) {
+            // Postgres partial-unique-index failsafe (see migration
+            // "AffiliateEarning_one_verification_bonus_per_user") — a
+            // concurrent request already inserted the bonus between our
+            // findFirst above and this create. The profile's verification
+            // itself must still succeed, so this is swallowed, not
+            // rethrown (duck-typed P2002 check, same pattern as
+            // notifications/index.ts's dedupeKey catch).
+            const isDuplicateKey =
+              typeof err === 'object' &&
+              err !== null &&
+              'code' in err &&
+              (err as { code?: unknown }).code === 'P2002';
+            if (!isDuplicateKey) throw err;
+          }
+        }
+      }
+
+      await logAdminAction(tx, {
+        actorId: auth.admin.id,
+        action: approve ? 'profile.verify' : 'profile.reject',
+        targetType: 'Profile',
+        targetId: id,
+        metadata: { userId: profile.userId },
+      });
+
+      return updatedProfile;
     });
 
     return NextResponse.json(
