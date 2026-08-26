@@ -150,6 +150,43 @@ export async function reconcileChariowOrder(
       relatedOrderId: order.id,
     });
 
+    // Affiliate commission — 15% of the NET amount (after Chariow's own
+    // cut), only for a referred HOMME still inside the 30-day window from
+    // signup. FEMME purchases never trigger this (messaging is free for
+    // them in practice, but the condition stays explicit rather than
+    // implicit — see reconcile.ts's design spec §6.2). Idempotence is
+    // inherited for free from the Order-status CAS above: this whole
+    // function body runs at most once per Order, so no separate guard is
+    // needed here (unlike the verification bonus, which CAN legitimately
+    // be re-attempted if a future flow resets verificationStatus).
+    const referralUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        createdAt: true,
+        referredByAffiliateId: true,
+        profile: { select: { gender: true } },
+      },
+    });
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    if (
+      referralUser?.referredByAffiliateId &&
+      referralUser.profile?.gender === 'HOMME' &&
+      paidAt.getTime() <= referralUser.createdAt.getTime() + THIRTY_DAYS_MS
+    ) {
+      const feePct = Number(process.env.CHARIOW_PROVIDER_FEE_PCT ?? 15);
+      const netAmount = Math.round(order.amount * (1 - feePct / 100));
+      const commission = Math.round(netAmount * 0.15);
+      await tx.affiliateEarning.create({
+        data: {
+          affiliateId: referralUser.referredByAffiliateId,
+          referredUserId: userId,
+          type: 'CREDIT_COMMISSION',
+          amount: commission,
+          relatedOrderId: order.id,
+        },
+      });
+    }
+
     await enqueueOutbox(tx, {
       kind: 'notification.payment_received',
       payload: { userId, orderId: order.id, amount: order.amount, currency: order.currency },
