@@ -173,8 +173,10 @@ export async function reconcileChariowOrder(
       referralUser.profile?.gender === 'HOMME' &&
       paidAt.getTime() <= referralUser.createdAt.getTime() + THIRTY_DAYS_MS
     ) {
-      const feePct = Number(process.env.CHARIOW_PROVIDER_FEE_PCT ?? 15);
-      const netAmount = Math.round(order.amount * (1 - feePct / 100));
+      const rawFeePct = process.env.CHARIOW_PROVIDER_FEE_PCT;
+      const feePct = rawFeePct && rawFeePct.trim() !== '' ? Number(rawFeePct) : 15;
+      const grossFcfa = Math.round(order.amount / 100); // order.amount is smallest-unit (×100) — see checkout/route.ts
+      const netAmount = Math.round(grossFcfa * (1 - feePct / 100));
       const commission = Math.round(netAmount * 0.15);
       await tx.affiliateEarning.create({
         data: {

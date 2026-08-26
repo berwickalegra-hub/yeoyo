@@ -76,30 +76,30 @@ export async function POST(
           select: { id: true },
         });
         if (!existingBonus) {
-          try {
-            await tx.affiliateEarning.create({
-              data: {
+          // Postgres partial-unique-index failsafe (see migration
+          // "AffiliateEarning_one_verification_bonus_per_user") — a
+          // concurrent request may have already inserted the bonus between
+          // our findFirst above and this insert. A unique-constraint
+          // violation on Postgres aborts the WHOLE transaction (25P02),
+          // which a JS try/catch around `.create()` cannot undo inside an
+          // interactive Prisma transaction (no savepoints between
+          // statements) — the next statement (logAdminAction below) would
+          // itself throw and roll back the profile's legitimate
+          // verification too. `createMany({ skipDuplicates: true })`
+          // compiles to `INSERT ... ON CONFLICT DO NOTHING`, so it never
+          // raises on the partial-unique-index conflict and no catch is
+          // needed.
+          await tx.affiliateEarning.createMany({
+            data: [
+              {
                 affiliateId: profile.user.referredByAffiliateId,
                 referredUserId: profile.userId,
                 type: 'VERIFICATION_BONUS',
                 amount: profile.gender === 'FEMME' ? 1500 : 300,
               },
-            });
-          } catch (err) {
-            // Postgres partial-unique-index failsafe (see migration
-            // "AffiliateEarning_one_verification_bonus_per_user") — a
-            // concurrent request already inserted the bonus between our
-            // findFirst above and this create. The profile's verification
-            // itself must still succeed, so this is swallowed, not
-            // rethrown (duck-typed P2002 check, same pattern as
-            // notifications/index.ts's dedupeKey catch).
-            const isDuplicateKey =
-              typeof err === 'object' &&
-              err !== null &&
-              'code' in err &&
-              (err as { code?: unknown }).code === 'P2002';
-            if (!isDuplicateKey) throw err;
-          }
+            ],
+            skipDuplicates: true,
+          });
         }
       }
 

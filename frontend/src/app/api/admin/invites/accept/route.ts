@@ -190,6 +190,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
               tokenVersion: { increment: 1 },
               ...(affiliateCode && !existing.affiliateCode ? { affiliateCode } : {}),
+              ...(invite.name ? { name: invite.name } : {}),
             },
           });
           userId = existing.id;
@@ -201,6 +202,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               role: invite.role,
               emailVerifiedAt: new Date(),
               ...(affiliateCode ? { affiliateCode } : {}),
+              ...(invite.name ? { name: invite.name } : {}),
             },
           });
           userId = created.id;
@@ -231,7 +233,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     return NextResponse.json(
-      { ok: true },
+      { ok: true, role: invite.role },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },
     );
   });

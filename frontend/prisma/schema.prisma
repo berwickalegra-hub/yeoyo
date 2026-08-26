@@ -172,6 +172,14 @@ model AdminInvite {
 // database (profile actually flips to VERIFIED; Order actually flips to
 // PAID) — never speculatively, never reversed.
 // ───────────────────────────────────────────────────────────────────────
+// WARNING: this table has a hand-written Postgres PARTIAL unique index
+// (AffiliateEarning_one_verification_bonus_per_user, defined in migration
+// 20260826073426_affiliate_program) that Prisma cannot represent in this
+// schema file. If `prisma migrate dev` ever generates a migration containing
+// `DROP INDEX "AffiliateEarning_one_verification_bonus_per_user"`, DO NOT
+// apply it as-is — that index is the DB-level guarantee against a duplicate
+// VERIFICATION_BONUS row per referredUserId. Edit the generated migration to
+// remove that DROP statement before applying.
 model AffiliateEarning {
   id             String    @id @default(cuid())
   affiliateId    String

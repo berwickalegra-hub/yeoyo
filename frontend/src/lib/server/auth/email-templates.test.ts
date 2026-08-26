@@ -96,4 +96,16 @@ describe('adminInviteEmail', () => {
     expect(tpl.html).toContain('https://example.test/admin/invites/accept?token=abc');
     expect(tpl.html).toContain('MODERATOR');
   });
+
+  it('uses Affilié-space copy (not "back-office") for an AFFILIATE invite', () => {
+    const tpl = adminInviteEmail({
+      inviteUrl: 'https://example.test/admin/invites/accept?token=aff',
+      role: 'AFFILIATE',
+      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(tpl.html).toContain('https://example.test/admin/invites/accept?token=aff');
+    expect(tpl.html).not.toContain('back-office');
+    expect(tpl.text).not.toContain('back-office');
+    expect(tpl.html).toContain('Affilié');
+  });
 });

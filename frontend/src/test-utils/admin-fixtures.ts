@@ -401,6 +401,7 @@ interface AdminInviteOverrides {
   id?: string;
   email?: string;
   role?: 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
+  name?: string | null;
   tokenHash?: string;
   invitedById?: string;
   expiresAt?: Date;
@@ -413,6 +414,7 @@ export function seedAdminInvite(overrides: AdminInviteOverrides = {}) {
     id: overrides.id ?? `invite_${Math.random().toString(36).slice(2, 10)}`,
     email: overrides.email ?? 'invitee@test.local',
     role: overrides.role ?? 'MODERATOR',
+    name: overrides.name ?? null,
     tokenHash: overrides.tokenHash ?? 'a'.repeat(64),
     invitedById: overrides.invitedById ?? 'superadmin_seed_1',
     expiresAt: overrides.expiresAt ?? new Date(FROZEN_NOW.getTime() + 48 * 60 * 60 * 1000),

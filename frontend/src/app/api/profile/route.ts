@@ -23,6 +23,26 @@ import { COUNTRY_CODES } from '@/lib/yeoyo/constants';
 
 const MIN_AGE_YEARS = 18;
 
+// An AFFILIATE-role account has no dating-app-facing identity — it must
+// never be able to read, create, or update a Profile. `requireAuth()`
+// (protected file, lib/server/middleware/index.ts) intentionally returns a
+// minimal AuthContext with no `role`, so this route re-queries the fresh
+// role itself (same pattern as profile/boost/route.ts) rather than trusting
+// a JWT claim.
+async function rejectIfAffiliate(userId: string, requestId: string): Promise<NextResponse | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (user?.role === 'AFFILIATE') {
+    return NextResponse.json(
+      {
+        code: 'AFFILIATE_ACCOUNT',
+        message: 'Un compte Affilié ne peut pas créer ou modifier de profil de rencontre.',
+      },
+      { status: 403, headers: { 'x-request-id': requestId } },
+    );
+  }
+  return null;
+}
+
 type ProfileWithPhotos = Profile & { photos: (ProfilePhoto & { fileUpload: FileUpload })[] };
 
 // Same "primary wins, else first" resolution as profile/card.ts's
@@ -105,6 +125,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
+    const affiliateFail = await rejectIfAffiliate(auth.user.sub, ctx.requestId);
+    if (affiliateFail) return affiliateFail;
+
     const profile = await prisma.profile.findUnique({
       where: { userId: auth.user.sub },
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
@@ -131,6 +154,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    const affiliateFail = await rejectIfAffiliate(auth.user.sub, ctx.requestId);
+    if (affiliateFail) return affiliateFail;
 
     const json: unknown = await req.json().catch(() => null);
     const parsed = Body.safeParse(json);
@@ -221,6 +247,9 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
 
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    const affiliateFail = await rejectIfAffiliate(auth.user.sub, ctx.requestId);
+    if (affiliateFail) return affiliateFail;
 
     const parsed = PatchBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {

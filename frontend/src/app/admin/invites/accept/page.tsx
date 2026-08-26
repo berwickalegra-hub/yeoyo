@@ -1,9 +1,12 @@
 // GET ?token=<raw invite token>, sent by the outbox invite email
 // (see api/admin/invites/route.ts's `inviteUrl`). Sets the invitee's
-// password via POST /api/admin/invites/accept, then sends them to
-// /admin/login to authenticate normally — this route never issues cookies
-// itself (mirrors reset-password's no-auto-login rationale: keep the
-// invite-accept and login flows independent).
+// password via POST /api/admin/invites/accept, then sends them to log in —
+// this route never issues cookies itself (mirrors reset-password's
+// no-auto-login rationale: keep the invite-accept and login flows
+// independent). The accept response carries the invite's `role`: an
+// AFFILIATE account goes to /affilie/login (it fails /api/admin/login's
+// `roleRank(role) >= roleRank('MODERATOR')` gate), everyone else goes to
+// /admin/login as before.
 'use client';
 
 import { Suspense, useState, type FormEvent } from 'react';
@@ -24,12 +27,12 @@ function AcceptInviteForm() {
     setError(null);
     setBusy(true);
     try {
-      await api('/api/admin/invites/accept', {
+      const res = await api<{ ok: boolean; role?: string }>('/api/admin/invites/accept', {
         method: 'POST',
         body: { token, password },
       });
       setDone(true);
-      router.push('/admin/login');
+      router.push(res.role === 'AFFILIATE' ? '/affilie/login' : '/admin/login');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Échec de l'activation du compte.");
     } finally {

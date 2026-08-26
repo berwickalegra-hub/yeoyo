@@ -108,8 +108,22 @@ export interface AdminInviteEmailArgs {
 
 export function adminInviteEmail(args: AdminInviteEmailArgs): EmailTemplate {
   const url = htmlEscape(args.inviteUrl);
-  const role = htmlEscape(args.role);
   const ttl = ttlWording(args.expiresAt);
+
+  // AFFILIATE invites never grant back-office access (POST /api/admin/login
+  // gates on roleRank(role) >= roleRank('MODERATOR')), so the copy must not
+  // promise "back-office" for that role — it dead-ends the invitee at a
+  // login page that will always reject them. Every other role keeps the
+  // original wording unchanged.
+  if (args.role === 'AFFILIATE') {
+    return {
+      subject: 'Invitation au programme Affilié YeOyo',
+      html: `<p>Bonjour,</p><p>Vous avez été invité(e) à rejoindre l'espace Affilié YeOyo.</p><p><a href="${url}">Activer mon compte affilié</a></p><p>Ce lien expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
+      text: `Vous avez été invité(e) à rejoindre l'espace Affilié YeOyo. Activer : ${args.inviteUrl}. Ce lien expire ${ttl}.`,
+    };
+  }
+
+  const role = htmlEscape(args.role);
   return {
     subject: 'Invitation à l’administration YeOyo',
     html: `<p>Bonjour,</p><p>Vous avez été invité(e) à rejoindre le back-office YeOyo avec le rôle <strong>${role}</strong>.</p><p><a href="${url}">Accepter l'invitation</a></p><p>Ce lien expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,

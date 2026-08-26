@@ -10,6 +10,20 @@ vi.mock('@/lib/server/affiliates/code', () => ({
   generateUniqueAffiliateCode: vi.fn(),
 }));
 
+// This route's `limiter` is built once at module-import time from a single
+// in-memory bucket (no redis configured in the test env), keyed by source
+// IP — every POST in this file shares that ONE bucket for the file's whole
+// run since NextRequest here never sets a distinguishing IP header. Mock it
+// out so the number of tests in this file isn't silently capped by
+// ADMIN_INVITE_ACCEPT_RATE_LIMIT_MAX (default 10) — rate-limiting isn't
+// what any test in this file is exercising.
+vi.mock('@/lib/server/middleware/rate-limit-by-email', () => ({
+  createEmailLimiter: vi.fn().mockReturnValue({
+    check: vi.fn().mockResolvedValue(null),
+    refund: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 const mockGenerateCode = vi.mocked(generateUniqueAffiliateCode);
 
 function makePost(body: unknown): NextRequest {
@@ -254,6 +268,121 @@ describe('POST /api/admin/invites/accept', () => {
         data: expect.objectContaining({ affiliateCode: 'AFF77788' }),
       }),
     );
+  });
+
+  it('copies invite.name onto the new User row when the invite carries one', async () => {
+    const invite = seedAdminInvite({
+      email: 'named-aff@test.local',
+      role: 'AFFILIATE' as never,
+      name: 'Awa Diop',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    } as never);
+    mockGenerateCode.mockResolvedValueOnce('AFF55511');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.create.mockResolvedValueOnce({ id: 'new_named_1' } as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ name: 'Awa Diop' }),
+      }),
+    );
+  });
+
+  it('copies invite.name onto an existing User row being promoted, when the invite carries one', async () => {
+    const invite = seedAdminInvite({
+      email: 'named-existing@test.local',
+      role: 'AFFILIATE' as never,
+      name: 'Moussa Ba',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    } as never);
+    mockGenerateCode.mockResolvedValueOnce('AFF66622');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'existing_named_1',
+      email: 'named-existing@test.local',
+      affiliateCode: null,
+      emailVerifiedAt: new Date(),
+    } as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.update.mockResolvedValueOnce({} as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ name: 'Moussa Ba' }),
+      }),
+    );
+  });
+
+  it('does not set name at all when the invite carries no name (MODERATOR/ADMIN invites never set it)', async () => {
+    const invite = seedAdminInvite({
+      email: 'no-name-mod@test.local',
+      role: 'MODERATOR',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.create.mockResolvedValueOnce({ id: 'no_name_user_1' } as never);
+
+    await POST(makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }));
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ name: expect.anything() }),
+      }),
+    );
+  });
+
+  it('returns the accepted invite role in the response body (so the client can route the post-accept redirect)', async () => {
+    const invite = seedAdminInvite({
+      email: 'role-in-response@test.local',
+      role: 'AFFILIATE' as never,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    mockGenerateCode.mockResolvedValueOnce('AFF33344');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.create.mockResolvedValueOnce({ id: 'role_resp_1' } as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }),
+    );
+    const body = (await res.json()) as { ok: boolean; role: string };
+    expect(body.role).toBe('AFFILIATE');
   });
 
   it('rejects the second of two concurrent accepts (race-safety guard)', async () => {

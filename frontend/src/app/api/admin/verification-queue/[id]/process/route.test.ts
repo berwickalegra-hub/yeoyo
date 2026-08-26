@@ -188,18 +188,21 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       verifiedAt: new Date(),
     } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
-    prismaMock.affiliateEarning.create.mockResolvedValueOnce({} as never);
+    prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
 
     const res = await POST(makePost('p_bonus_h', { action: 'APPROVE' }), ctxWith('p_bonus_h'));
     expect(res.status).toBe(200);
-    expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
+    expect(prismaMock.affiliateEarning.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          affiliateId: 'aff_1',
-          referredUserId: 'user_1',
-          type: 'VERIFICATION_BONUS',
-          amount: 300,
-        }),
+        data: [
+          expect.objectContaining({
+            affiliateId: 'aff_1',
+            referredUserId: 'user_1',
+            type: 'VERIFICATION_BONUS',
+            amount: 300,
+          }),
+        ],
+        skipDuplicates: true,
       }),
     );
   });
@@ -216,11 +219,14 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       verificationStatus: 'VERIFIED',
     } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
-    prismaMock.affiliateEarning.create.mockResolvedValueOnce({} as never);
+    prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
 
     await POST(makePost('p_bonus_f', { action: 'APPROVE' }), ctxWith('p_bonus_f'));
-    expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: 1500 }) }),
+    expect(prismaMock.affiliateEarning.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ amount: 1500 })],
+        skipDuplicates: true,
+      }),
     );
   });
 
@@ -234,7 +240,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
 
     await POST(makePost('p_no_ref', { action: 'APPROVE' }), ctxWith('p_no_ref'));
     expect(prismaMock.affiliateEarning.findFirst).not.toHaveBeenCalled();
-    expect(prismaMock.affiliateEarning.create).not.toHaveBeenCalled();
+    expect(prismaMock.affiliateEarning.createMany).not.toHaveBeenCalled();
   });
 
   it('POST never inserts a bonus on REJECT even with a referring affiliate', async () => {
@@ -246,7 +252,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
     } as never);
 
     await POST(makePost('p_reject', { action: 'REJECT' }), ctxWith('p_reject'));
-    expect(prismaMock.affiliateEarning.create).not.toHaveBeenCalled();
+    expect(prismaMock.affiliateEarning.createMany).not.toHaveBeenCalled();
   });
 
   it('POST never inserts a second bonus for the same referredUserId (app-level check)', async () => {
@@ -260,10 +266,19 @@ describe('/api/admin/verification-queue/[id]/process', () => {
 
     const res = await POST(makePost('p_dup', { action: 'APPROVE' }), ctxWith('p_dup'));
     expect(res.status).toBe(200);
-    expect(prismaMock.affiliateEarning.create).not.toHaveBeenCalled();
+    expect(prismaMock.affiliateEarning.createMany).not.toHaveBeenCalled();
   });
 
-  it('POST swallows a P2002 race from the partial unique index without failing the profile update', async () => {
+  it('POST uses createMany+skipDuplicates so a concurrent duplicate bonus never aborts the transaction', async () => {
+    // On Postgres, a unique-constraint violation inside an interactive
+    // Prisma transaction aborts the WHOLE transaction (25P02) — a JS
+    // try/catch around a throwing `.create()` cannot undo that (no
+    // savepoints between statements), so the next statement
+    // (logAdminAction) would itself throw and roll back the profile's
+    // legitimate verification too. `createMany({ skipDuplicates: true })`
+    // compiles to `INSERT ... ON CONFLICT DO NOTHING`, so a concurrent
+    // request having already inserted the row between our findFirst and
+    // this insert just resolves with `count: 0` instead of throwing.
     const profile = seedProfile({ id: 'p_race', referredByAffiliateId: 'aff_1' });
     prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
     prismaMock.profile.update.mockResolvedValueOnce({
@@ -271,11 +286,14 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       verificationStatus: 'VERIFIED',
     } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
-    prismaMock.affiliateEarning.create.mockRejectedValueOnce({ code: 'P2002' });
+    prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 0 } as never);
 
     const res = await POST(makePost('p_race', { action: 'APPROVE' }), ctxWith('p_race'));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { profile: { verificationStatus: string } };
     expect(body.profile.verificationStatus).toBe('VERIFIED');
+    expect(prismaMock.affiliateEarning.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
   });
 });

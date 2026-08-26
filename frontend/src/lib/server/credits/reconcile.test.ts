@@ -67,14 +67,15 @@ describe('reconcileChariowOrder — affiliate commission', () => {
 
     const result = await reconcileChariowOrder(prismaMock, 'order_1');
     expect(result.orderStatus).toBe('PAID');
-    // netAmount = round(100000 * 0.85) = 85000; commission = round(85000 * 0.15) = 12750
+    // order.amount=100000 is smallest-unit (×100) -> grossFcfa = round(100000/100) = 1000
+    // netAmount = round(1000 * 0.85) = 850; commission = round(850 * 0.15) = round(127.5) = 128
     expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           affiliateId: 'aff_1',
           referredUserId: 'user_1',
           type: 'CREDIT_COMMISSION',
-          amount: 12750,
+          amount: 128,
           relatedOrderId: 'order_1',
         }),
       }),
@@ -164,9 +165,10 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     prismaMock.affiliateEarning.create.mockResolvedValueOnce({} as never);
 
     await reconcileChariowOrder(prismaMock, 'order_5');
-    // netAmount = round(100000 * 0.90) = 90000; commission = round(90000 * 0.15) = 13500
+    // order.amount=100000 is smallest-unit (×100) -> grossFcfa = round(100000/100) = 1000
+    // netAmount = round(1000 * 0.90) = 900; commission = round(900 * 0.15) = 135
     expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: 13500 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ amount: 135 }) }),
     );
   });
 });
