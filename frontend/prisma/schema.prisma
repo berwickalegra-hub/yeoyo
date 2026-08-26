@@ -28,7 +28,7 @@ model User {
   // full back-office; SUPERADMIN can promote/demote other admins and
   // manage 2FA/invites. Bootstrap an initial SUPERADMIN via
   // `pnpm db:make-superadmin <email>` (see scripts).
-  role                   String    @default("USER") // USER | MODERATOR | ADMIN | SUPERADMIN
+  role                   String    @default("USER") // USER | MODERATOR | ADMIN | SUPERADMIN | AFFILIATE
   // Account status. ACTIVE = login + refresh allowed; SUSPENDED = both
   // refused with 403 ACCOUNT_SUSPENDED. Mutated via /api/admin/users/[id]/status
   // (ADMIN can suspend; only SUPERADMIN can restore).
@@ -83,9 +83,29 @@ model User {
   ownedOrganizations Organization[]       @relation("OrgOwner")
   memberships        OrganizationMember[] @relation("OrgMembership")
 
+  // Affiliate program — a User with role="AFFILIATE" is a separate account
+  // type (never a dating-app user in parallel), created only via
+  // POST /api/admin/affiliates (SUPERADMIN-only, reuses the AdminInvite
+  // flow). affiliateCode is generated once at account creation and never
+  // regenerated (an already-shared referral link must stay valid).
+  affiliateCode          String?   @unique
+
+  // Filleul → parrain. Set exactly once, at signup (POST /api/auth/signup),
+  // never modified afterward — permanent attribution. onDelete: SetNull so
+  // a (hypothetical, not built in V1) affiliate-account deletion never
+  // cascades into deleting the referred user.
+  referredByAffiliateId  String?
+  referredByAffiliate    User?     @relation("AffiliateReferrals", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  referredUsers          User[]    @relation("AffiliateReferrals")
+
+  affiliateEarnings      AffiliateEarning[] @relation("AffiliateEarnings")
+  earningsGenerated      AffiliateEarning[] @relation("ReferredUserEarnings")
+
   @@index([email])
   @@index([role])
   @@index([status])
+  @@index([affiliateCode])
+  @@index([referredByAffiliateId])
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -127,7 +147,11 @@ model AdminAction {
 model AdminInvite {
   id          String    @id @default(cuid())
   email       String
-  role        String // MODERATOR | ADMIN | SUPERADMIN
+  // Optional display name — only ever set by POST /api/admin/affiliates
+  // (affiliate invites carry a name; MODERATOR/ADMIN/SUPERADMIN invites
+  // from POST /api/admin/invites never set this, stays null for them).
+  name        String?
+  role        String // MODERATOR | ADMIN | SUPERADMIN | AFFILIATE
   tokenHash   String    @unique
   invitedById String
   invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Restrict)
@@ -138,6 +162,34 @@ model AdminInvite {
 
   @@index([email])
   @@index([tokenHash])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Affiliate program — one row per real, confirmed earning event. Never
+// updated after creation except `paidAt` (set in bulk by
+// POST /api/admin/affiliates/[id]/mark-paid). A gain is only ever
+// inserted at the exact moment the underlying event is confirmed in the
+// database (profile actually flips to VERIFIED; Order actually flips to
+// PAID) — never speculatively, never reversed.
+// ───────────────────────────────────────────────────────────────────────
+model AffiliateEarning {
+  id             String    @id @default(cuid())
+  affiliateId    String
+  affiliate      User      @relation("AffiliateEarnings", fields: [affiliateId], references: [id], onDelete: Cascade)
+  referredUserId String
+  referredUser   User      @relation("ReferredUserEarnings", fields: [referredUserId], references: [id], onDelete: Cascade)
+  type           String // VERIFICATION_BONUS | CREDIT_COMMISSION
+  amount         Int // FCFA, always positive
+  // Set only for type=CREDIT_COMMISSION — informative reference to the
+  // Order that triggered it, same non-strict-FK convention as
+  // CreditTransaction.relatedOrderId (must never fail this insert).
+  relatedOrderId String?
+  // null = awaiting payout; timestamp = paid (see mark-paid route).
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([affiliateId, paidAt])
+  @@index([referredUserId, type])
 }
 
 // ───────────────────────────────────────────────────────────────────────
