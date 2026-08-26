@@ -4,6 +4,13 @@ import { NextRequest } from 'next/server';
 
 import { POST } from './route';
 import { seedAdminInvite } from '@/test-utils/admin-fixtures';
+import { generateUniqueAffiliateCode } from '@/lib/server/affiliates/code';
+
+vi.mock('@/lib/server/affiliates/code', () => ({
+  generateUniqueAffiliateCode: vi.fn(),
+}));
+
+const mockGenerateCode = vi.mocked(generateUniqueAffiliateCode);
 
 function makePost(body: unknown): NextRequest {
   return new NextRequest('http://test/api/admin/invites/accept', {
@@ -149,6 +156,70 @@ describe('POST /api/admin/invites/accept', () => {
 
     const res = await POST(makePost({ token: 'raw-token-value', password: 'x'.repeat(12) }));
     expect(res.status).toBe(400);
+  });
+
+  it('generates and sets affiliateCode when accepting an AFFILIATE invite (new user)', async () => {
+    const invite = seedAdminInvite({
+      email: 'aff@test.local',
+      role: 'AFFILIATE' as never,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    mockGenerateCode.mockResolvedValueOnce('AFF99988');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce(null as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.create.mockResolvedValueOnce({ id: 'new_affiliate_1' } as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(mockGenerateCode).toHaveBeenCalledOnce();
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: 'AFFILIATE', affiliateCode: 'AFF99988' }),
+      }),
+    );
+  });
+
+  it('never regenerates affiliateCode when promoting an existing user who already has one', async () => {
+    const invite = seedAdminInvite({
+      email: 'aff2@test.local',
+      role: 'AFFILIATE' as never,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    mockGenerateCode.mockResolvedValueOnce('AFF11122');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'existing_1',
+      email: 'aff2@test.local',
+      affiliateCode: 'ALREADY1',
+      emailVerifiedAt: new Date(),
+    } as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.update.mockResolvedValueOnce({} as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value-2', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ affiliateCode: expect.anything() }),
+      }),
+    );
   });
 
   it('rejects the second of two concurrent accepts (race-safety guard)', async () => {

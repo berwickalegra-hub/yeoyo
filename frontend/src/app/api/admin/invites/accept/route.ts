@@ -43,6 +43,7 @@ import { hashPassword } from '@/lib/server/auth';
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { logAdminAction } from '@/lib/server/admin/audit';
+import { generateUniqueAffiliateCode } from '@/lib/server/affiliates/code';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
@@ -145,6 +146,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const passwordHash = await hashPassword(password);
     const existing = await prisma.user.findUnique({ where: { email: invite.email } });
 
+    // Generated BEFORE entering the transaction — the code lookup itself
+    // needs its own DB round-trip (collision check) and doesn't need to be
+    // serializable with the invite-consumption write below. Only ever
+    // generated for AFFILIATE-role invites; every other role leaves this
+    // undefined and the code is never touched.
+    const affiliateCode =
+      invite.role === 'AFFILIATE' ? await generateUniqueAffiliateCode() : undefined;
+
     try {
       await prisma.$transaction(async (tx) => {
         // WR-05-style close of the TOCTOU window between the findUnique
@@ -170,7 +179,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           // so every pre-existing session for this account is invalidated,
           // same as AUTH-09 change-password — otherwise a session opened
           // before the invite existed keeps working with the old
-          // credentials/role after this write.
+          // credentials/role after this write. affiliateCode is set ONLY if
+          // this account doesn't already have one — a link already shared
+          // must stay valid (never regenerated).
           await tx.user.update({
             where: { id: existing.id },
             data: {
@@ -178,6 +189,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               passwordHash,
               emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
               tokenVersion: { increment: 1 },
+              ...(affiliateCode && !existing.affiliateCode ? { affiliateCode } : {}),
             },
           });
           userId = existing.id;
@@ -188,6 +200,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               passwordHash,
               role: invite.role,
               emailVerifiedAt: new Date(),
+              ...(affiliateCode ? { affiliateCode } : {}),
             },
           });
           userId = created.id;
