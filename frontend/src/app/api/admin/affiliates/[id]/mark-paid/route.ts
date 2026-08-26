@@ -43,15 +43,25 @@ export async function POST(
 
     const now = new Date();
     const result = await prisma.$transaction(async (tx) => {
-      const unpaid = await tx.affiliateEarning.findMany({
-        where: { affiliateId: id, paidAt: null },
-        select: { amount: true },
-      });
-      const totalAmount = unpaid.reduce((sum, e) => sum + e.amount, 0);
+      // Update FIRST, then aggregate the rows just written (filtered on the
+      // exact `now` timestamp) — not the other way around. Read Committed
+      // (this tx's isolation level; no Serializable override here, unlike
+      // users/[id]/role/route.ts) gives each statement its own fresh
+      // snapshot, so a findMany-then-updateMany order would let a
+      // concurrently-committed AffiliateEarning row (e.g. a webhook-driven
+      // commission) get swept into the updateMany's identical
+      // `{paidAt: null}` filter without ever being counted in the total —
+      // a silent under-reported payout. Aggregating post-update sees only
+      // this transaction's own just-committed write, so it's exact.
       const updated = await tx.affiliateEarning.updateMany({
         where: { affiliateId: id, paidAt: null },
         data: { paidAt: now },
       });
+      const totals = await tx.affiliateEarning.aggregate({
+        where: { affiliateId: id, paidAt: now },
+        _sum: { amount: true },
+      });
+      const totalAmount = totals._sum.amount ?? 0;
       await logAdminAction(tx, {
         actorId: auth.admin.id,
         action: 'affiliate.mark_paid',

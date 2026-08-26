@@ -48,11 +48,10 @@ describe('POST /api/admin/affiliates/[id]/mark-paid', () => {
       }
       return Promise.resolve(undefined);
     });
-    prismaMock.affiliateEarning.findMany.mockResolvedValueOnce([
-      { amount: 1500 },
-      { amount: 300 },
-    ] as never);
     prismaMock.affiliateEarning.updateMany.mockResolvedValueOnce({ count: 2 });
+    prismaMock.affiliateEarning.aggregate.mockResolvedValueOnce({
+      _sum: { amount: 1800 },
+    } as never);
     prismaMock.adminAction.create.mockResolvedValueOnce({} as never);
 
     const res = await POST(makePost('aff_1'), ctxWith('aff_1'));
