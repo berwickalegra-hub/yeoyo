@@ -111,6 +111,7 @@ const INTENTS = [
 
 interface WizardData {
   email: string;
+  promoCode: string;
   gender: 'HOMME' | 'FEMME' | null;
   interestedIn: string | null;
   firstName: string;
@@ -128,6 +129,7 @@ interface WizardData {
 
 const INITIAL_DATA: WizardData = {
   email: '',
+  promoCode: '',
   gender: null,
   interestedIn: null,
   firstName: '',
@@ -315,6 +317,15 @@ export default function OnboardingPage() {
     return () => URL.revokeObjectURL(url);
   }, [photoFile]);
 
+  // Prefills the promo field from an affiliate referral link
+  // (https://yeoyo.net/onboarding?promo=CODE). Read once on mount — the
+  // user can still edit or clear it manually afterward.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const promo = new URLSearchParams(window.location.search).get('promo');
+    if (promo) setData((d) => ({ ...d, promoCode: promo }));
+  }, []);
+
   // Returning user who already has a session — figure out where they
   // actually belong instead of always dumping them into the wizard:
   //   - no profile yet → skip signup, go straight to the profile wizard
@@ -403,7 +414,14 @@ export default function OnboardingPage() {
 
     setSubmitting(true);
     try {
-      await api('/api/auth/signup', { method: 'POST', body: { email: data.email, password } });
+      await api('/api/auth/signup', {
+        method: 'POST',
+        body: {
+          email: data.email,
+          password,
+          ...(data.promoCode.trim() ? { promoCode: data.promoCode.trim() } : {}),
+        },
+      });
       setStep('verify');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -715,6 +733,18 @@ export default function OnboardingPage() {
                   {passwordConfirmError}
                 </span>
               )}
+            </label>
+
+            <label className="flex flex-col gap-2 font-body text-sm text-muted-foreground">
+              Code promo (optionnel)
+              <input
+                type="text"
+                autoComplete="off"
+                value={data.promoCode}
+                onChange={(e) => setData((d) => ({ ...d, promoCode: e.target.value }))}
+                placeholder="Ex. AFF23456"
+                className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm uppercase text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
             </label>
 
             {error && (
