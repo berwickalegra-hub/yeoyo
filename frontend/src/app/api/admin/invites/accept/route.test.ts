@@ -222,6 +222,40 @@ describe('POST /api/admin/invites/accept', () => {
     );
   });
 
+  it('sets affiliateCode when promoting an existing user who does not yet have one', async () => {
+    const invite = seedAdminInvite({
+      email: 'aff3@test.local',
+      role: 'AFFILIATE' as never,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    mockGenerateCode.mockResolvedValueOnce('AFF77788');
+    prismaMock.adminInvite.findUnique.mockResolvedValueOnce(invite as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'existing_2',
+      email: 'aff3@test.local',
+      affiliateCode: null,
+      emailVerifiedAt: new Date(),
+    } as never);
+    prismaMock.$transaction.mockImplementationOnce((cb: unknown) => {
+      if (typeof cb === 'function') {
+        return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+      }
+      return Promise.resolve(undefined);
+    });
+    prismaMock.adminInvite.updateMany.mockResolvedValueOnce({ count: 1 } as never);
+    prismaMock.user.update.mockResolvedValueOnce({} as never);
+
+    const res = await POST(
+      makePost({ token: 'raw-token-value-3', password: 'a-strong-password-123' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ affiliateCode: 'AFF77788' }),
+      }),
+    );
+  });
+
   it('rejects the second of two concurrent accepts (race-safety guard)', async () => {
     // Simulates a racer that passed the pre-tx findUnique checks but loses
     // the atomic updateMany because another request already consumed the
