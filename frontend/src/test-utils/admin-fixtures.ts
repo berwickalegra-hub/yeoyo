@@ -27,12 +27,14 @@ const FROZEN_NOW = new Date('2026-05-08T12:00:00.000Z');
 interface UserOverrides {
   id?: string;
   email?: string;
-  role?: 'USER' | 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
+  role?: 'USER' | 'MODERATOR' | 'ADMIN' | 'SUPERADMIN' | 'AFFILIATE';
   status?: 'ACTIVE' | 'SUSPENDED';
   passwordHash?: string | null;
   emailVerifiedAt?: Date | null;
   twoFactorEnabled?: boolean;
   twoFactorSecret?: string | null;
+  affiliateCode?: string | null;
+  referredByAffiliateId?: string | null;
 }
 
 function buildUser(overrides: UserOverrides = {}): User {
@@ -48,6 +50,8 @@ function buildUser(overrides: UserOverrides = {}): User {
     avatarUrl: null,
     role: overrides.role ?? 'USER',
     status: overrides.status ?? 'ACTIVE',
+    affiliateCode: overrides.affiliateCode ?? null,
+    referredByAffiliateId: overrides.referredByAffiliateId ?? null,
     twoFactorSecret: overrides.twoFactorSecret ?? null,
     twoFactorEnabled: overrides.twoFactorEnabled ?? false,
     twoFactorRecoveryCodes: null,
@@ -81,6 +85,17 @@ export function seedModerator(overrides: UserOverrides = {}): User {
     email: overrides.email ?? 'moderator@test.local',
     role: 'MODERATOR',
     status: overrides.status ?? 'ACTIVE',
+    ...overrides,
+  });
+}
+
+export function seedAffiliate(overrides: UserOverrides = {}): User {
+  return buildUser({
+    id: overrides.id ?? 'affiliate_seed_1',
+    email: overrides.email ?? 'affiliate@test.local',
+    role: 'AFFILIATE',
+    status: overrides.status ?? 'ACTIVE',
+    affiliateCode: overrides.affiliateCode ?? 'AFF23456',
     ...overrides,
   });
 }
@@ -403,6 +418,33 @@ export function seedAdminInvite(overrides: AdminInviteOverrides = {}) {
     expiresAt: overrides.expiresAt ?? new Date(FROZEN_NOW.getTime() + 48 * 60 * 60 * 1000),
     acceptedAt: overrides.acceptedAt ?? null,
     revokedAt: overrides.revokedAt ?? null,
+    createdAt: FROZEN_NOW,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Affiliate program — earning row fixture
+// ────────────────────────────────────────────────────────────────────
+
+interface AffiliateEarningOverrides {
+  id?: string;
+  affiliateId?: string;
+  referredUserId?: string;
+  type?: 'VERIFICATION_BONUS' | 'CREDIT_COMMISSION';
+  amount?: number;
+  relatedOrderId?: string | null;
+  paidAt?: Date | null;
+}
+
+export function seedAffiliateEarning(overrides: AffiliateEarningOverrides = {}) {
+  return {
+    id: overrides.id ?? `earning_${Math.random().toString(36).slice(2, 10)}`,
+    affiliateId: overrides.affiliateId ?? 'affiliate_seed_1',
+    referredUserId: overrides.referredUserId ?? 'user_seed_1',
+    type: overrides.type ?? 'VERIFICATION_BONUS',
+    amount: overrides.amount ?? 1500,
+    relatedOrderId: overrides.relatedOrderId ?? null,
+    paidAt: overrides.paidAt ?? null,
     createdAt: FROZEN_NOW,
   };
 }
