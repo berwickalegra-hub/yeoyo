@@ -13,7 +13,7 @@ vi.mock('@/lib/server/middleware/rate-limit-by-userid', () => ({
 
 import { requireSuperadmin } from '@/lib/server/middleware';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
-import { POST } from './route';
+import { GET, POST } from './route';
 import { seedSuperadmin, seedAdminInvite } from '@/test-utils/admin-fixtures';
 
 const mockRequireSuperadmin = vi.mocked(requireSuperadmin);
@@ -80,6 +80,53 @@ describe('POST /api/admin/affiliates', () => {
       NextResponse.json({ error: 'ADMIN_REQUIRED' }, { status: 403 }),
     );
     const res = await POST(makePost({ email: 'x@test.local', name: 'X' }));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/affiliates', () => {
+  function makeGet(url = 'http://test/api/admin/affiliates'): NextRequest {
+    return new NextRequest(url, { method: 'GET' });
+  }
+
+  it('returns affiliates with owed totals and last-paid dates', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      {
+        id: 'aff_1',
+        email: 'a1@test.local',
+        name: 'Awa',
+        affiliateCode: 'AFF00001',
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      },
+    ] as never);
+    // prisma.affiliateEarning.groupBy's overloaded generic signature confuses
+    // vitest-mock-extended's typing (same pitfall as
+    // src/app/api/conversations/route.test.ts's message.groupBy) — cast the
+    // mock itself rather than the resolved value.
+    const groupByMock = prismaMock.affiliateEarning.groupBy as unknown as {
+      mockResolvedValueOnce: (v: unknown[]) => { mockResolvedValueOnce: (v: unknown[]) => void };
+    };
+    groupByMock
+      .mockResolvedValueOnce([{ affiliateId: 'aff_1', _sum: { amount: 4500 } }])
+      .mockResolvedValueOnce([
+        { affiliateId: 'aff_1', _max: { paidAt: new Date('2026-08-10T00:00:00.000Z') } },
+      ]);
+
+    const res = await GET(makeGet());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { id: string; amountOwed: number; lastPaidAt: string | null }[];
+    };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.amountOwed).toBe(4500);
+    expect(body.items[0]?.lastPaidAt).not.toBeNull();
+  });
+
+  it('propagates 403 from requireSuperadmin', async () => {
+    mockRequireSuperadmin.mockResolvedValueOnce(
+      NextResponse.json({ error: 'ADMIN_REQUIRED' }, { status: 403 }),
+    );
+    const res = await GET(makeGet());
     expect(res.status).toBe(403);
   });
 });

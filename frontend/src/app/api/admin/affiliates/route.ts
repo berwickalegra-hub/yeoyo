@@ -20,6 +20,7 @@ import { logAdminAction } from '@/lib/server/admin/audit';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000; // 48h — same TTL as admin invites
 
@@ -79,6 +80,60 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { invite: { id: invite.id, email: invite.email, expiresAt: invite.expiresAt } },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },
+    );
+  });
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const auth = await requireSuperadmin();
+    if (auth instanceof NextResponse) return auth;
+
+    const limited = await enforceAdminRateLimit(auth.admin.id);
+    if (limited) return limited;
+
+    const url = req.nextUrl;
+    const limit = clampLimit(url.searchParams.get('limit'));
+    const cursor = decodeCursor(url.searchParams.get('cursor'));
+
+    const rows = await prisma.user.findMany({
+      where: { role: 'AFFILIATE', ...cursorWhere(cursor) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: { id: true, email: true, name: true, affiliateCode: true, createdAt: true },
+    });
+    const page = buildPage(rows, limit);
+    const affiliateIds = page.items.map((u) => u.id);
+
+    const [owedGroups, paidGroups] = await Promise.all([
+      prisma.affiliateEarning.groupBy({
+        by: ['affiliateId'],
+        where: { affiliateId: { in: affiliateIds }, paidAt: null },
+        _sum: { amount: true },
+      }),
+      prisma.affiliateEarning.groupBy({
+        by: ['affiliateId'],
+        where: { affiliateId: { in: affiliateIds }, paidAt: { not: null } },
+        _max: { paidAt: true },
+      }),
+    ]);
+    const owedMap = new Map(owedGroups.map((g) => [g.affiliateId, g._sum.amount ?? 0]));
+    const lastPaidMap = new Map(paidGroups.map((g) => [g.affiliateId, g._max.paidAt]));
+
+    const items = page.items.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      affiliateCode: u.affiliateCode,
+      createdAt: u.createdAt,
+      amountOwed: owedMap.get(u.id) ?? 0,
+      lastPaidAt: lastPaidMap.get(u.id) ?? null,
+    }));
+
+    return NextResponse.json(
+      { items, nextCursor: page.nextCursor },
+      { headers: { 'x-request-id': ctx.requestId } },
     );
   });
 }
