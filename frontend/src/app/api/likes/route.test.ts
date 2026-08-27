@@ -59,7 +59,6 @@ beforeEach(() => {
     id: 'cr-1',
     status: 'PENDING',
   } as never);
-  prismaMock.conversation.upsert.mockResolvedValue({ id: 'conv-1' } as never);
 });
 
 describe('POST /api/likes — monthly quota', () => {
@@ -147,5 +146,175 @@ describe('DELETE /api/likes', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { likeExisted: boolean; contactRequestCancelled: boolean };
     expect(body).toEqual({ likeExisted: true, contactRequestCancelled: true });
+  });
+});
+
+describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () => {
+  it('a normal like (no flash) creates only Like+ContactRequest, no Conversation, conversationId null', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { conversationId: string | null };
+    expect(body.conversationId).toBeNull();
+    expect(prismaMock.conversation.create).not.toHaveBeenCalled();
+    // The one call is contactRequestQuotaStatus's own role check (isNewRequest
+    // gates quota regardless of flash) — no flash → no ADDITIONAL role check,
+    // no spend attempted.
+    expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('a flash like with sufficient credits charges 3 credits and stores flashMessageBody, still no Conversation', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
+      .mockResolvedValueOnce({ role: 'USER' } as never); // role check before spend
+    // spendCredits' own post-CAS balance fetch falls through to the default
+    // (unmocked) resolved value — harmless here since a 201 response never
+    // surfaces `balance` on the success path.
+    prismaMock.user.updateMany.mockResolvedValueOnce({ count: 1 } as never); // CAS success
+    prismaMock.creditTransaction.create.mockResolvedValueOnce({} as never);
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: 'Salut, ton profil me plaît beaucoup !',
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(
+      makePost({
+        targetUserId: 'target-1',
+        flashMessageBody: 'Salut, ton profil me plaît beaucoup !',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'me-1', creditBalance: { gte: 3 } },
+      data: { creditBalance: { decrement: 3 } },
+    });
+    expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          flashMessageBody: 'Salut, ton profil me plaît beaucoup !',
+        }),
+      }),
+    );
+    const body = (await res.json()) as { conversationId: string | null };
+    expect(body.conversationId).toBeNull();
+  });
+
+  it('a flash like with insufficient credits creates nothing and returns 402', async () => {
+    prismaMock.contactRequest.findUnique.mockResolvedValueOnce(null); // existingRequest — new request
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
+      .mockResolvedValueOnce({ role: 'USER' } as never) // role check before spend
+      .mockResolvedValueOnce({ creditBalance: 1 } as never); // spendCredits' balance fetch on failure
+    prismaMock.user.updateMany.mockResolvedValueOnce({ count: 0 } as never); // CAS fails
+
+    const res = await POST(makePost({ targetUserId: 'target-1', flashMessageBody: 'Coucou' }));
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as { code: string; balance: number; cost: number };
+    expect(body.code).toBe('INSUFFICIENT_CREDITS');
+    expect(body.balance).toBe(1);
+    expect(body.cost).toBe(3);
+    expect(prismaMock.like.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.contactRequest.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.creditTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('mutual match: both requests flip to ACCEPTED, Conversation is created, flash messages inserted oldest-first', async () => {
+    const olderCreatedAt = new Date('2026-08-20T10:00:00Z');
+    const newerCreatedAt = new Date('2026-08-27T10:00:00Z');
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request from me
+      .mockResolvedValueOnce({
+        id: 'reverse-req-1',
+        requesterId: 'target-1',
+        targetId: 'me-1',
+        status: 'PENDING',
+        flashMessageBody: 'Salut moi aussi !',
+        createdAt: olderCreatedAt,
+      } as never); // reverseRequest — mutual match, sent earlier, carried its own flash
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-new-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: newerCreatedAt,
+    } as never);
+    prismaMock.contactRequest.update.mockResolvedValueOnce({
+      id: 'cr-new-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'ACCEPTED',
+    } as never);
+    prismaMock.conversation.create.mockResolvedValueOnce({ id: 'conv-new-1' } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    expect(prismaMock.contactRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-new-1' },
+      data: { status: 'ACCEPTED' },
+    });
+    expect(prismaMock.contactRequest.update).toHaveBeenCalledWith({
+      where: { id: 'reverse-req-1' },
+      data: { status: 'ACCEPTED' },
+    });
+    expect(prismaMock.conversation.create).toHaveBeenCalledWith({
+      data: { userAId: 'me-1', userBId: 'target-1', contactRequestId: 'cr-new-1' },
+    });
+    // Only the reverse request carried a flash message — inserted once, from its own requester.
+    expect(prismaMock.message.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'conv-new-1', senderId: 'target-1', body: 'Salut moi aussi !' },
+    });
+    expect(prismaMock.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'conv-new-1' },
+      data: { lastMessageAt: expect.any(Date) },
+    });
+    const body = (await res.json()) as { conversationId: string | null };
+    expect(body.conversationId).toBe('conv-new-1');
+  });
+
+  it('re-liking an existing PENDING request never re-charges or overwrites flashMessageBody', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce({ id: 'cr-existing' } as never) // existingRequest — NOT new
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-existing',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(
+      makePost({
+        targetUserId: 'target-1',
+        flashMessageBody: 'Nouveau message, ne devrait pas compter',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled(); // no role check → no spend attempted
+    expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { status: 'PENDING' } }),
+    );
   });
 });

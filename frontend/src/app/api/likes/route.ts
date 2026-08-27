@@ -3,6 +3,19 @@
 // liking auto-creates a PENDING ContactRequest in the same transaction.
 // Idempotent: liking twice returns the existing rows instead of erroring.
 //
+// Message Flash (2026-08-27): the caller may attach an optional
+// `flashMessageBody` (3 credits, charged here, non-refundable). It's stored
+// on the ContactRequest and only becomes a real Message once the request
+// is accepted (POST /api/contact-requests/[id]/respond) or immediately if
+// this like completes a mutual match (below).
+//
+// A Conversation is NOT created just because a request was sent (reverted
+// 2026-08-27 — see docs/superpowers/specs/2026-08-27-message-flash-design.md
+// for why the earlier "eager conversation" behavior was rolled back). It's
+// created here only when the reverse side already has a PENDING request out
+// to us (mutual match — both sides auto-accept, "it's a match" semantics),
+// or later in POST /api/contact-requests/[id]/respond on an explicit ACCEPT.
+//
 // DELETE /api/likes — unlike a profile (retract). Removes the Like row and,
 // if the auto-created ContactRequest is still PENDING, cancels it too — a
 // user should be able to change their mind before the other side responds.
@@ -11,13 +24,6 @@
 // exchanged, only withdraws an unanswered request.
 //
 // GET /api/likes/received (sibling route) covers "who liked me".
-//
-// A Conversation is upserted in the same transaction as the Like/ContactRequest
-// (not gated on the target accepting) so the liker can open a chat and write
-// immediately — mirrors the "message request" pattern of modern dating apps
-// instead of forcing a wait for mutual accept before any text can be sent.
-// POST /api/contact-requests/[id]/respond still upserts the same row on
-// ACCEPT (idempotent — `update: {}` never touches contactRequestId).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -29,12 +35,19 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
 import { createNotification } from '@/lib/server/notifications';
-import { contactRequestReceived } from '@/lib/server/notifications/templates';
+import {
+  contactRequestReceived,
+  contactRequestAccepted,
+} from '@/lib/server/notifications/templates';
 import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-merge';
 import { orderedPair } from '@/lib/server/conversations/lib';
 import { contactRequestQuotaStatus } from '@/lib/server/contact-requests/quota';
+import { spendCredits, CREDIT_COSTS } from '@/lib/server/credits/ledger';
 
-const Body = z.object({ targetUserId: z.string() });
+const Body = z.object({
+  targetUserId: z.string(),
+  flashMessageBody: z.string().trim().min(1).max(2000).optional(),
+});
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -53,7 +66,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { targetUserId } = parsed.data;
+    const { targetUserId, flashMessageBody } = parsed.data;
 
     if (targetUserId === auth.user.sub) {
       return NextResponse.json(
@@ -80,14 +93,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Quota only applies to a genuinely NEW request — re-liking a target
     // you've already requested (or un-liked and are re-requesting) is
     // idempotent via the upsert below and must never be blocked or double-
-    // counted. Checked outside the transaction (mirrors messageQuotaStatus's
-    // plain check-then-act — this is a soft free-tier cap, not a
-    // double-spend-grade invariant, so no Serializable isolation needed).
+    // counted. This same "is it new" signal also gates the Message Flash
+    // charge/attach below: a re-like never re-charges credits or overwrites
+    // a previously-set flash message (see the route's header comment).
     const existingRequest = await prisma.contactRequest.findUnique({
       where: { requesterId_targetId: { requesterId: auth.user.sub, targetId: targetUserId } },
       select: { id: true },
     });
-    if (!existingRequest) {
+    const isNewRequest = !existingRequest;
+    if (isNewRequest) {
       const quota = await contactRequestQuotaStatus(auth.user.sub);
       if (quota.limit !== null && (quota.remaining ?? 0) <= 0) {
         return NextResponse.json(
@@ -103,7 +117,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const { userAId, userBId } = orderedPair(auth.user.sub, targetUserId);
-    const { like, contactRequest, conversation } = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      if (isNewRequest && flashMessageBody) {
+        const sender = await tx.user.findUnique({
+          where: { id: auth.user.sub },
+          select: { role: true },
+        });
+        const spend = await spendCredits(tx, {
+          userId: auth.user.sub,
+          action: 'flash_message',
+          role: sender?.role ?? null,
+        });
+        if (!spend.ok) {
+          return { ok: false as const, balance: spend.balance };
+        }
+      }
+
       const likeRow = await tx.like.upsert({
         where: { likerId_likedId: { likerId: auth.user.sub, likedId: targetUserId } },
         create: { likerId: auth.user.sub, likedId: targetUserId },
@@ -112,20 +141,101 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       const contactRequestRow = await tx.contactRequest.upsert({
         where: { requesterId_targetId: { requesterId: auth.user.sub, targetId: targetUserId } },
-        create: { requesterId: auth.user.sub, targetId: targetUserId },
+        create: {
+          requesterId: auth.user.sub,
+          targetId: targetUserId,
+          flashMessageBody: flashMessageBody ?? null,
+        },
         // A previously-withdrawn (CANCELLED) request that gets re-liked
         // should go back to PENDING instead of staying stuck as cancelled.
+        // Never touches flashMessageBody here — only `create` sets it, so a
+        // re-like can't re-charge or overwrite a previously-attached flash.
         update: { status: 'PENDING' },
       });
 
-      const conversationRow = await tx.conversation.upsert({
-        where: { userAId_userBId: { userAId, userBId } },
-        create: { userAId, userBId, contactRequestId: contactRequestRow.id },
-        update: {},
+      // Mutual match: the target already has a PENDING request out to us.
+      // Checked inside the transaction (not before it) so a concurrent
+      // request can't create the reverse row between a pre-transaction
+      // check and this transaction's writes.
+      const reverseRequest = await tx.contactRequest.findUnique({
+        where: { requesterId_targetId: { requesterId: targetUserId, targetId: auth.user.sub } },
+      });
+      const mutualMatch = !!reverseRequest && reverseRequest.status === 'PENDING';
+
+      if (!mutualMatch) {
+        return {
+          ok: true as const,
+          like: likeRow,
+          contactRequest: contactRequestRow,
+          conversationId: null as string | null,
+          matchedRequestId: null as string | null,
+        };
+      }
+
+      const acceptedRow = await tx.contactRequest.update({
+        where: { id: contactRequestRow.id },
+        data: { status: 'ACCEPTED' },
+      });
+      await tx.contactRequest.update({
+        where: { id: reverseRequest.id },
+        data: { status: 'ACCEPTED' },
+      });
+      const conversationRow = await tx.conversation.create({
+        data: { userAId, userBId, contactRequestId: contactRequestRow.id },
       });
 
-      return { like: likeRow, contactRequest: contactRequestRow, conversation: conversationRow };
+      const flashSources: { senderId: string; body: string | null; createdAt: Date }[] = [
+        {
+          senderId: contactRequestRow.requesterId,
+          body: contactRequestRow.flashMessageBody,
+          createdAt: contactRequestRow.createdAt,
+        },
+        {
+          senderId: reverseRequest.requesterId,
+          body: reverseRequest.flashMessageBody,
+          createdAt: reverseRequest.createdAt,
+        },
+      ];
+      const orderedFlashSources = flashSources
+        .filter((s): s is { senderId: string; body: string; createdAt: Date } => !!s.body)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+      for (const source of orderedFlashSources) {
+        await tx.message.create({
+          data: {
+            conversationId: conversationRow.id,
+            senderId: source.senderId,
+            body: source.body,
+          },
+        });
+      }
+      if (orderedFlashSources.length > 0) {
+        await tx.conversation.update({
+          where: { id: conversationRow.id },
+          data: { lastMessageAt: new Date() },
+        });
+      }
+
+      return {
+        ok: true as const,
+        like: likeRow,
+        contactRequest: acceptedRow,
+        conversationId: conversationRow.id as string | null,
+        matchedRequestId: reverseRequest.id as string | null,
+      };
     });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          code: 'INSUFFICIENT_CREDITS',
+          message: 'Solde de crédits insuffisant pour envoyer ce message flash.',
+          balance: result.balance,
+          cost: CREDIT_COSTS.flash_message,
+        },
+        { status: 402, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
 
     const [likerProfile, targetPrefsRow] = await Promise.all([
       prisma.profile.findUnique({ where: { userId: auth.user.sub }, select: { firstName: true } }),
@@ -134,12 +244,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         select: { prefs: true },
       }),
     ]);
-    if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
+
+    if (result.matchedRequestId) {
+      // Mutual match — the target's own earlier request just got
+      // auto-accepted. Tell them it's a match, using the same
+      // always-on (not preference-gated) notification convention as the
+      // ACCEPT branch of POST /api/contact-requests/[id]/respond.
+      await createNotification(
+        prisma,
+        contactRequestAccepted(
+          targetUserId,
+          result.matchedRequestId,
+          result.conversationId as string,
+          likerProfile?.firstName ?? 'Quelqu’un',
+        ),
+      );
+    } else if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
       await createNotification(
         prisma,
         contactRequestReceived(
           targetUserId,
-          contactRequest.id,
+          result.contactRequest.id,
           likerProfile?.firstName ?? 'Quelqu’un',
         ),
       );
@@ -147,10 +272,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(
       {
-        likeId: like.id,
-        contactRequestId: contactRequest.id,
-        contactRequestStatus: contactRequest.status,
-        conversationId: conversation.id,
+        likeId: result.like.id,
+        contactRequestId: result.contactRequest.id,
+        contactRequestStatus: result.contactRequest.status,
+        conversationId: result.conversationId,
       },
       { status: 201, headers: { 'x-request-id': ctx.requestId } },
     );
