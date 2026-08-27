@@ -4,6 +4,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { AdminTableSkeleton } from '@/components/yeoyo/AdminTableSkeleton';
@@ -71,8 +72,11 @@ export default function AdminVerificationPage() {
               key={item.id}
               className="flex items-center justify-between rounded-xl border border-border bg-surface p-4"
             >
-              <div>
-                <p className="font-body text-sm font-medium text-foreground">
+              <Link
+                href={`/admin/membres/${item.userId}`}
+                className="cursor-pointer transition-opacity hover:opacity-70"
+              >
+                <p className="font-body text-sm font-medium text-foreground underline-offset-2 hover:underline">
                   {item.firstName}, {item.age} ans
                 </p>
                 <p className="font-body text-xs text-muted-foreground">
@@ -81,7 +85,7 @@ export default function AdminVerificationPage() {
                     ? `en attente depuis le ${new Date(item.waitingSince).toLocaleDateString('fr-FR')}`
                     : 'en attente'}
                 </p>
-              </div>
+              </Link>
               <div className="flex gap-2">
                 <button
                   type="button"

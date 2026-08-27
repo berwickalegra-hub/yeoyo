@@ -167,3 +167,40 @@ export function messageReceived(
     dedupeKey: `message:${messageId}`,
   };
 }
+
+/**
+ * YeOyo — an admin approved a pending profile (POST
+ * /api/admin/verification-queue/[id]/process, action=APPROVE). dedupeKey is
+ * the Profile's own id, matching this route's other admin-facing pattern —
+ * a profile has exactly one first-verification event per id in practice.
+ */
+export function profileVerified(userId: string, profileId: string): CreateNotificationInput {
+  return {
+    userId,
+    type: 'PROFILE_VERIFIED',
+    title: 'Ton profil est vérifié !',
+    body: 'Notre équipe a vérifié ton profil — le badge Vérifié est maintenant visible sur tes photos.',
+    dedupeKey: `profile-verified:${profileId}`,
+  };
+}
+
+/**
+ * YeOyo — an admin rejected a pending profile (same route, action=REJECT).
+ * `reason` is the admin's optional free-text note from the verification
+ * fiche — included in the body when given so the user knows what to fix.
+ */
+export function profileRejected(
+  userId: string,
+  profileId: string,
+  reason?: string,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'PROFILE_REJECTED',
+    title: 'Ta vérification de profil a été refusée',
+    body: reason
+      ? `Ton profil n'a pas pu être vérifié : ${reason}`
+      : "Ton profil n'a pas pu être vérifié. Vérifie que tes photos sont claires, récentes et te montrent bien, puis réessaie.",
+    dedupeKey: `profile-rejected:${profileId}`,
+  };
+}

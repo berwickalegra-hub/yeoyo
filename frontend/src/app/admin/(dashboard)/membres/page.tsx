@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { AdminTableSkeleton } from '@/components/yeoyo/AdminTableSkeleton';
@@ -165,6 +166,12 @@ export default function AdminMembresPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/admin/membres/${u.id}`}
+                        className="btn-press cursor-pointer rounded-lg border border-border px-3 py-1 font-body text-xs text-primary"
+                      >
+                        Voir
+                      </Link>
                       {u.role === 'USER' && (
                         <button
                           type="button"

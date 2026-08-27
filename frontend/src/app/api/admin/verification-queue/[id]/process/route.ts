@@ -13,8 +13,16 @@ import { prisma } from '@/lib/server/prisma';
 import { logAdminAction } from '@/lib/server/admin/audit';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { createNotification } from '@/lib/server/notifications';
+import { profileRejected, profileVerified } from '@/lib/server/notifications/templates';
 
-const Body = z.object({ action: z.enum(['APPROVE', 'REJECT']) });
+const Body = z.object({
+  action: z.enum(['APPROVE', 'REJECT']),
+  // Admin's free-text note from the verification fiche — optional, only
+  // meaningful for REJECT (surfaced to the user in their notification so
+  // they know what to fix before resubmitting).
+  reason: z.string().trim().max(500).optional(),
+});
 
 export async function POST(
   req: NextRequest,
@@ -108,11 +116,21 @@ export async function POST(
         action: approve ? 'profile.verify' : 'profile.reject',
         targetType: 'Profile',
         targetId: id,
-        metadata: { userId: profile.userId },
+        metadata: {
+          userId: profile.userId,
+          ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
+        },
       });
 
       return updatedProfile;
     });
+
+    await createNotification(
+      prisma,
+      approve
+        ? profileVerified(profile.userId, id)
+        : profileRejected(profile.userId, id, parsed.data.reason),
+    );
 
     return NextResponse.json(
       { profile: updated },
