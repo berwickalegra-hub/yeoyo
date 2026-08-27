@@ -500,6 +500,13 @@ model ContactRequest {
   targetId    String
   target      User     @relation("ContactRequestsReceived", fields: [targetId], references: [id], onDelete: Cascade)
   status      String   @default("PENDING") // PENDING | VIEWED | ACCEPTED | CANCELLED
+  // Message Flash (2026-08-27) — optional personalized message attached at
+  // request time, shown to the target before she accepts/declines. Becomes
+  // the conversation's real first Message once the request is accepted or
+  // auto-accepted via mutual match (see POST /api/likes and POST
+  // /api/contact-requests/[id]/respond). Non-refundable if declined — the
+  // 3-credit charge already happened at send time in POST /api/likes.
+  flashMessageBody String? @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -511,12 +518,13 @@ model ContactRequest {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// YeOyo domain — messaging (Phase D). A Conversation is created when the
-// target ACCEPTs a ContactRequest (see POST /api/contact-requests/[id]/respond).
-// userAId/userBId are stored in canonical sorted-id order (see
-// lib/server/conversations/lib.ts:orderedPair) so the unique constraint
-// holds regardless of which side is the requester/target, and lookups
-// don't need an OR clause.
+// YeOyo domain — messaging (Phase D). A Conversation is created when a
+// ContactRequest is ACCEPTED (see POST /api/contact-requests/[id]/respond),
+// or immediately when a new like completes a mutual match (both sides have
+// liked each other — see POST /api/likes). userAId/userBId are stored in
+// canonical sorted-id order (see lib\server\conversations\lib.ts:orderedPair)
+// so the unique constraint holds regardless of which side accepted, and
+// lookups don't need an OR clause.
 // ───────────────────────────────────────────────────────────────────────
 model Conversation {
   id               String         @id @default(cuid())

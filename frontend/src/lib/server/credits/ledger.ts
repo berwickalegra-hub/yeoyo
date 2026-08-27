@@ -33,6 +33,7 @@ export const CREDIT_COSTS = {
   view_favorited_by: 1,
   boost: 3,
   first_message: 1,
+  flash_message: 3,
 } as const;
 
 export type CreditAction = keyof typeof CREDIT_COSTS;
