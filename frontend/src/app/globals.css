@@ -263,6 +263,21 @@ body {
   animation: scale-in 0.2s ease-out;
 }
 
+/* Bottom sheet entrance (Message Flash, 2026-08-27) — slides up from the
+   bottom edge instead of Modal.tsx's centered scale-in. See
+   components/ui/Sheet.tsx. */
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.animate-sheet-slide-up {
+  animation: sheet-slide-up 0.25s ease-out;
+}
+
 /* Hero on-mount entrance (2026-08-19, explicit user ask: the hero text and
    photo should animate "dès que l'utilisateur arrive" — on arrival, not on
    scroll). Distinct from `.reveal` (IntersectionObserver-gated, for
@@ -453,6 +468,7 @@ body {
   .animate-fade-in,
   .animate-fade-in-up,
   .animate-scale-in,
+  .animate-sheet-slide-up,
   .animate-heart-pop,
   .animate-slide-out-left,
   .animate-slide-out-right,

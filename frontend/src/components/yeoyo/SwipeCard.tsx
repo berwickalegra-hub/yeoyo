@@ -71,6 +71,7 @@ import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 import { useLikePop } from '@/lib/yeoyo/useLikePop';
+import { FlashMessageModal } from '@/components/yeoyo/FlashMessageModal';
 
 const SWIPE_THRESHOLD = 90;
 const CLICK_THRESHOLD = 6;
@@ -88,16 +89,20 @@ export function SwipeCard({
   profile,
   onDismiss,
   onLike,
+  onFlash,
   onFavorite,
   favoriteBusy,
   busy,
+  creditBalance,
 }: {
   profile: ProfileCard;
   onDismiss: (userId: string) => void;
   onLike: (userId: string) => void;
+  onFlash: (userId: string, message: string) => void;
   onFavorite?: (userId: string) => void;
   favoriteBusy?: boolean;
   busy?: boolean;
+  creditBalance: number;
 }) {
   const router = useRouter();
   const [dragX, setDragX] = useState(0);
@@ -105,6 +110,7 @@ export function SwipeCard({
   const [exiting, setExiting] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [showFlashModal, setShowFlashModal] = useState(false);
   // Gate for the mobile action bar's portal — see file header comment.
   const [mounted, setMounted] = useState(false);
   const startXRef = useRef(0);
@@ -320,6 +326,15 @@ export function SwipeCard({
             onClose={() => setShowLightbox(false)}
           />
         )}
+        <FlashMessageModal
+          open={showFlashModal}
+          onClose={() => setShowFlashModal(false)}
+          balance={creditBalance}
+          onSend={(message) => {
+            setShowFlashModal(false);
+            flyOff(1, () => onFlash(profile.userId, message));
+          }}
+        />
       </div>
       {/* Mobile only — floating above MobileTabBar's "Accueil" bar, via a
         portal straight onto document.body so no ancestor transform (the
@@ -343,9 +358,13 @@ export function SwipeCard({
 
   // Circular Passer + pill Demander (2026-08-19, modeled on the Banani
   // DiscoverScreen.jsx design; the Message shortcut was removed 2026-08-25 —
-  // messaging now only opens once a contact request is accepted). Shared
-  // between the desktop in-flow footer above and the mobile floating portal
-  // below so both stay visually identical.
+  // messaging only opened once a contact request was accepted). Message
+  // Flash (2026-08-27) reintroduces a middle button, but it does NOT open
+  // messaging directly — it opens FlashMessageModal to attach a paid
+  // message to the contact request itself; the underlying accepted-only
+  // messaging flow is unchanged. Shared between the desktop in-flow footer
+  // above and the mobile floating portal below so both stay visually
+  // identical.
   function renderActions(): ReactNode {
     return (
       <>
@@ -357,6 +376,15 @@ export function SwipeCard({
           className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-red-200 bg-red-50 shadow-md transition-transform active:scale-95 disabled:opacity-50"
         >
           <Icon name="x" size={22} className="text-primary" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowFlashModal(true)}
+          disabled={busy || exiting}
+          aria-label="Message flash — envoyer un message avant que ta demande soit acceptée"
+          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-gold/30 bg-gold/10 shadow-md transition-transform active:scale-95 disabled:opacity-50"
+        >
+          <Icon name="zap" size={20} className="text-gold" />
         </button>
         <button
           type="button"
