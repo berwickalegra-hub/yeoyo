@@ -187,3 +187,46 @@ describe('POST /api/contact-requests/[id]/respond — FIRST_MATCH_BONUS', () => 
     expect(body).toEqual({ status: 'ACCEPTED', conversationId: 'conv_1' });
   });
 });
+
+describe('POST /api/contact-requests/[id]/respond — flash message becomes Message #1', () => {
+  it('inserts the stored flashMessageBody as the conversation first Message on ACCEPT', async () => {
+    prismaMock.contactRequest.findUnique.mockResolvedValue({
+      id: 'req_1',
+      requesterId: REQUESTER_ID,
+      targetId: ACCEPTER_ID,
+      status: 'PENDING',
+      flashMessageBody: 'Salut, j’aimerais faire connaissance !',
+    } as never);
+    prismaMock.conversation.upsert.mockResolvedValueOnce({ id: 'conv_1' } as never);
+
+    await POST(makePost('req_1', { action: 'ACCEPT' }), ctxWith('req_1'));
+
+    expect(prismaMock.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'conv_1',
+        senderId: REQUESTER_ID,
+        body: 'Salut, j’aimerais faire connaissance !',
+      },
+    });
+    expect(prismaMock.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'conv_1' },
+      data: { lastMessageAt: expect.any(Date) },
+    });
+  });
+
+  it('creates no Message when the request has no flashMessageBody', async () => {
+    prismaMock.contactRequest.findUnique.mockResolvedValue({
+      id: 'req_1',
+      requesterId: REQUESTER_ID,
+      targetId: ACCEPTER_ID,
+      status: 'PENDING',
+      flashMessageBody: null,
+    } as never);
+    prismaMock.conversation.upsert.mockResolvedValueOnce({ id: 'conv_1' } as never);
+
+    await POST(makePost('req_1', { action: 'ACCEPT' }), ctxWith('req_1'));
+
+    expect(prismaMock.message.create).not.toHaveBeenCalled();
+    expect(prismaMock.conversation.update).not.toHaveBeenCalled();
+  });
+});

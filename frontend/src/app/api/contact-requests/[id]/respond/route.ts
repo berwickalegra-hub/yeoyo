@@ -82,6 +82,24 @@ export async function POST(
         update: {},
       });
 
+      // Message Flash (2026-08-27) — a stored flash message becomes the
+      // conversation's real first Message once the request is accepted.
+      // Sets lastMessageAt too, same as a normal POST /messages send, so
+      // this conversation sorts correctly in the Messages list.
+      if (request.flashMessageBody) {
+        await tx.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderId: request.requesterId,
+            body: request.flashMessageBody,
+          },
+        });
+        await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { lastMessageAt: new Date() },
+        });
+      }
+
       // Affiliate first-match bonus — one-time-ever per referred FEMME,
       // triggered by her first accepted contact request (first real
       // conversation). Mirrors the verification-bonus pattern: check both
