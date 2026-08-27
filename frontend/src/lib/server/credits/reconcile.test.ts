@@ -27,7 +27,7 @@ const mockGetSaleStatus = vi.mocked(getSaleStatus);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.CHARIOW_PROVIDER_FEE_PCT = '15';
+  process.env.CHARIOW_PROVIDER_FEE_PCT = '18';
   prismaMock.$transaction.mockImplementation((cb: unknown) => {
     if (typeof cb === 'function') {
       return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
@@ -47,7 +47,7 @@ function seedSucceeded(overrides: Partial<{ amount: number; settledAt: Date }> =
 }
 
 describe('reconcileChariowOrder — affiliate commission', () => {
-  it('inserts a 15%-of-net CREDIT_COMMISSION for a referred HOMME inside the 30-day window', async () => {
+  it('inserts a 25%-of-net CREDIT_COMMISSION for a referred HOMME inside the 30-day window', async () => {
     seedSucceeded();
     const order = seedOrder({
       id: 'order_1',
@@ -68,14 +68,14 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     const result = await reconcileChariowOrder(prismaMock, 'order_1');
     expect(result.orderStatus).toBe('PAID');
     // order.amount=100000 is smallest-unit (×100) -> grossFcfa = round(100000/100) = 1000
-    // netAmount = round(1000 * 0.85) = 850; commission = round(850 * 0.15) = round(127.5) = 128
+    // netAmount = round(1000 * 0.82) = 820; commission = round(820 * 0.25) = 205
     expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           affiliateId: 'aff_1',
           referredUserId: 'user_1',
           type: 'CREDIT_COMMISSION',
-          amount: 128,
+          amount: 205,
           relatedOrderId: 'order_1',
         }),
       }),
@@ -166,9 +166,9 @@ describe('reconcileChariowOrder — affiliate commission', () => {
 
     await reconcileChariowOrder(prismaMock, 'order_5');
     // order.amount=100000 is smallest-unit (×100) -> grossFcfa = round(100000/100) = 1000
-    // netAmount = round(1000 * 0.90) = 900; commission = round(900 * 0.15) = 135
+    // netAmount = round(1000 * 0.90) = 900; commission = round(900 * 0.25) = 225
     expect(prismaMock.affiliateEarning.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: 135 }) }),
+      expect.objectContaining({ data: expect.objectContaining({ amount: 225 }) }),
     );
   });
 });

@@ -172,21 +172,24 @@ model AdminInvite {
 // database (profile actually flips to VERIFIED; Order actually flips to
 // PAID) — never speculatively, never reversed.
 // ───────────────────────────────────────────────────────────────────────
-// WARNING: this table has a hand-written Postgres PARTIAL unique index
-// (AffiliateEarning_one_verification_bonus_per_user, defined in migration
-// 20260826073426_affiliate_program) that Prisma cannot represent in this
-// schema file. If `prisma migrate dev` ever generates a migration containing
-// `DROP INDEX "AffiliateEarning_one_verification_bonus_per_user"`, DO NOT
-// apply it as-is — that index is the DB-level guarantee against a duplicate
-// VERIFICATION_BONUS row per referredUserId. Edit the generated migration to
-// remove that DROP statement before applying.
+// WARNING: this table has TWO hand-written Postgres PARTIAL unique indexes
+// that Prisma cannot represent in this schema file:
+//   - AffiliateEarning_one_verification_bonus_per_user (migration
+//     20260826073426_affiliate_program)
+//   - AffiliateEarning_one_first_match_bonus_per_user (migration
+//     20260827_first_match_bonus_index)
+// If `prisma migrate dev` ever generates a migration containing a
+// `DROP INDEX` for either of these, DO NOT apply it as-is — they are the
+// DB-level guarantees against a duplicate VERIFICATION_BONUS or
+// FIRST_MATCH_BONUS row per referredUserId. Edit the generated migration to
+// remove those DROP statements before applying.
 model AffiliateEarning {
   id             String    @id @default(cuid())
   affiliateId    String
   affiliate      User      @relation("AffiliateEarnings", fields: [affiliateId], references: [id], onDelete: Cascade)
   referredUserId String
   referredUser   User      @relation("ReferredUserEarnings", fields: [referredUserId], references: [id], onDelete: Cascade)
-  type           String // VERIFICATION_BONUS | CREDIT_COMMISSION
+  type           String // VERIFICATION_BONUS | CREDIT_COMMISSION | FIRST_MATCH_BONUS
   amount         Int // FCFA, always positive
   // Set only for type=CREDIT_COMMISSION — informative reference to the
   // Order that triggered it, same non-strict-FK convention as

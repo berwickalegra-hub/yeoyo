@@ -175,7 +175,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
     expect(prismaMock.profile.findUnique).not.toHaveBeenCalled();
   });
 
-  it('POST inserts a 300 FCFA VERIFICATION_BONUS for a referred HOMME on approve', async () => {
+  it('POST inserts a 30 FCFA VERIFICATION_BONUS for a referred HOMME on approve', async () => {
     const profile = seedProfile({
       id: 'p_bonus_h',
       gender: 'HOMME',
@@ -199,7 +199,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
             affiliateId: 'aff_1',
             referredUserId: 'user_1',
             type: 'VERIFICATION_BONUS',
-            amount: 300,
+            amount: 30,
           }),
         ],
         skipDuplicates: true,
@@ -207,7 +207,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
     );
   });
 
-  it('POST inserts a 1500 FCFA VERIFICATION_BONUS for a referred FEMME on approve', async () => {
+  it('POST inserts a 90 FCFA VERIFICATION_BONUS for a referred FEMME on approve', async () => {
     const profile = seedProfile({
       id: 'p_bonus_f',
       gender: 'FEMME',
@@ -224,7 +224,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
     await POST(makePost('p_bonus_f', { action: 'APPROVE' }), ctxWith('p_bonus_f'));
     expect(prismaMock.affiliateEarning.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: [expect.objectContaining({ amount: 1500 })],
+        data: [expect.objectContaining({ amount: 90 })],
         skipDuplicates: true,
       }),
     );

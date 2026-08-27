@@ -20,10 +20,19 @@ const MIGRATION_SQL_PATH = path.resolve(
   __dirname,
   '../../../../prisma/migrations/20260826073426_affiliate_program/migration.sql',
 );
+const FIRST_MATCH_MIGRATION_SQL_PATH = path.resolve(
+  __dirname,
+  '../../../../prisma/migrations/20260827095819_first_match_bonus_index/migration.sql',
+);
 
 describe('AffiliateEarning partial unique index — migration.sql guard', () => {
   it('still contains the hand-written partial unique index for VERIFICATION_BONUS dedup', () => {
     const sql = readFileSync(MIGRATION_SQL_PATH, 'utf8');
     expect(sql).toContain('AffiliateEarning_one_verification_bonus_per_user');
+  });
+
+  it('still contains the hand-written partial unique index for FIRST_MATCH_BONUS dedup', () => {
+    const sql = readFileSync(FIRST_MATCH_MIGRATION_SQL_PATH, 'utf8');
+    expect(sql).toContain('AffiliateEarning_one_first_match_bonus_per_user');
   });
 });

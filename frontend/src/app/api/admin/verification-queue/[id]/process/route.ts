@@ -103,7 +103,7 @@ export async function POST(
                 affiliateId: profile.user.referredByAffiliateId,
                 referredUserId: profile.userId,
                 type: 'VERIFICATION_BONUS',
-                amount: profile.gender === 'FEMME' ? 1500 : 300,
+                amount: profile.gender === 'FEMME' ? 90 : 30,
               },
             ],
             skipDuplicates: true,

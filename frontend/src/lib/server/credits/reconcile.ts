@@ -150,7 +150,7 @@ export async function reconcileChariowOrder(
       relatedOrderId: order.id,
     });
 
-    // Affiliate commission — 15% of the NET amount (after Chariow's own
+    // Affiliate commission — 25% of the NET amount (after Chariow's own
     // cut), only for a referred HOMME still inside the 30-day window from
     // signup. FEMME purchases never trigger this (messaging is free for
     // them in practice, but the condition stays explicit rather than
@@ -174,10 +174,10 @@ export async function reconcileChariowOrder(
       paidAt.getTime() <= referralUser.createdAt.getTime() + THIRTY_DAYS_MS
     ) {
       const rawFeePct = process.env.CHARIOW_PROVIDER_FEE_PCT;
-      const feePct = rawFeePct && rawFeePct.trim() !== '' ? Number(rawFeePct) : 15;
+      const feePct = rawFeePct && rawFeePct.trim() !== '' ? Number(rawFeePct) : 18;
       const grossFcfa = Math.round(order.amount / 100); // order.amount is smallest-unit (×100) — see checkout/route.ts
       const netAmount = Math.round(grossFcfa * (1 - feePct / 100));
-      const commission = Math.round(netAmount * 0.15);
+      const commission = Math.round(netAmount * 0.25);
       await tx.affiliateEarning.create({
         data: {
           affiliateId: referralUser.referredByAffiliateId,

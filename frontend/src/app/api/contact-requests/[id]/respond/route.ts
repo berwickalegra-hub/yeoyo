@@ -81,6 +81,45 @@ export async function POST(
         create: { userAId, userBId, contactRequestId: id },
         update: {},
       });
+
+      // Affiliate first-match bonus — one-time-ever per referred FEMME,
+      // triggered by her first accepted contact request (first real
+      // conversation). Mirrors the verification-bonus pattern: check both
+      // participants (either could be the referred woman), skip anyone
+      // already paid, insert via createMany+skipDuplicates so the partial
+      // unique index (AffiliateEarning_one_first_match_bonus_per_user)
+      // never aborts this transaction — see
+      // verification-queue/[id]/process/route.ts for the full rationale.
+      const participants = await tx.user.findMany({
+        where: { id: { in: [request.requesterId, request.targetId] } },
+        select: { id: true, referredByAffiliateId: true, profile: { select: { gender: true } } },
+      });
+      const eligible = participants.filter(
+        (u) => u.referredByAffiliateId && u.profile?.gender === 'FEMME',
+      );
+      if (eligible.length > 0) {
+        const alreadyBonused = await tx.affiliateEarning.findMany({
+          where: {
+            referredUserId: { in: eligible.map((u) => u.id) },
+            type: 'FIRST_MATCH_BONUS',
+          },
+          select: { referredUserId: true },
+        });
+        const alreadyBonusedIds = new Set(alreadyBonused.map((e) => e.referredUserId));
+        const toBonus = eligible.filter((u) => !alreadyBonusedIds.has(u.id));
+        if (toBonus.length > 0) {
+          await tx.affiliateEarning.createMany({
+            data: toBonus.map((u) => ({
+              affiliateId: u.referredByAffiliateId as string,
+              referredUserId: u.id,
+              type: 'FIRST_MATCH_BONUS',
+              amount: 30,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
       return { conversationId: conversation.id };
     });
 
