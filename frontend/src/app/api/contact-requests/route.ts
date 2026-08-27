@@ -66,6 +66,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           createdAt: row.createdAt.toISOString(),
           conversationId: row.conversation?.id ?? null,
           otherUser: toProfileCard(otherUser.profile),
+          flashMessageBody:
+            parsed.data.type === 'received' && row.status === 'PENDING'
+              ? row.flashMessageBody
+              : null,
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);

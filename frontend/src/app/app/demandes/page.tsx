@@ -26,6 +26,7 @@ interface RequestRow {
   createdAt: string;
   conversationId: string | null;
   otherUser: ProfileCard;
+  flashMessageBody: string | null;
 }
 
 type Tab = 'received' | 'sent' | 'contacts';
@@ -246,6 +247,7 @@ export default function DemandesPage() {
                   status={r.status}
                   direction={tab === 'sent' ? 'sent' : 'received'}
                   conversationId={r.conversationId}
+                  flashMessageBody={r.flashMessageBody}
                   responding={respondingId === r.id}
                   onAccept={() => respond(r.id, 'ACCEPT', r.otherUser)}
                   onDecline={() => respond(r.id, 'DECLINE', r.otherUser)}
