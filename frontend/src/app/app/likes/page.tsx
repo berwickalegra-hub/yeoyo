@@ -101,15 +101,22 @@ export default function LikesPage() {
         toast('Like retiré', 'success');
         return;
       }
-      const res = await api<{ conversationId: string }>('/api/likes', {
+      const res = await api<{ conversationId: string | null }>('/api/likes', {
         method: 'POST',
         body: { targetUserId: userId },
       });
       setLikes((prev) =>
         prev.map((l) => (l.profile.userId === userId ? { ...l, likedBack: true } : l)),
       );
-      toast('C’est un match — direction la conversation !', 'success');
-      router.push(`/app/messages/${res.conversationId}`);
+      if (res.conversationId) {
+        toast('C’est un match — direction la conversation !', 'success');
+        router.push(`/app/messages/${res.conversationId}`);
+      } else {
+        // Liking back someone who already liked you always hits the
+        // mutual-match branch server-side (POST /api/likes), so this
+        // should never actually happen — defensive fallback only.
+        toast('C’est un match !', 'success');
+      }
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {

@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { SwipeCard } from '@/components/yeoyo/SwipeCard';
@@ -87,6 +88,7 @@ function buildQuery(filters: Filters, page: number): string {
 export default function ExplorerPage() {
   const user = useUser();
   const { toast } = useToast();
+  const { balance: creditBalance, refresh: refreshCredits } = useCredits();
   const badgeCounts = useNavCounts();
 
   const [viewMode, setViewMode] = useState<ViewMode>('swipe');
@@ -205,6 +207,28 @@ export default function ExplorerPage() {
       advance();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function onFlash(targetUserId: string, message: string) {
+    setBusyUserId(targetUserId);
+    try {
+      await api('/api/likes', {
+        method: 'POST',
+        body: { targetUserId, flashMessageBody: message },
+      });
+      setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
+      toast('Message flash envoyé !', 'success');
+      void refreshCredits();
+      advance();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+        toast('Solde de crédits insuffisant pour ce message flash.', 'error');
+      } else {
+        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      }
     } finally {
       setBusyUserId(null);
     }
@@ -335,9 +359,11 @@ export default function ExplorerPage() {
                   profile={current}
                   onDismiss={onDismiss}
                   onLike={onLike}
+                  onFlash={onFlash}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}
+                  creditBalance={creditBalance}
                 />
 
                 {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
@@ -586,9 +612,11 @@ export default function ExplorerPage() {
                   profile={current}
                   onDismiss={onDismiss}
                   onLike={onLike}
+                  onFlash={onFlash}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}
+                  creditBalance={creditBalance}
                 />
                 <div aria-hidden="true" className="hidden lg:block" />
               </div>
