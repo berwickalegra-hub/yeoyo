@@ -43,6 +43,7 @@ import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-m
 import { orderedPair } from '@/lib/server/conversations/lib';
 import { contactRequestQuotaStatus } from '@/lib/server/contact-requests/quota';
 import { spendCredits, CREDIT_COSTS } from '@/lib/server/credits/ledger';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
 
 const Body = z.object({
   targetUserId: z.string(),
@@ -118,7 +119,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const { userAId, userBId } = orderedPair(auth.user.sub, targetUserId);
     const result = await prisma.$transaction(async (tx) => {
-      if (isNewRequest && flashMessageBody) {
+      // Serializes concurrent POST /api/likes for the same user — without
+      // this, two concurrent requests can both observe "no existing row"
+      // and both spend flash-message credits before either commits (task
+      // review finding). Reuses the withdrawals domain's own advisory-lock
+      // helper — that lock is per-user and short-lived, safe to reuse
+      // outside its original domain.
+      await lockUserTx(tx, auth.user.sub);
+
+      // Freshly re-read inside the lock — the pre-transaction `existingRequest`
+      // read (used only for the quota check above, which already tolerates
+      // being a soft/non-atomic check) can be stale by the time we get here
+      // under concurrency; only this in-lock read is safe to gate the credit
+      // charge and the flashMessageBody write on.
+      const existingFresh = await tx.contactRequest.findUnique({
+        where: { requesterId_targetId: { requesterId: auth.user.sub, targetId: targetUserId } },
+      });
+      const isNewRequestInTx = !existingFresh;
+
+      if (isNewRequestInTx && flashMessageBody) {
         const sender = await tx.user.findUnique({
           where: { id: auth.user.sub },
           select: { role: true },
@@ -150,7 +169,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // should go back to PENDING instead of staying stuck as cancelled.
         // Never touches flashMessageBody here — only `create` sets it, so a
         // re-like can't re-charge or overwrite a previously-attached flash.
-        update: { status: 'PENDING' },
+        // But an already-ACCEPTED request (a live conversation exists) must
+        // NOT be reset to PENDING by a re-like — that would make the
+        // conversation look unusable to any code gating on
+        // ContactRequest.status === 'ACCEPTED' (task review finding).
+        update: existingFresh?.status === 'ACCEPTED' ? {} : { status: 'PENDING' },
       });
 
       // Mutual match: the target already has a PENDING request out to us.

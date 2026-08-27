@@ -19,6 +19,17 @@ vi.mock('@/lib/server/blocks', () => ({
 vi.mock('@/lib/server/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
 }));
+// Same mocking pattern as src/app/api/withdrawals/route.test.ts: spy on
+// lockUserTx so tests can assert it was invoked as the first statement
+// inside the transaction, without exercising the real
+// pg_advisory_xact_lock SQL (that's lock.test.ts's job). vi.hoisted keeps
+// lockSpy safe to reference from the (hoisted) vi.mock factory below
+// regardless of its position relative to the other vi.mock calls in this
+// file.
+const { lockSpy } = vi.hoisted(() => ({ lockSpy: vi.fn() }));
+vi.mock('@/lib/server/withdrawals/lock', () => ({
+  lockUserTx: lockSpy,
+}));
 
 import { requireAuth } from '@/lib/server/middleware';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
@@ -152,7 +163,8 @@ describe('DELETE /api/likes', () => {
 describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () => {
   it('a normal like (no flash) creates only Like+ContactRequest, no Conversation, conversationId null', async () => {
     prismaMock.contactRequest.findUnique
-      .mockResolvedValueOnce(null) // existingRequest — new request
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx, under the advisory lock)
       .mockResolvedValueOnce(null); // reverseRequest — no mutual match
     prismaMock.contactRequest.upsert.mockResolvedValueOnce({
       id: 'cr-1',
@@ -176,7 +188,8 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
 
   it('a flash like with sufficient credits charges 3 credits and stores flashMessageBody, still no Conversation', async () => {
     prismaMock.contactRequest.findUnique
-      .mockResolvedValueOnce(null) // existingRequest — new request
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx, under the advisory lock)
       .mockResolvedValueOnce(null); // reverseRequest — no mutual match
     prismaMock.user.findUnique
       .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
@@ -213,12 +226,18 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
         }),
       }),
     );
+    // The advisory lock is the first statement inside the transaction —
+    // without it, two concurrent requests could both observe "no existing
+    // row" and both spend credits before either commits.
+    expect(lockSpy).toHaveBeenCalledWith(prismaMock, 'me-1');
     const body = (await res.json()) as { conversationId: string | null };
     expect(body.conversationId).toBeNull();
   });
 
   it('a flash like with insufficient credits creates nothing and returns 402', async () => {
-    prismaMock.contactRequest.findUnique.mockResolvedValueOnce(null); // existingRequest — new request
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null); // existingFresh — new request (in-tx, under the advisory lock)
     prismaMock.user.findUnique
       .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
       .mockResolvedValueOnce({ role: 'USER' } as never) // role check before spend
@@ -240,7 +259,8 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     const olderCreatedAt = new Date('2026-08-20T10:00:00Z');
     const newerCreatedAt = new Date('2026-08-27T10:00:00Z');
     prismaMock.contactRequest.findUnique
-      .mockResolvedValueOnce(null) // existingRequest — new request from me
+      .mockResolvedValueOnce(null) // existingRequest — new request from me (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx, under the advisory lock)
       .mockResolvedValueOnce({
         id: 'reverse-req-1',
         requesterId: 'target-1',
@@ -293,7 +313,15 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
 
   it('re-liking an existing PENDING request never re-charges or overwrites flashMessageBody', async () => {
     prismaMock.contactRequest.findUnique
-      .mockResolvedValueOnce({ id: 'cr-existing' } as never) // existingRequest — NOT new
+      .mockResolvedValueOnce({ id: 'cr-existing' } as never) // existingRequest — NOT new (pre-tx, id-only select)
+      .mockResolvedValueOnce({
+        id: 'cr-existing',
+        requesterId: 'me-1',
+        targetId: 'target-1',
+        status: 'PENDING',
+        flashMessageBody: null,
+        createdAt: new Date(),
+      } as never) // existingFresh — in-tx re-read, still PENDING (not ACCEPTED)
       .mockResolvedValueOnce(null); // reverseRequest — no mutual match
     prismaMock.contactRequest.upsert.mockResolvedValueOnce({
       id: 'cr-existing',
@@ -315,6 +343,37 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: { status: 'PENDING' } }),
+    );
+  });
+
+  it('re-liking an already-ACCEPTED request does not reset it back to PENDING (task review finding 2)', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce({ id: 'cr-accepted' } as never) // existingRequest — NOT new (pre-tx, id-only select)
+      .mockResolvedValueOnce({
+        id: 'cr-accepted',
+        requesterId: 'me-1',
+        targetId: 'target-1',
+        status: 'ACCEPTED',
+        flashMessageBody: null,
+        createdAt: new Date(),
+      } as never) // existingFresh — in-tx re-read: already ACCEPTED, a live Conversation exists
+      .mockResolvedValueOnce(null); // reverseRequest — irrelevant here, request is already ACCEPTED
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-accepted',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'ACCEPTED',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    // Must NOT reset status back to PENDING — that would make an
+    // already-matched, live Conversation look unusable to any code gating
+    // on ContactRequest.status === 'ACCEPTED'.
+    expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} }),
     );
   });
 });
