@@ -37,6 +37,7 @@ vi.mock('@/lib/server/withdrawals/lock', () => ({
 import { requireAuth } from '@/lib/server/middleware';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
 import { sendPushToUser } from '@/lib/server/push';
+import { createNotification } from '@/lib/server/notifications';
 import { POST, DELETE } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
@@ -216,6 +217,35 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     const res = await POST(makePost({ targetUserId: 'target-1' }));
     expect(res.status).toBe(201);
     expect(vi.mocked(sendPushToUser)).not.toHaveBeenCalled();
+    // The in-app channel is still on → its notification still fires.
+    expect(vi.mocked(createNotification)).toHaveBeenCalled();
+  });
+
+  it('pushes a new contact request but skips the in-app notification when the target opted out of only the in-app channel', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx)
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+    prismaMock.notificationPreferences.findUnique.mockResolvedValueOnce({
+      prefs: { CONTACT_REQUEST: { inApp: false } }, // push absent ⇒ still enabled
+    } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
+      expect.anything(),
+      'target-1',
+      expect.objectContaining({ url: expect.stringContaining('/app/') }),
+    );
+    expect(vi.mocked(createNotification)).not.toHaveBeenCalled();
   });
 
   it('a flash like with sufficient credits charges 3 credits and stores flashMessageBody, still no Conversation', async () => {

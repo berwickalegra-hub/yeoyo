@@ -317,15 +317,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         url: `/app/messages/${result.conversationId as string}`,
         tag: `match:${result.matchedRequestId}`,
       });
-    } else if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
-      await createNotification(
-        prisma,
-        contactRequestReceived(
-          targetUserId,
-          result.contactRequest.id,
-          likerProfile?.firstName ?? 'Quelqu’un',
-        ),
-      );
+    } else {
+      if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
+        await createNotification(
+          prisma,
+          contactRequestReceived(
+            targetUserId,
+            result.contactRequest.id,
+            likerProfile?.firstName ?? 'Quelqu’un',
+          ),
+        );
+      }
       if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'push')) {
         void sendPushToUser(prisma, targetUserId, {
           title: `${likerProfile?.firstName ?? 'Quelqu’un'} s'intéresse à toi`,
