@@ -60,6 +60,7 @@ export function AdminSidebar({
   role,
   reportsCount,
   verificationCount,
+  supportCount,
   open,
   onClose,
 }: {
@@ -67,6 +68,7 @@ export function AdminSidebar({
   role: 'MODERATOR' | 'ADMIN' | 'SUPERADMIN';
   reportsCount?: number | undefined;
   verificationCount?: number | undefined;
+  supportCount?: number | undefined;
   open: boolean;
   onClose: () => void;
 }) {
@@ -91,6 +93,12 @@ export function AdminSidebar({
           label: 'Signalements',
           icon: 'flag',
           badge: reportsCount,
+        },
+        {
+          href: '/admin/support',
+          label: 'Support',
+          icon: 'life-buoy',
+          badge: supportCount,
         },
       ],
     },

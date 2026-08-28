@@ -25,6 +25,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [checked, setChecked] = useState(false);
   const [reportsCount, setReportsCount] = useState<number | undefined>(undefined);
   const [verificationCount, setVerificationCount] = useState<number | undefined>(undefined);
+  const [supportCount, setSupportCount] = useState<number | undefined>(undefined);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
@@ -34,13 +35,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         const res = await api<AdminMe>('/api/admin/me');
         if (cancelled) return;
         setAdmin(res.admin);
-        const [reports, verification] = await Promise.all([
+        const [reports, verification, support] = await Promise.all([
           api<{ total: number }>('/api/admin/reports?status=PENDING&limit=1'),
           api<{ total: number }>('/api/admin/verification-queue?limit=1'),
+          api<{ unreadThreads: number }>('/api/admin/support?limit=1'),
         ]);
         if (!cancelled) {
           setReportsCount(reports.total);
           setVerificationCount(verification.total);
+          setSupportCount(support.unreadThreads);
         }
       } catch (err) {
         if (!cancelled) {
@@ -71,6 +74,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         role={admin.role as 'MODERATOR' | 'ADMIN' | 'SUPERADMIN'}
         reportsCount={reportsCount}
         verificationCount={verificationCount}
+        supportCount={supportCount}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />

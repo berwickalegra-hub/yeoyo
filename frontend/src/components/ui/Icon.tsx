@@ -34,6 +34,7 @@ import {
   Layers,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   Lightbulb,
   Link2,
   Lock,
@@ -148,6 +149,7 @@ const ICONS = {
   calendar: Calendar,
   briefcase: Briefcase,
   plus: Plus,
+  'life-buoy': LifeBuoy,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

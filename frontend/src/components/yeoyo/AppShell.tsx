@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { TopNav, type SidebarUser, type SidebarBadgeCounts } from './TopNav';
 import { MobileTabBar } from './MobileTabBar';
-import { CoachWidget } from './CoachWidget';
+import { SupportWidget } from './SupportWidget';
 import type { SidebarTab } from './nav-items';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -36,9 +36,11 @@ export function AppShell({
   user: SidebarUser;
   badgeCounts?: SidebarBadgeCounts | undefined;
   /** Découvrir (Explorer) already stacks a raised nav FAB, the SwipeCard's
-   * own action row, and the swipe gestures themselves — the Coach bubble
-   * added one floating element too many there (2026-08-17, explicit user
-   * report). Every other screen keeps it; only that one call site opts out. */
+   * own action row, and the swipe gestures themselves — the floating
+   * Support widget (was Coach until 2026-08-29, prop name kept to avoid
+   * touching every call site) added one floating element too many there
+   * (2026-08-17, explicit user report). Every other screen keeps it; only
+   * that one call site opts out. */
   showCoach?: boolean;
   /** Découvrir (Explorer) only (2026-08-17, explicit user report): swaps
    * MobileTabBar's full 5-tab bar for a single "Accueil" button — that
@@ -100,7 +102,7 @@ export function AppShell({
         badgeCounts={badgeCounts}
         variant={compactMobileNav ? (hideMobileAccueilBar ? 'none' : 'minimal') : 'full'}
       />
-      {showCoach && <CoachWidget />}
+      {showCoach && <SupportWidget />}
     </div>
   );
 }

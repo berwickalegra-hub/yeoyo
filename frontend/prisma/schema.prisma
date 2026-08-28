@@ -72,6 +72,8 @@ model User {
   reportsFiled            Report[]                  @relation("ReportsFiled")
   reportsReceived         Report[]                  @relation("ReportsReceived")
   coachMessages           CoachMessage[]
+  supportThread           SupportMessage[]          @relation("SupportMessagesForUser")
+  supportMessagesSent     SupportMessage[]          @relation("SupportMessagesSent")
   profileViewsGiven       ProfileView[]             @relation("ProfileViewsGiven")
   profileViewsReceived    ProfileView[]             @relation("ProfileViewsReceived")
   favoritesGiven          Favorite[]                @relation("FavoritesGiven")
@@ -89,18 +91,18 @@ model User {
   // POST /api/admin/affiliates (SUPERADMIN-only, reuses the AdminInvite
   // flow). affiliateCode is generated once at account creation and never
   // regenerated (an already-shared referral link must stay valid).
-  affiliateCode          String?   @unique
+  affiliateCode String? @unique
 
   // Filleul → parrain. Set exactly once, at signup (POST /api/auth/signup),
   // never modified afterward — permanent attribution. onDelete: SetNull so
   // a (hypothetical, not built in V1) affiliate-account deletion never
   // cascades into deleting the referred user.
-  referredByAffiliateId  String?
-  referredByAffiliate    User?     @relation("AffiliateReferrals", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
-  referredUsers          User[]    @relation("AffiliateReferrals")
+  referredByAffiliateId String?
+  referredByAffiliate   User?   @relation("AffiliateReferrals", fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  referredUsers         User[]  @relation("AffiliateReferrals")
 
-  affiliateEarnings      AffiliateEarning[] @relation("AffiliateEarnings")
-  earningsGenerated      AffiliateEarning[] @relation("ReferredUserEarnings")
+  affiliateEarnings AffiliateEarning[] @relation("AffiliateEarnings")
+  earningsGenerated AffiliateEarning[] @relation("ReferredUserEarnings")
 
   @@index([email])
   @@index([role])
@@ -305,16 +307,17 @@ model VerificationCode {
 // File uploads — Cloudinary (column names kept from the R2 era; no migration needed)
 // ───────────────────────────────────────────────────────────────────────
 model FileUpload {
-  id           String        @id @default(cuid())
-  userId       String? // nullable — uploads can be anonymous if route allows
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  key          String        @unique // Cloudinary public_id (column name historical — was R2 object key)
-  filename     String
-  mimeType     String
-  sizeBytes    Int
-  createdAt    DateTime      @default(now())
-  profilePhoto ProfilePhoto?
-  messageImage Message?
+  id                  String          @id @default(cuid())
+  userId              String? // nullable — uploads can be anonymous if route allows
+  user                User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  key                 String          @unique // Cloudinary public_id (column name historical — was R2 object key)
+  filename            String
+  mimeType            String
+  sizeBytes           Int
+  createdAt           DateTime        @default(now())
+  profilePhoto        ProfilePhoto?
+  messageImage        Message?
+  supportMessageImage SupportMessage?
 
   @@index([userId])
   @@index([createdAt])
@@ -495,21 +498,21 @@ model ProfileView {
 }
 
 model ContactRequest {
-  id          String   @id @default(cuid())
-  requesterId String
-  requester   User     @relation("ContactRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
-  targetId    String
-  target      User     @relation("ContactRequestsReceived", fields: [targetId], references: [id], onDelete: Cascade)
-  status      String   @default("PENDING") // PENDING | VIEWED | ACCEPTED | CANCELLED
+  id               String   @id @default(cuid())
+  requesterId      String
+  requester        User     @relation("ContactRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetId         String
+  target           User     @relation("ContactRequestsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  status           String   @default("PENDING") // PENDING | VIEWED | ACCEPTED | CANCELLED
   // Message Flash (2026-08-27) — optional personalized message attached at
   // request time, shown to the target before she accepts/declines. Becomes
   // the conversation's real first Message once the request is accepted or
   // auto-accepted via mutual match (see POST /api/likes and POST
   // /api/contact-requests/[id]/respond). Non-refundable if declined — the
   // 3-credit charge already happened at send time in POST /api/likes.
-  flashMessageBody String? @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  flashMessageBody String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   conversation Conversation?
 
@@ -822,6 +825,49 @@ model CoachMessage {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Support inbox (2026-08-29, explicit user ask — replaces the floating
+// Coach AI button with a human "contact support" one). Same flat,
+// ever-growing-thread-per-user shape as CoachMessage above (one thread per
+// end user, no separate ticket/status wrapper — an admin's own reply is
+// itself the signal the thread was seen) — deliberately NOT a full
+// Conversation-style two-relation model since there's exactly one support
+// inbox, not N counterparts per user.
+//
+// `userId` is the thread owner (always the end user, never an admin).
+// `senderId` is whoever actually typed this row — the end user for
+// senderRole=USER, or the responding admin's own id for senderRole=ADMIN —
+// kept separate from `userId` so "who replied" survives even though the
+// thread itself is always keyed by the end user. Mirrors Message.senderId's
+// role in the peer-to-peer Conversation model.
+//
+// `readByAdminAt`: null on every USER-authored row until an admin opens the
+// thread (GET /api/admin/support/[userId] bulk-marks them), same
+// null-until-seen convention as Message.readAt. ADMIN-authored rows never
+// set this — it only tracks whether admin has seen the user's own messages.
+// Un-actioned USER rows (readByAdminAt IS NULL) is exactly the "unread"
+// count driving the AdminSidebar badge.
+//
+// Image attachment: identical FileUpload relation as Message.imageUploadId
+// above (screenshot of a bug, same POST /api/upload flow every other
+// attachment in this app already uses).
+model SupportMessage {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation("SupportMessagesForUser", fields: [userId], references: [id], onDelete: Cascade)
+  senderRole    String // USER | ADMIN
+  senderId      String
+  sender        User        @relation("SupportMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  content       String      @default("")
+  imageUploadId String?     @unique
+  imageUpload   FileUpload? @relation(fields: [imageUploadId], references: [id], onDelete: SetNull)
+  readByAdminAt DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([senderRole, readByAdminAt])
 }
 
 // ───────────────────────────────────────────────────────────────────────
