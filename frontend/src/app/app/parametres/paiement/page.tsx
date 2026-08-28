@@ -115,7 +115,7 @@ export default function PaiementPage() {
           >
             <Link
               href="/app/credits"
-              className="rounded-lg bg-gold px-4 py-2 font-body text-sm font-semibold text-gold-foreground"
+              className="btn-premium rounded-lg px-4 py-2 font-body text-sm font-semibold"
             >
               Acheter des crédits
             </Link>

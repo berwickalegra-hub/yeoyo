@@ -28,6 +28,7 @@ export function AppShell({
   badgeCounts,
   showCoach = true,
   compactMobileNav = false,
+  hideMobileAccueilBar = false,
   hideTopStripOnMobile = false,
   children,
 }: {
@@ -45,6 +46,15 @@ export function AppShell({
    * thumb zone, so the full bar was one row of controls too many. Desktop's
    * TopNav is unaffected either way (no crowding there). */
   compactMobileNav?: boolean;
+  /** Découvrir (Explorer) only (2026-08-28, explicit user ask — an
+   * experiment to compare against the standard `compactMobileNav` bottom
+   * placement): moves the "Accueil" button out of MobileTabBar entirely so
+   * the page can render it itself, e.g. next to a top "Filtres" button.
+   * MobileTabBar still renders an empty fixed bottom-0 h-16 element (not
+   * removed outright) to preserve the mobile-Safari viewport-chrome
+   * stability documented on `hideTopStripOnMobile` below. No effect unless
+   * `compactMobileNav` is also true. */
+  hideMobileAccueilBar?: boolean;
   /** Découvrir (Explorer) only (2026-08-19, explicit user ask — reverted
    * from an earlier attempt that also removed MobileTabBar and replaced it
    * with a floating back button: the user reported that left mobile Safari
@@ -88,7 +98,7 @@ export function AppShell({
       <MobileTabBar
         active={active}
         badgeCounts={badgeCounts}
-        variant={compactMobileNav ? 'minimal' : 'full'}
+        variant={compactMobileNav ? (hideMobileAccueilBar ? 'none' : 'minimal') : 'full'}
       />
       {showCoach && <CoachWidget />}
     </div>

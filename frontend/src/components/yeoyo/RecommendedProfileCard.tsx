@@ -1,15 +1,20 @@
 'use client';
 
 // Grid card for Découvrir's "Sélection pour toi" — reproduces Banani's
-// ProfileCard.jsx verbatim (2026-08-14 fidelity pass): `aspect-[3/4]` photo
-// (scales with card width, not a fixed pixel height), verified badge as a
-// secondary-tinted pill with the shield-check icon + "Vérifié" label
-// (top-left), a bare circular favorite button (top-right), name+age on one
-// baseline, city (map-pin) and job (briefcase) each on their own line. The
-// one deliberate divergence from Banani's mock: no numeric match-% badge —
-// this project has no scoring algorithm, so a real, derived "why
-// recommended" line (shared commune/religion/objectif) is shown instead of
-// fabricating a percentage.
+// ProfileCard.jsx: `aspect-[3/4]` photo (scales with card width, not a fixed
+// pixel height), verified badge as a secondary-tinted pill with the
+// shield-check icon + "Vérifié" label (top-left), name+age on one baseline,
+// city (map-pin) and job (briefcase) each on their own line. The one
+// deliberate divergence from Banani's mock: no numeric match-% badge — this
+// project has no scoring algorithm, so a real, derived "why recommended"
+// line (shared commune/religion/objectif) is shown instead.
+//
+// 2026-08-27 (explicit user ask): the top-right button is a *favorite*
+// (bookmark) toggle — POST/DELETE /api/favorites, no credit, reversible —
+// NOT a contact request. Contact requests are made from the full profile
+// page (tap the card) or from Explorer. The favorite chip gets a small
+// "premium" gold treatment when active so a shortlisted profile reads at a
+// glance.
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
@@ -18,18 +23,20 @@ import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
 export function RecommendedProfileCard({
   profile,
-  onLike,
-  liking,
+  onFavorite,
+  favoriteBusy,
   note,
 }: {
   profile: ProfileCard;
-  onLike: (userId: string) => void;
-  liking?: boolean;
+  onFavorite: (userId: string) => void;
+  favoriteBusy?: boolean;
   /** Real, derived "why recommended" line (shared commune/religion/objectif) — never a fabricated match score. */
   note?: string | undefined;
 }) {
-  const liked = profile.liked ?? false;
-  const popping = useLikePop(liked);
+  const favorited = profile.favorited ?? false;
+  // useLikePop bounces once on a false→true flip — reused verbatim for the
+  // favorite star (not like-specific despite the name).
+  const popping = useLikePop(favorited);
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
@@ -59,18 +66,24 @@ export function RecommendedProfileCard({
         </Link>
         <button
           type="button"
-          onClick={() => onLike(profile.userId)}
-          disabled={liking || liked}
-          aria-label={liked ? 'Déjà aimé' : 'Aimer ce profil'}
-          className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface p-1.5 btn-success-flash ${liking ? 'opacity-50' : ''} ${liked ? 'text-primary' : 'text-muted-foreground'}`}
+          onClick={() => onFavorite(profile.userId)}
+          disabled={favoriteBusy}
+          aria-label={favorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          className={`btn-press absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
+            favoriteBusy ? 'opacity-50' : ''
+          } ${
+            favorited
+              ? 'bg-gradient-to-br from-[#e6ac44] to-[#a9761d] text-gold-foreground shadow-md shadow-gold/40'
+              : 'bg-surface/90 text-muted-foreground hover:text-gold'
+          }`}
         >
-          {liking ? (
+          {favoriteBusy ? (
             <Icon name="refresh-cw" size={14} className="animate-spin" />
           ) : (
             <Icon
-              name="heart"
-              size={14}
-              fill={liked ? 'currentColor' : 'none'}
+              name="star"
+              size={15}
+              fill={favorited ? 'currentColor' : 'none'}
               className={popping ? 'animate-heart-pop' : ''}
             />
           )}

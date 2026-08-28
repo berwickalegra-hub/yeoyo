@@ -20,8 +20,12 @@ import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { SwipeCard } from '@/components/yeoyo/SwipeCard';
 import { ProfileGridCard } from '@/components/yeoyo/ProfileGridCard';
+import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { TOPNAV_ITEMS, type NavItem } from '@/components/yeoyo/nav-items';
 import type { ProfileCard } from '@/lib/yeoyo/types';
+
+const ACCUEIL_ITEM = TOPNAV_ITEMS.find((i) => i.id === 'accueil') as NavItem;
 
 type ViewMode = 'swipe' | 'grid';
 
@@ -110,6 +114,7 @@ export default function ExplorerPage() {
   const [stats, setStats] = useState<StatsToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [showRequestSent, setShowRequestSent] = useState(false);
 
   const loadDeck = useCallback(async (nextFilters: Filters) => {
     setLoading(true);
@@ -203,7 +208,7 @@ export default function ExplorerPage() {
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
       setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
-      toast('Profil aimé — une demande de contact a été envoyée', 'success');
+      setShowRequestSent(true);
       advance();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
@@ -248,7 +253,7 @@ export default function ExplorerPage() {
       // advances past the liked card automatically) — remove it so a
       // pending request never sits there with a toggleable heart.
       setDeck((prev) => prev.filter((p) => p.userId !== targetUserId));
-      toast('Profil aimé — une demande de contact a été envoyée', 'success');
+      setShowRequestSent(true);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -287,6 +292,7 @@ export default function ExplorerPage() {
       badgeCounts={badgeCounts}
       showCoach={false}
       compactMobileNav
+      hideMobileAccueilBar
       hideTopStripOnMobile
     >
       {/* This page owns its own full-height layout (2026-08-19, explicit
@@ -300,6 +306,17 @@ export default function ExplorerPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-shrink-0 animate-fade-in-down bg-background/95">
           <div className="flex items-center justify-center gap-2 border-b border-border px-5 py-3">
+            {/* 2026-08-28 experiment (explicit user ask): Accueil moved here
+                from the bottom bar (see MobileTabBar's `variant="none"` /
+                AppShell's `hideMobileAccueilBar`), mobile only — desktop
+                already reaches Accueil via TopNav. */}
+            <Link
+              href={ACCUEIL_ITEM.href}
+              className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-muted-foreground transition-transform active:scale-95 md:hidden"
+            >
+              <Icon name={ACCUEIL_ITEM.icon} size={15} />
+              <span className="font-body text-sm font-medium">Accueil</span>
+            </Link>
             <button
               type="button"
               onClick={openFilterPanel}
@@ -689,6 +706,7 @@ export default function ExplorerPage() {
           </div>
         )}
       </div>
+      <RequestSentOverlay show={showRequestSent} onDone={() => setShowRequestSent(false)} />
     </AppShell>
   );
 }

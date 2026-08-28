@@ -59,7 +59,7 @@ export function FlashMessageModal({
             <button
               type="button"
               onClick={() => router.push('/app/credits')}
-              className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary font-body text-sm font-bold text-primary-foreground transition-transform active:scale-95"
+              className="btn-premium flex h-12 items-center justify-center gap-2 rounded-full font-body text-sm font-bold transition-transform active:scale-95"
             >
               <Icon name="gem" size={16} />
               Acheter des crédits
@@ -85,7 +85,7 @@ export function FlashMessageModal({
               type="button"
               onClick={() => onSend(message.trim())}
               disabled={message.trim().length === 0}
-              className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary font-body text-sm font-bold text-primary-foreground transition-transform active:scale-95 disabled:opacity-50"
+              className="btn-premium flex h-12 items-center justify-center gap-2 rounded-full font-body text-sm font-bold transition-transform active:scale-95 disabled:opacity-50"
             >
               <Icon name="zap" size={16} />
               Envoyer — {FLASH_MESSAGE_COST} crédits

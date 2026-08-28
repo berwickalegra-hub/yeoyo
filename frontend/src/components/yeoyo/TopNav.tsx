@@ -23,7 +23,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Modal } from '@/components/ui/Modal';
-import { CreditConfirmModal } from './CreditConfirmModal';
+import { BoostConfirmModal } from './BoostConfirmModal';
 import { BrandMark } from './BrandMark';
 import { NotificationBell } from './NotificationBell';
 import { useIsAdmin } from '@/lib/yeoyo/useIsAdmin';
@@ -51,12 +51,29 @@ interface BoostStatus {
   cost: number;
 }
 
-function BoostButton() {
+// Formats the time left until `boostedUntil` as "23h" / "45m" / "12s" —
+// coarsest unit that still reads as "counting down" (2026-08-28, explicit
+// user ask: "vingt-quatre heures, douze heures, deux heures à chaque fois
+// que cela descende"). Returns null once expired so callers can fall back
+// to a normal (non-countdown) render instead of freezing at "0s".
+function formatBoostCountdown(boostedUntil: string, now: number): string | null {
+  const diffMs = new Date(boostedUntil).getTime() - now;
+  if (diffMs <= 0) return null;
+  const totalSeconds = Math.ceil(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours >= 1) return `${hours}h`;
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes >= 1) return `${minutes}m`;
+  return `${totalSeconds}s`;
+}
+
+function BoostButton({ compact = false }: { compact?: boolean }) {
   const { toast } = useToast();
   const { balance, unlimited, refresh: refreshCredits } = useCredits();
   const [status, setStatus] = useState<BoostStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     api<BoostStatus>('/api/profile/boost')
@@ -65,6 +82,18 @@ function BoostButton() {
         /* boost pill is non-critical — silently stays hidden on failure */
       });
   }, []);
+
+  // Ticks every second only while a boost is actually counting down — no
+  // interval at all for the common case (inactive or status not loaded
+  // yet), so this never runs a background timer for most users.
+  useEffect(() => {
+    if (!status?.active || !status.boostedUntil) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [status?.active, status?.boostedUntil]);
+
+  const countdown =
+    status?.active && status.boostedUntil ? formatBoostCountdown(status.boostedUntil, now) : null;
 
   async function activate() {
     if (busy || !status) return;
@@ -86,12 +115,11 @@ function BoostButton() {
     }
   }
 
+  // Always open the explainer dialog first — including for unlimited-access
+  // users — so the boost is never activated without a confirmation that
+  // spells out what it does (2026-08-27, explicit user ask).
   function requestBoost() {
     if (!status || status.active || busy) return;
-    if (unlimited) {
-      void activate();
-      return;
-    }
     setShowConfirm(true);
   }
 
@@ -103,23 +131,48 @@ function BoostButton() {
         type="button"
         onClick={requestBoost}
         disabled={busy || status.active}
-        aria-label={`Booster mon profil — ${status.cost} crédits`}
-        className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-body text-sm font-medium transition-colors ${
+        aria-label={
           status.active
-            ? 'border-primary/40 bg-primary/10 text-primary'
-            : 'border-border text-muted-foreground hover:border-primary/40'
-        } ${busy ? 'opacity-50' : ''}`}
+            ? `Boost actif${countdown ? ` — ${countdown} restant` : ''}`
+            : `Booster mon profil — ${status.cost} crédits`
+        }
+        className={
+          compact
+            ? // Mobile top-strip variant (2026-08-28, replaces the redundant
+              // Messages icon there — Messages already lives in
+              // MobileTabBar's bottom bar): sized to match the credits pill
+              // beside it.
+              `flex h-9 items-center gap-1 rounded-full px-2.5 font-body text-xs font-bold ${
+                status.active
+                  ? 'border border-primary/40 bg-primary/10 text-primary'
+                  : 'btn-premium'
+              } ${busy ? 'opacity-50' : ''}`
+            : `relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-body text-sm font-semibold ${
+                status.active
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : // Premium gold gradient + slow breathing glow so the
+                    // paid action pulls the eye without shouting (2026-08-27
+                    // user ask).
+                    'btn-premium'
+              } ${busy ? 'opacity-50' : ''}`
+        }
       >
-        <Icon name="zap" size={15} />
-        {status.active ? 'En avant' : `Boost · ${status.cost}`}
+        <Icon name="zap" size={compact ? 14 : 15} />
+        {compact
+          ? status.active
+            ? (countdown ?? 'Actif')
+            : String(status.cost)
+          : status.active
+            ? (countdown ?? 'En avant')
+            : `Boost · ${status.cost}`}
       </button>
 
-      <CreditConfirmModal
+      <BoostConfirmModal
         open={showConfirm}
         onClose={() => setShowConfirm(false)}
         cost={status.cost}
         balance={balance}
-        actionLabel="Booster ton profil pendant 24h"
+        unlimited={unlimited}
         onConfirm={activate}
         confirming={busy}
       />
@@ -441,21 +494,42 @@ export function TopNav({
               </Link>
             );
           })}
-          <Link
-            href={CREDITS_ITEM.href}
-            aria-label={unlimited ? 'Crédits illimités' : `Crédits — solde de ${balance}`}
-            className={`relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium lg:px-4 ${
-              active === 'credits' ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            <Icon name={CREDITS_ITEM.icon} size={18} />
-            <span className="hidden lg:inline">{CREDITS_ITEM.label}</span>
+          {/* Wrapper is the `relative` anchor, not the Link itself
+              (2026-08-28 fix, explicit user report: the balance badge was
+              barely visible/cut off in the corner) — `.btn-premium` sets
+              `overflow: hidden` for its sheen sweep, which was silently
+              clipping the badge whenever it poked past the button's own
+              box. Keeping the badge as a sibling, outside that clipped
+              box, fixes the clipping outright; the softer offsets below
+              also pull it in from the exact corner per the user's ask
+              ("plus proche au centre... un peu d'espace au-dessus"). */}
+          <div className="relative">
+            <Link
+              href={CREDITS_ITEM.href}
+              aria-label={unlimited ? 'Crédits illimités' : `Crédits — solde de ${balance}`}
+              // Premium gold gradient + breathing glow (2026-08-28, user
+              // ask — "toujours frappant et visible") so the shop entry
+              // point stands out on every screen, not just a muted nav tab
+              // like the others.
+              className="btn-premium flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-bold lg:px-4"
+            >
+              <Icon name={CREDITS_ITEM.icon} size={18} />
+              <span className="hidden lg:inline">{CREDITS_ITEM.label}</span>
+            </Link>
             {!creditsLoading && (
-              <span className="absolute -right-1.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 font-body text-[10px] font-bold text-gold-foreground">
+              // Solid bg-foreground/text-background (2026-08-28 fix,
+              // explicit user report: the previous bg-background/text-gold
+              // badge was unreadable — near-white text against the app's
+              // own near-white background). Same "stays legible regardless
+              // of what's behind it" pattern as ToastContext's pill, and it
+              // inverts correctly with every theme (dark backgrounds flip
+              // foreground/background together), so it isn't just a
+              // light-theme fix.
+              <span className="pointer-events-none absolute -right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 font-body text-[10px] font-bold text-background">
                 {unlimited ? '∞' : balance > 99 ? '99+' : balance}
               </span>
             )}
-          </Link>
+          </div>
         </nav>
 
         <div className="flex flex-shrink-0 items-center gap-3">
@@ -493,7 +567,7 @@ export function TopNav({
             <Link
               href={CREDITS_ITEM.href}
               aria-label={unlimited ? 'Crédits illimités' : `Crédits — solde de ${balance}`}
-              className="flex h-9 items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2.5 text-gold"
+              className="btn-premium flex h-9 items-center gap-1 rounded-full px-2.5"
             >
               <Icon name={CREDITS_ITEM.icon} size={14} />
               {!creditsLoading && (
@@ -502,16 +576,12 @@ export function TopNav({
                 </span>
               )}
             </Link>
-            <Link
-              href="/app/messages"
-              aria-label="Messages"
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gold/40 bg-gold/10 text-gold"
-            >
-              <Icon name="message-circle" size={17} />
-              {!!badgeFor('messages', badgeCounts) && (
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
-              )}
-            </Link>
+            {/* Messages icon removed here (2026-08-28, explicit user
+                report): it duplicated the "Messages" tab already in
+                MobileTabBar's bottom bar. Replaced with the Boost pill
+                (live countdown while active) so mobile gets the same
+                always-visible boost entry point desktop has. */}
+            <BoostButton compact />
             <NotificationBell />
             <AccountMenu user={user} />
           </div>

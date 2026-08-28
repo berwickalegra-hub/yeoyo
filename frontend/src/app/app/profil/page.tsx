@@ -1359,10 +1359,10 @@ export default function ProfilPage() {
                     </div>
                     <Link
                       href="/app/credits"
-                      className="mt-4 flex items-center gap-2 rounded-xl border border-gold/30 bg-gold/10 p-3"
+                      className="btn-premium mt-4 flex items-center gap-2 rounded-xl p-3"
                     >
-                      <Icon name="zap" size={14} className="text-gold" />
-                      <p className="font-body text-xs text-foreground">
+                      <Icon name="zap" size={14} />
+                      <p className="font-body text-xs font-semibold">
                         Booste ton profil pour plus de visibilité
                       </p>
                     </Link>

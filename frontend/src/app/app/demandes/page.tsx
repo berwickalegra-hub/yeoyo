@@ -145,6 +145,31 @@ export default function DemandesPage() {
     sent: sent.length,
     contacts: contacts.length,
   };
+  // Each tab carries its own colour + icon + one-line explainer so the
+  // three kinds never blur together (2026-08-28, explicit user ask).
+  const TAB_META: Record<
+    Tab,
+    { icon: 'inbox' | 'send' | 'check-circle'; active: string; badge: string; hint: string }
+  > = {
+    received: {
+      icon: 'inbox',
+      active: 'bg-primary text-primary-foreground',
+      badge: 'bg-primary-foreground/20 text-primary-foreground',
+      hint: 'Ces personnes veulent te parler — à toi de répondre.',
+    },
+    sent: {
+      icon: 'send',
+      active: 'bg-secondary text-secondary-foreground',
+      badge: 'bg-secondary-foreground/20 text-secondary-foreground',
+      hint: 'Tu as envoyé ces demandes — en attente de leur réponse.',
+    },
+    contacts: {
+      icon: 'check-circle',
+      active: 'bg-verified text-verified-foreground',
+      badge: 'bg-verified-foreground/20 text-verified-foreground',
+      hint: 'Demandes acceptées — vous pouvez discuter.',
+    },
+  };
 
   return (
     <AppShell
@@ -171,24 +196,21 @@ export default function DemandesPage() {
               </Link>
             </div>
 
-            <div className="mx-5 mb-4 flex items-center gap-1 rounded-xl border border-border bg-surface p-1 lg:mx-8">
+            <div className="mx-5 mb-2 flex items-center gap-1 rounded-xl border border-border bg-surface p-1 lg:mx-8">
               {(['received', 'sent', 'contacts'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 font-body text-sm font-medium transition-colors ${
-                    tab === t
-                      ? 'bg-secondary text-secondary-foreground font-bold'
-                      : 'text-muted-foreground'
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 font-body text-sm font-medium transition-colors ${
+                    tab === t ? `${TAB_META[t].active} font-bold` : 'text-muted-foreground'
                   }`}
                 >
+                  <Icon name={TAB_META[t].icon} size={14} />
                   {TAB_LABELS[t]}
                   <span
                     className={`flex h-5 min-w-5 items-center justify-center rounded-md px-1 font-body text-xs font-bold ${
-                      tab === t
-                        ? 'bg-secondary-foreground/20 text-secondary-foreground'
-                        : 'bg-muted text-muted-foreground'
+                      tab === t ? TAB_META[t].badge : 'bg-muted text-muted-foreground'
                     }`}
                   >
                     {TAB_COUNTS[t]}
@@ -196,6 +218,10 @@ export default function DemandesPage() {
                 </button>
               ))}
             </div>
+            <p className="mx-5 mb-4 flex items-center gap-1.5 font-body text-xs text-muted-foreground lg:mx-8">
+              <Icon name="info" size={12} className="flex-shrink-0" />
+              {TAB_META[tab].hint}
+            </p>
           </div>
 
           <div key={tab} className="flex flex-col gap-3 px-5 py-6 lg:px-8 animate-fade-in">

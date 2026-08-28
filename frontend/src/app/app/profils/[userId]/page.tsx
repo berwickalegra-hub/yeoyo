@@ -46,6 +46,7 @@ import { AppShell } from '@/components/yeoyo/AppShell';
 import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
 import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
+import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import type { ProfileCard } from '@/lib/yeoyo/types';
@@ -68,6 +69,7 @@ export default function ProfileDetailPage() {
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [showRequestSent, setShowRequestSent] = useState(false);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
   );
@@ -104,7 +106,7 @@ export default function ProfileDetailPage() {
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId: profile.userId } });
       setLiked(true);
-      toast('Demande envoyée — une demande de contact a été envoyée', 'success');
+      setShowRequestSent(true);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
@@ -305,7 +307,13 @@ export default function ProfileDetailPage() {
                   </button>
                 </div>
 
-                <ProfileInfoSections profile={profile} />
+                <ProfileInfoSections
+                  profile={profile}
+                  onPhotoClick={(index) => {
+                    setActivePhotoIndex(index);
+                    setLightboxOpen(true);
+                  }}
+                />
               </div>
             </div>
 
@@ -418,6 +426,7 @@ export default function ProfileDetailPage() {
           onClose={() => setLightboxOpen(false)}
         />
       )}
+      <RequestSentOverlay show={showRequestSent} onDone={() => setShowRequestSent(false)} />
     </AppShell>
   );
 }

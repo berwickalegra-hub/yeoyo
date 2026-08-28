@@ -20,6 +20,8 @@ export interface User {
   avatarUrl: string | null;
   /** False until the onboarding wizard's profile steps are finished — drives the AppShell redirect gate. */
   profileCompleted: boolean;
+  /** USER | MODERATOR | ADMIN | SUPERADMIN | AFFILIATE — see schema.prisma's User.role. */
+  role: string;
 }
 
 interface AuthContextValue {

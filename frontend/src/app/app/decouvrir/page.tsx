@@ -58,7 +58,7 @@ import { RecommendedProfileCard } from '@/components/yeoyo/RecommendedProfileCar
 import { ProfileCardSkeleton } from '@/components/yeoyo/ProfileCardSkeleton';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
 import { WhoLikedBanner } from '@/components/yeoyo/WhoLikedBanner';
-import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
+import { BoostConfirmModal } from '@/components/yeoyo/BoostConfirmModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { periodicPick, quotesForReligion, PROFILE_TIPS } from '@/lib/yeoyo/content';
 import { useCardExit } from '@/lib/yeoyo/useCardExit';
@@ -217,7 +217,7 @@ export default function DecouvrirPage() {
   const [showBoostConfirm, setShowBoostConfirm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [actingUserId, setActingUserId] = useState<string | null>(null);
+  const [favoritingUserId, setFavoritingUserId] = useState<string | null>(null);
   const [completionBannerDismissed, setCompletionBannerDismissed] = useState(false);
   const [premiumBannerDismissed, setPremiumBannerDismissed] = useState(false);
   const [boostBannerDismissed, setBoostBannerDismissed] = useState(false);
@@ -296,21 +296,29 @@ export default function DecouvrirPage() {
     setBoostBannerDismissed(true);
   }
 
-  async function onLike(targetUserId: string) {
-    setActingUserId(targetUserId);
+  // 2026-08-27 (explicit user ask): the card action here is a *favorite*
+  // bookmark toggle, not a contact request. Contact requests are made from
+  // the full profile page or from Explorer — Découvrir is for browsing and
+  // shortlisting only. A favorited card stays in the list (unlike the old
+  // "send request → card leaves" behaviour). Mirrors Explorer's onFavorite.
+  async function onFavorite(targetUserId: string) {
+    setFavoritingUserId(targetUserId);
+    const alreadyFavorited = recommended.find((p) => p.userId === targetUserId)?.favorited ?? false;
     try {
-      await api('/api/likes', { method: 'POST', body: { targetUserId } });
-      // Explorer/Découvrir only ever show profiles with no pending request
-      // from me — toggling a like/dislike on a request already sent reads
-      // as "can I take it back from here", which belongs on Demandes →
-      // Envoyées instead. So a liked card leaves this list immediately
-      // rather than sticking around in a "liked" visual state.
-      setRecommended((prev) => prev.filter((p) => p.userId !== targetUserId));
-      toast('Profil aimé — une demande de contact a été envoyée', 'success');
+      if (alreadyFavorited) {
+        await api('/api/favorites', { method: 'DELETE', body: { targetUserId } });
+        toast('Retiré des favoris', 'success');
+      } else {
+        await api('/api/favorites', { method: 'POST', body: { targetUserId } });
+        toast('Ajouté aux favoris', 'success');
+      }
+      setRecommended((prev) =>
+        prev.map((p) => (p.userId === targetUserId ? { ...p, favorited: !alreadyFavorited } : p)),
+      );
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
-      setActingUserId(null);
+      setFavoritingUserId(null);
     }
   }
 
@@ -334,11 +342,10 @@ export default function DecouvrirPage() {
     }
   }
 
+  // Always open the explainer dialog first — even for unlimited-access
+  // users — so everyone sees what a boost does and confirms before it
+  // activates (2026-08-27, explicit user ask).
   function requestBoost() {
-    if (creditsUnlimited) {
-      void activateBoost();
-      return;
-    }
     setShowBoostConfirm(true);
   }
 
@@ -438,27 +445,23 @@ export default function DecouvrirPage() {
                 <div className={`animate-fade-in-up relative ${premiumBannerExit.exitClassName}`}>
                   <Link
                     href="/app/credits"
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-gold/30 bg-gradient-to-r from-gold/15 to-gold/5 px-5 py-4 pr-10"
+                    className="btn-premium flex w-full items-center justify-between gap-3 rounded-xl px-5 py-4 pr-10"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-background/40">
                         <Icon name="gem" size={18} />
                       </div>
                       <div>
-                        <p className="font-headings text-sm font-semibold text-foreground">
+                        <p className="font-headings text-sm font-semibold">
                           {creditBalance} crédit{creditBalance > 1 ? 's' : ''}
                         </p>
-                        <p className="font-body text-xs text-muted-foreground">
+                        <p className="font-body text-xs opacity-80">
                           Achète des crédits pour voir qui t&apos;a mis en favori, qui a visité ton
                           profil, ou booster ta visibilité
                         </p>
                       </div>
                     </div>
-                    <Icon
-                      name="chevron-right"
-                      size={18}
-                      className="flex-shrink-0 text-muted-foreground"
-                    />
+                    <Icon name="chevron-right" size={18} className="flex-shrink-0 opacity-70" />
                   </Link>
                   <button
                     type="button"
@@ -647,16 +650,22 @@ export default function DecouvrirPage() {
                 <div>
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h1 className="font-headings text-2xl font-bold text-foreground">
-                        La sélection YeOyo
-                      </h1>
+                      {/* Gold accent bar — anchors the page's main heading
+                          and echoes the "premium" gold used by Boost /
+                          crédits (2026-08-27 polish pass). */}
+                      <div className="flex items-center gap-2.5">
+                        <span className="h-6 w-1 rounded-full bg-gradient-to-b from-[#e6ac44] to-[#a9761d]" />
+                        <h1 className="font-headings text-2xl font-bold text-foreground">
+                          La sélection YeOyo
+                        </h1>
+                      </div>
                       <p className="mt-0.5 font-body text-sm text-muted-foreground">
                         Des profils sérieux choisis pour toi
                       </p>
                     </div>
                     <Link
                       href="/app/explorer"
-                      className="flex flex-shrink-0 items-center gap-1.5 font-body text-sm font-medium text-secondary"
+                      className="flex flex-shrink-0 items-center gap-1.5 font-body text-sm font-medium text-secondary hover:underline"
                     >
                       Voir tous les profils
                       <Icon name="arrow-right" size={15} />
@@ -679,13 +688,41 @@ export default function DecouvrirPage() {
                       >
                         <RecommendedProfileCard
                           profile={p}
-                          onLike={onLike}
-                          liking={actingUserId === p.userId}
+                          onFavorite={onFavorite}
+                          favoriteBusy={favoritingUserId === p.userId}
                           note={matchNote(profile, p)}
                         />
                       </div>
                     ))}
                   </div>
+
+                  {/* Contact requests don't happen on Découvrir anymore — the
+                      cards only bookmark. This CTA routes the user to
+                      Explorer, where the swipe deck / "Demander" action
+                      lives (2026-08-27, explicit user ask). */}
+                  <Link
+                    href="/app/explorer"
+                    className="group mt-4 flex items-center justify-between gap-3 rounded-xl bg-primary px-5 py-4 text-primary-foreground shadow-md shadow-primary/30 transition-transform active:scale-95"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary-foreground/15">
+                        <Icon name="sparkles" size={18} />
+                      </span>
+                      <div>
+                        <p className="font-headings text-sm font-semibold">
+                          Prêt·e à faire le premier pas ?
+                        </p>
+                        <p className="font-body text-xs text-primary-foreground/80">
+                          Explore tous les profils et envoie tes demandes de contact
+                        </p>
+                      </div>
+                    </div>
+                    <Icon
+                      name="arrow-right"
+                      size={18}
+                      className="flex-shrink-0 transition-transform group-hover:translate-x-0.5"
+                    />
+                  </Link>
                 </div>
               )}
 
@@ -713,47 +750,45 @@ export default function DecouvrirPage() {
                 </div>
               </div>
 
+              {/* Quick-stat tiles — one loop instead of 4 near-identical
+                  blocks (2026-08-27 polish pass), with a lift-on-hover so
+                  they read as tappable. */}
               <div className="grid grid-cols-4 gap-3">
-                <Link
-                  href="/app/demandes"
-                  className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface p-4 text-center"
-                >
-                  <Icon name="inbox" size={18} className="text-primary" />
-                  <span className="font-headings text-lg font-bold text-foreground">
-                    {badgeCounts.demandes ?? 0}
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">Demandes</span>
-                </Link>
-                <Link
-                  href="/app/messages"
-                  className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface p-4 text-center"
-                >
-                  <Icon name="message-circle" size={18} className="text-primary" />
-                  <span className="font-headings text-lg font-bold text-foreground">
-                    {badgeCounts.messages ?? 0}
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">Messages</span>
-                </Link>
-                <Link
-                  href="/app/likes"
-                  className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface p-4 text-center"
-                >
-                  <Icon name="heart" size={18} className="text-primary" />
-                  <span className="font-headings text-lg font-bold text-foreground">
-                    {likes.length}
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">Qui m&rsquo;aime</span>
-                </Link>
-                <Link
-                  href="/app/visiteurs"
-                  className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface p-4 text-center"
-                >
-                  <Icon name="eye" size={18} className="text-primary" />
-                  <span className="font-headings text-lg font-bold text-foreground">
-                    {visitorsCount}
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">Visiteurs</span>
-                </Link>
+                {(
+                  [
+                    {
+                      href: '/app/demandes',
+                      icon: 'inbox',
+                      value: badgeCounts.demandes ?? 0,
+                      label: 'Demandes',
+                    },
+                    {
+                      href: '/app/messages',
+                      icon: 'message-circle',
+                      value: badgeCounts.messages ?? 0,
+                      label: 'Messages',
+                    },
+                    { href: '/app/likes', icon: 'heart', value: likes.length, label: "Qui m'aime" },
+                    {
+                      href: '/app/visiteurs',
+                      icon: 'eye',
+                      value: visitorsCount,
+                      label: 'Visiteurs',
+                    },
+                  ] as const
+                ).map((stat) => (
+                  <Link
+                    key={stat.href}
+                    href={stat.href}
+                    className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface p-4 text-center transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                  >
+                    <Icon name={stat.icon} size={18} className="text-primary" />
+                    <span className="font-headings text-lg font-bold text-foreground">
+                      {stat.value}
+                    </span>
+                    <span className="font-body text-xs text-muted-foreground">{stat.label}</span>
+                  </Link>
+                ))}
               </div>
 
               {likes.length > 0 && (
@@ -816,12 +851,12 @@ export default function DecouvrirPage() {
         )}
       </div>
 
-      <CreditConfirmModal
+      <BoostConfirmModal
         open={showBoostConfirm}
         onClose={() => setShowBoostConfirm(false)}
         cost={boost?.cost ?? 3}
         balance={creditBalance}
-        actionLabel="Booster ton profil pendant 24h"
+        unlimited={creditsUnlimited}
         onConfirm={activateBoost}
         confirming={boosting}
       />

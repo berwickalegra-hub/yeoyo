@@ -42,6 +42,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       select: {
         id: true,
         email: true,
+        role: true,
         emailVerifiedAt: true,
         createdAt: true,
         updatedAt: true,
@@ -76,6 +77,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       sub: auth.user.sub,
       id: dbUser?.id ?? auth.user.sub,
       email: dbUser?.email ?? auth.user.email,
+      // Drives useIsAdmin's short-circuit — that hook skips the /api/admin/me
+      // probe entirely for plain USER accounts so a regular member never
+      // triggers its (expected, but console-visible) 403.
+      role: dbUser?.role ?? 'USER',
       emailVerifiedAt: dbUser?.emailVerifiedAt
         ? dbUser.emailVerifiedAt instanceof Date
           ? dbUser.emailVerifiedAt.toISOString()

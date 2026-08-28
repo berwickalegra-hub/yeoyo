@@ -66,6 +66,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { MatchStories } from '@/components/yeoyo/MatchStories';
 import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
 import {
   closeAblySafely,
@@ -676,18 +677,26 @@ export default function MessageThreadPage() {
           <div className="border-b border-border px-5 py-5">
             <h1 className="font-headings text-xl font-bold text-foreground">Messages</h1>
           </div>
+          <MatchStories
+            matches={conversations
+              .filter((c) => !c.lastMessage)
+              .map((c) => ({ conversationId: c.id, otherUser: c.otherUser }))}
+            activeId={conversationId}
+          />
           <div className="flex flex-1 flex-col overflow-y-auto">
-            {conversations.map((c) => (
-              <ConversationListItem
-                key={c.id}
-                id={c.id}
-                otherUser={c.otherUser}
-                lastMessage={c.lastMessage}
-                unreadCount={c.unreadCount}
-                muted={c.muted}
-                active={c.id === conversationId}
-              />
-            ))}
+            {conversations
+              .filter((c) => c.lastMessage)
+              .map((c) => (
+                <ConversationListItem
+                  key={c.id}
+                  id={c.id}
+                  otherUser={c.otherUser}
+                  lastMessage={c.lastMessage}
+                  unreadCount={c.unreadCount}
+                  muted={c.muted}
+                  active={c.id === conversationId}
+                />
+              ))}
           </div>
         </div>
 

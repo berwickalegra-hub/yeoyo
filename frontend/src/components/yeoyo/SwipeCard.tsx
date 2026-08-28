@@ -305,7 +305,13 @@ export function SwipeCard({
           </div>
 
           <div className="flex flex-col gap-4 p-4">
-            <ProfileInfoSections profile={profile} />
+            <ProfileInfoSections
+              profile={profile}
+              onPhotoClick={(index) => {
+                setPhotoIndex(index);
+                setShowLightbox(true);
+              }}
+            />
           </div>
         </div>
 
@@ -382,9 +388,9 @@ export function SwipeCard({
           onClick={() => setShowFlashModal(true)}
           disabled={busy || liked || exiting}
           aria-label="Message flash — envoyer un message avant que ta demande soit acceptée"
-          className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-gold/30 bg-gold/10 shadow-md transition-transform active:scale-95 disabled:opacity-50"
+          className="btn-premium flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full shadow-md transition-transform active:scale-95 disabled:opacity-50"
         >
-          <Icon name="zap" size={20} className="text-gold" />
+          <Icon name="zap" size={20} />
         </button>
         <button
           type="button"

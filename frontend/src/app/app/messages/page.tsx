@@ -13,6 +13,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
+import { MatchStories } from '@/components/yeoyo/MatchStories';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { useConversations } from '@/lib/yeoyo/useConversations';
@@ -23,11 +24,23 @@ export default function MessagesPage() {
   const { conversations, loading } = useConversations();
   const [search, setSearch] = useState('');
 
+  // A conversation with no message yet = a fresh match — it shows in the
+  // "Nouveaux matchs" strip only, never in the thread list below. It joins
+  // the list automatically once someone sends the first message.
+  const newMatches = useMemo(
+    () =>
+      conversations
+        .filter((c) => !c.lastMessage)
+        .map((c) => ({ conversationId: c.id, otherUser: c.otherUser })),
+    [conversations],
+  );
+  const threads = useMemo(() => conversations.filter((c) => c.lastMessage), [conversations]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter((c) => c.otherUser.firstName.toLowerCase().includes(q));
-  }, [conversations, search]);
+    if (!q) return threads;
+    return threads.filter((c) => c.otherUser.firstName.toLowerCase().includes(q));
+  }, [threads, search]);
 
   if (!user) return null;
 
@@ -42,7 +55,8 @@ export default function MessagesPage() {
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-5">
             <h1 className="font-headings text-xl font-bold text-foreground">Messages</h1>
           </div>
-          {conversations.length > 0 && (
+          {!loading && <MatchStories matches={newMatches} />}
+          {threads.length > 0 && (
             <div className="border-b border-border px-4 py-3">
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
                 <Icon name="search" size={15} className="flex-shrink-0 text-muted-foreground" />
@@ -66,7 +80,13 @@ export default function MessagesPage() {
                 Aucune conversation pour l’instant — accepte une demande de contact pour démarrer.
               </p>
             )}
-            {!loading && conversations.length > 0 && filtered.length === 0 && (
+            {!loading && threads.length === 0 && newMatches.length > 0 && (
+              <p className="px-5 py-4 font-body text-sm text-muted-foreground">
+                Touche un nouveau match ci-dessus et envoie le premier message pour lancer la
+                conversation.
+              </p>
+            )}
+            {!loading && threads.length > 0 && filtered.length === 0 && (
               <p className="px-5 py-3 font-body text-sm text-muted-foreground">
                 Aucune conversation ne correspond à « {search} ».
               </p>

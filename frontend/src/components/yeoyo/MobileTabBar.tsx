@@ -99,7 +99,7 @@ export function MobileTabBar({
 }: {
   active: SidebarTab;
   badgeCounts?: SidebarBadgeCounts | undefined;
-  variant?: 'full' | 'minimal';
+  variant?: 'full' | 'minimal' | 'none';
 }) {
   if (variant === 'minimal') {
     return (
@@ -113,6 +113,17 @@ export function MobileTabBar({
         </Link>
       </nav>
     );
+  }
+
+  // 2026-08-28 experiment (explicit user ask): Explorer moves the Accueil
+  // button up into its own top bar, next to Filtres. This keeps the fixed,
+  // bottom-0, h-16 element in place with no content — same footprint as
+  // 'minimal', so mobile Safari's viewport-chrome sizing stays as
+  // predictable as it was before (see AppShell.tsx's hideTopStripOnMobile
+  // comment for why a fixed bottom element was reinstated after removing it
+  // once already broke that). Only the Accueil button itself moved.
+  if (variant === 'none') {
+    return <nav aria-hidden className="fixed inset-x-0 bottom-0 z-40 h-16 md:hidden" />;
   }
 
   return (
