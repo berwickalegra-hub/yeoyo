@@ -9,6 +9,7 @@ import { SettingsSubHeader } from '@/components/yeoyo/SettingsSubHeader';
 import { SettingsSection, SettingsRow } from '@/components/yeoyo/SettingsSection';
 import { Toggle } from '@/components/ui/Toggle';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { usePushNotifications } from '@/lib/yeoyo/usePushNotifications';
 import type { NotificationPrefs } from '@/lib/server/notifications/prefs-merge';
 
 const NOTIF_EVENTS: { key: string; label: string; helper: string }[] = [
@@ -34,6 +35,7 @@ export default function NotificationsSettingsPage() {
   const user = useUser();
   const { toast } = useToast();
   const badgeCounts = useNavCounts();
+  const { state: pushState, enable: enablePush, disable: disablePush } = usePushNotifications();
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({});
 
   const load = useCallback(async () => {
@@ -73,6 +75,27 @@ export default function NotificationsSettingsPage() {
     >
       <SettingsSubHeader title="Notifications" subtitle="Ce que tu veux être averti(e)" />
       <div className="flex flex-col gap-4 px-5 py-6 lg:mx-auto lg:max-w-3xl lg:px-8">
+        <SettingsSection title="Notifications push (cet appareil)">
+          <SettingsRow
+            label="Recevoir les notifications sur cet appareil"
+            helper={
+              pushState === 'denied'
+                ? 'Tu as bloqué les notifications — réactive-les dans les réglages de ton navigateur.'
+                : pushState === 'ios-needs-install'
+                  ? "Installe d'abord YeOyo sur ton écran d'accueil."
+                  : pushState === 'unconfigured' || pushState === 'unsupported'
+                    ? 'Non disponible sur ce navigateur.'
+                    : 'Message, match accepté, nouvelle demande de contact.'
+            }
+          >
+            <Toggle
+              label="Notifications push"
+              checked={pushState === 'granted'}
+              disabled={pushState !== 'granted' && pushState !== 'default'}
+              onChange={(v) => void (v ? enablePush() : disablePush())}
+            />
+          </SettingsRow>
+        </SettingsSection>
         <SettingsSection title="Notifications">
           {NOTIF_EVENTS.map((e) => (
             <SettingsRow key={e.key} label={e.label} helper={e.helper}>
