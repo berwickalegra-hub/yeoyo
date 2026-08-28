@@ -180,12 +180,21 @@ if (isChannelEnabled(parsePrefs(prefsRow?.prefs), EVENT, 'push')) {
 | `likes/route.ts` (~L304, mutual match) | `CONTACT_REQUEST_ACCEPTED` | the already-waiting side | `/app/messages/{conversationId}` | `match:{matchedRequestId}` |
 | `likes/route.ts` (~L314, new request) | `CONTACT_REQUEST` | target | `/app/demandes` | `req:{contactRequestId}` |
 
-Every push is gated the same way: `isChannelEnabled(parsePrefs(prefsRow?.prefs), <key>, 'push')`.
-The prefs event key is the matching **notification `type`** (so the `push` channel toggles
-alongside the same event as `inApp`). Note the two match rows use `CONTACT_REQUEST_ACCEPTED`
-even though the surrounding in-app notification there is currently unconditional — the
-opt-out default keeps push effectively on while giving a future per-event UI something to
-switch. Copy for each push mirrors the existing `templates.ts` title/body for that event
+The `MESSAGE_RECEIVED` push and the `CONTACT_REQUEST` (new-request) push are gated
+`isChannelEnabled(parsePrefs(prefsRow?.prefs), <key>, 'push')` — the prefs event key is the
+matching **notification `type`** (so the `push` channel toggles alongside the same event as
+`inApp`).
+
+**Implementation ruling (2026-08-28):** the two **match** pushes (`respond` ACCEPT, `likes`
+mutual match) ship **ungated**, mirroring the surrounding in-app match notification which is
+itself unconditional at those two sites. A subscription must still exist for anything to
+send. If a future per-event UI wants to make match push opt-out-able, it must add the
+`isChannelEnabled(..., 'CONTACT_REQUEST_ACCEPTED', 'push')` gate at both sites **and** the
+equivalent gate on the in-app `createNotification` there, so the two channels stay
+consistent. As shipped, `PATCH /api/notifications/prefs` will accept
+`{ CONTACT_REQUEST_ACCEPTED: { push: false } }` but it has no effect on match pushes yet.
+
+Copy for each push mirrors the existing `templates.ts` title/body for that event
 ("Nouveau message de {name}" / preview; "C'est un match avec {name} !"; "{name} s'intéresse
 à toi"). The `respond` route's DECLINE path (L66) gets **no** push.
 
