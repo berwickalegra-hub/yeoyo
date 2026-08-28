@@ -69,6 +69,7 @@ Groupes optionnels (set les vars pour activer ; absent = inerte) :
 | Paiements (Chariow) | `CHARIOW_API_KEY`, `CHARIOW_WEBHOOK_SECRET`, `CHARIOW_PRODUCT_ID_15J/1M/3M/6M` | `/api/subscriptions/checkout` renvoie 503 `PAYMENT_PROVIDER_UNCONFIGURED` |
 | Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | `/api/auth/oauth/google/*` renvoient 404 |
 | Sentry | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE?`, ... | No-op silencieux (zéro coût perf) |
+| Web Push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | `GET /api/push/vapid-public-key` renvoie `null`, la bannière d'activation ne s'affiche pas, aucune notification OS n'est envoyée — le reste de l'app est inchangé |
 | Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Fallback rate-limit en mémoire avec `logger.warn` au boot — NE PAS lancer en prod sans Upstash |
 
 Référence env complète avec toutes les flags : voir [`.env.example`](.env.example) à la racine du repo (14 sections, chaque clé documentée avec défaut + impact).
