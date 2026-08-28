@@ -2,22 +2,13 @@
 
 import { useEffect, useState } from 'react';
 
+import { isIos, isStandalone } from '@/lib/yeoyo/platform';
+
 // Not in lib.dom.d.ts yet — Chrome/Edge/Android-only event, feature-detected
 // below rather than relied on for typing correctness.
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-// Broadened from a Safari-only check (2026-08-14, explicit user report:
-// "the download button does nothing on my iPhone"). No iOS browser has a
-// `beforeinstallprompt` API — Chrome-iOS/Firefox-iOS/Edge-iOS are all
-// WebKit under the hood and equally need the manual Share → "Sur l'écran
-// d'accueil" flow, so gating the hint on the UA literally containing
-// "Safari" silently dropped the hint (and left the button doing nothing
-// visible) for anyone whose default iPhone browser isn't Safari itself.
-function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 }
 
 // In-app browsers (WhatsApp/Instagram/Facebook/Messenger/TikTok/Line
@@ -29,15 +20,6 @@ function isIos(): boolean {
 function isInAppBrowser(): boolean {
   const ua = window.navigator.userAgent;
   return /FBAN|FBAV|Instagram|Line\/|MicroMessenger|Twitter|TikTok|WhatsApp/i.test(ua);
-}
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari's own non-standard flag — no (display-mode: standalone)
-    // media-query support there.
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
 }
 
 // Shared install-prompt plumbing so both the dismissible home banner
