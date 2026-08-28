@@ -24,6 +24,7 @@
     "db:make-superadmin": "pnpm --filter frontend run db:make-superadmin",
     "dev:verification-code": "pnpm --filter frontend run dev:verification-code",
     "db:backfill-legacy-country": "pnpm --filter frontend run db:backfill-legacy-country",
+    "db:cleanup-legacy-conversations": "pnpm --filter frontend run db:cleanup-legacy-conversations",
     "seed:dev": "pnpm --filter frontend run seed:dev",
     "seed:yeoyo": "pnpm --filter frontend run seed:yeoyo",
     "seed:yeoyo-women": "pnpm --filter frontend run seed:yeoyo-women",
