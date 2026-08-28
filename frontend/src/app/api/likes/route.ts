@@ -137,18 +137,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
       const isNewRequestInTx = !existingFresh;
 
+      let effectiveFlashMessageBody = flashMessageBody;
       if (isNewRequestInTx && flashMessageBody) {
         const sender = await tx.user.findUnique({
           where: { id: auth.user.sub },
-          select: { role: true },
+          select: { role: true, profile: { select: { gender: true } } },
         });
-        const spend = await spendCredits(tx, {
-          userId: auth.user.sub,
-          action: 'flash_message',
-          role: sender?.role ?? null,
-        });
-        if (!spend.ok) {
-          return { ok: false as const, balance: spend.balance };
+        const isStaff = sender?.role === 'ADMIN' || sender?.role === 'SUPERADMIN';
+        const isMan = sender?.profile?.gender === 'HOMME';
+        if (!isMan && !isStaff) {
+          // Message Flash is a HOMME-only paid feature (spec: "a man can
+          // pay 3 credits"), matching the first_message credit rule's own
+          // gender gate. A non-HOMME caller's flash is silently dropped —
+          // no charge, not stored — the like still succeeds normally.
+          effectiveFlashMessageBody = undefined;
+        } else {
+          const spend = await spendCredits(tx, {
+            userId: auth.user.sub,
+            action: 'flash_message',
+            role: sender?.role ?? null,
+          });
+          if (!spend.ok) {
+            return { ok: false as const, balance: spend.balance };
+          }
         }
       }
 
@@ -163,7 +174,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         create: {
           requesterId: auth.user.sub,
           targetId: targetUserId,
-          flashMessageBody: flashMessageBody ?? null,
+          flashMessageBody: effectiveFlashMessageBody ?? null,
         },
         // A previously-withdrawn (CANCELLED) request that gets re-liked
         // should go back to PENDING instead of staying stuck as cancelled.
@@ -203,16 +214,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         where: { id: reverseRequest.id },
         data: { status: 'ACCEPTED' },
       });
-      const conversationRow = await tx.conversation.create({
-        data: { userAId, userBId, contactRequestId: contactRequestRow.id },
+      const conversationRow = await tx.conversation.upsert({
+        where: { userAId_userBId: { userAId, userBId } },
+        create: { userAId, userBId, contactRequestId: contactRequestRow.id },
+        update: {},
       });
 
       const flashSources: { senderId: string; body: string | null; createdAt: Date }[] = [
-        {
-          senderId: contactRequestRow.requesterId,
-          body: contactRequestRow.flashMessageBody,
-          createdAt: contactRequestRow.createdAt,
-        },
+        // Skip our own side's flash if this request was already ACCEPTED before
+        // this transaction — its flash (if any) was already delivered as
+        // Message #1 by POST /api/contact-requests/[id]/respond or an earlier
+        // mutual match. reverseRequest is always safe: mutualMatch is only
+        // true when reverseRequest.status === 'PENDING', and a PENDING
+        // request's flash has never been delivered yet.
+        ...(existingFresh?.status === 'ACCEPTED'
+          ? []
+          : [
+              {
+                senderId: contactRequestRow.requesterId,
+                body: contactRequestRow.flashMessageBody,
+                createdAt: contactRequestRow.createdAt,
+              },
+            ]),
         {
           senderId: reverseRequest.requesterId,
           body: reverseRequest.flashMessageBody,
@@ -223,12 +246,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .filter((s): s is { senderId: string; body: string; createdAt: Date } => !!s.body)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
-      for (const source of orderedFlashSources) {
+      for (const [i, source] of orderedFlashSources.entries()) {
         await tx.message.create({
           data: {
             conversationId: conversationRow.id,
             senderId: source.senderId,
             body: source.body,
+            // Explicit, distinct timestamps — two rows inserted in the same
+            // transaction would otherwise both get Postgres's transaction-start
+            // CURRENT_TIMESTAMP, making display order between them arbitrary
+            // (M1 in the final review).
+            createdAt: new Date(Date.now() + i),
           },
         });
       }

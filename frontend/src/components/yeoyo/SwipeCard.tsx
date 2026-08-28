@@ -380,7 +380,7 @@ export function SwipeCard({
         <button
           type="button"
           onClick={() => setShowFlashModal(true)}
-          disabled={busy || exiting}
+          disabled={busy || liked || exiting}
           aria-label="Message flash — envoyer un message avant que ta demande soit acceptée"
           className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-gold/30 bg-gold/10 shadow-md transition-transform active:scale-95 disabled:opacity-50"
         >

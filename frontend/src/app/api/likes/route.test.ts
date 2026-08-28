@@ -193,7 +193,7 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
       .mockResolvedValueOnce(null); // reverseRequest — no mutual match
     prismaMock.user.findUnique
       .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
-      .mockResolvedValueOnce({ role: 'USER' } as never); // role check before spend
+      .mockResolvedValueOnce({ role: 'USER', profile: { gender: 'HOMME' } } as never); // gender/staff check before spend
     // spendCredits' own post-CAS balance fetch falls through to the default
     // (unmocked) resolved value — harmless here since a 201 response never
     // surfaces `balance` on the success path.
@@ -240,7 +240,7 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
       .mockResolvedValueOnce(null); // existingFresh — new request (in-tx, under the advisory lock)
     prismaMock.user.findUnique
       .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
-      .mockResolvedValueOnce({ role: 'USER' } as never) // role check before spend
+      .mockResolvedValueOnce({ role: 'USER', profile: { gender: 'HOMME' } } as never) // gender/staff check before spend
       .mockResolvedValueOnce({ creditBalance: 1 } as never); // spendCredits' balance fetch on failure
     prismaMock.user.updateMany.mockResolvedValueOnce({ count: 0 } as never); // CAS fails
 
@@ -283,7 +283,7 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
       targetId: 'target-1',
       status: 'ACCEPTED',
     } as never);
-    prismaMock.conversation.create.mockResolvedValueOnce({ id: 'conv-new-1' } as never);
+    prismaMock.conversation.upsert.mockResolvedValueOnce({ id: 'conv-new-1' } as never);
 
     const res = await POST(makePost({ targetUserId: 'target-1' }));
     expect(res.status).toBe(201);
@@ -295,13 +295,23 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
       where: { id: 'reverse-req-1' },
       data: { status: 'ACCEPTED' },
     });
-    expect(prismaMock.conversation.create).toHaveBeenCalledWith({
-      data: { userAId: 'me-1', userBId: 'target-1', contactRequestId: 'cr-new-1' },
+    // upsert, not create — a Conversation may already exist for this pair
+    // (legacy eager-upsert data, or an earlier accept) and must not throw
+    // P2002 (final-review finding C1).
+    expect(prismaMock.conversation.upsert).toHaveBeenCalledWith({
+      where: { userAId_userBId: { userAId: 'me-1', userBId: 'target-1' } },
+      create: { userAId: 'me-1', userBId: 'target-1', contactRequestId: 'cr-new-1' },
+      update: {},
     });
     // Only the reverse request carried a flash message — inserted once, from its own requester.
     expect(prismaMock.message.create).toHaveBeenCalledTimes(1);
     expect(prismaMock.message.create).toHaveBeenCalledWith({
-      data: { conversationId: 'conv-new-1', senderId: 'target-1', body: 'Salut moi aussi !' },
+      data: {
+        conversationId: 'conv-new-1',
+        senderId: 'target-1',
+        body: 'Salut moi aussi !',
+        createdAt: expect.any(Date),
+      },
     });
     expect(prismaMock.conversation.update).toHaveBeenCalledWith({
       where: { id: 'conv-new-1' },
@@ -374,6 +384,102 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     // on ContactRequest.status === 'ACCEPTED'.
     expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: {} }),
+    );
+  });
+
+  it('mutual match where my own side was already ACCEPTED (legacy Conversation exists): upserts instead of crashing, does not re-deliver my already-sent flash', async () => {
+    const myOldCreatedAt = new Date('2026-08-15T10:00:00Z');
+    const reverseCreatedAt = new Date('2026-08-27T10:00:00Z');
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce({ id: 'cr-mine' } as never) // existingRequest — NOT new (pre-tx)
+      .mockResolvedValueOnce({
+        id: 'cr-mine',
+        requesterId: 'me-1',
+        targetId: 'target-1',
+        status: 'ACCEPTED', // already accepted earlier — its flash (if any) was
+        // already delivered as Message #1 by POST /api/contact-requests/[id]/respond
+        flashMessageBody: 'Mon message déjà livré',
+        createdAt: myOldCreatedAt,
+      } as never) // existingFresh
+      .mockResolvedValueOnce({
+        id: 'reverse-req-2',
+        requesterId: 'target-1',
+        targetId: 'me-1',
+        status: 'PENDING', // fresh — mutualMatch requires this, so its flash was never delivered
+        flashMessageBody: 'Salut, nouveau message flash !',
+        createdAt: reverseCreatedAt,
+      } as never); // reverseRequest — mutual match
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-mine',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'ACCEPTED',
+      flashMessageBody: 'Mon message déjà livré',
+      createdAt: myOldCreatedAt,
+    } as never);
+    prismaMock.contactRequest.update.mockResolvedValueOnce({
+      id: 'cr-mine',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'ACCEPTED',
+    } as never);
+    // A legacy Conversation row already exists for this pair (old
+    // eager-upsert behaviour, or an earlier accept) — upsert must resolve
+    // it instead of colliding on the unique constraint (final-review C1).
+    prismaMock.conversation.upsert.mockResolvedValueOnce({ id: 'conv-existing-1' } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    expect(prismaMock.conversation.upsert).toHaveBeenCalledWith({
+      where: { userAId_userBId: { userAId: 'me-1', userBId: 'target-1' } },
+      create: { userAId: 'me-1', userBId: 'target-1', contactRequestId: 'cr-mine' },
+      update: {},
+    });
+    // My own side's flash was already delivered before this transaction —
+    // must NOT be re-inserted. Only the reverse side's fresh flash lands.
+    expect(prismaMock.message.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'conv-existing-1',
+        senderId: 'target-1',
+        body: 'Salut, nouveau message flash !',
+        createdAt: expect.any(Date),
+      },
+    });
+    const body = (await res.json()) as { conversationId: string | null };
+    expect(body.conversationId).toBe('conv-existing-1');
+  });
+
+  it('a flash from a FEMME sender is silently dropped — no charge, not stored, the like still succeeds', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx, under the advisory lock)
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ role: 'USER' } as never) // contactRequestQuotaStatus's own role check
+      .mockResolvedValueOnce({ role: 'USER', profile: { gender: 'FEMME' } } as never); // gender/staff check before spend
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+
+    const res = await POST(
+      makePost({ targetUserId: 'target-1', flashMessageBody: 'Coucou, ça te dit ?' }),
+    );
+    expect(res.status).toBe(201);
+    // Message Flash is a HOMME-only paid feature (final-review I2) — a
+    // FEMME sender's flash is silently dropped: no charge, not stored, the
+    // like still succeeds as if no flash had been attached.
+    expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.creditTransaction.create).not.toHaveBeenCalled();
+    expect(prismaMock.contactRequest.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ flashMessageBody: null }),
+      }),
     );
   });
 });
