@@ -29,6 +29,7 @@ vi.mock('@/lib/server/push', () => ({
 
 import { requireAuth } from '@/lib/server/middleware';
 import { sendPushToUser } from '@/lib/server/push';
+import { createNotification } from '@/lib/server/notifications';
 import { POST } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
@@ -165,8 +166,35 @@ describe('POST /api/conversations/[id]/messages — first-message credit interac
     expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
       expect.anything(),
       WOMAN_ID,
-      expect.objectContaining({ url: expect.stringContaining('/app/messages/') }),
+      expect.objectContaining({ url: expect.stringContaining(`/app/messages/${CONVERSATION_ID}`) }),
     );
+  });
+
+  it('does NOT push when the recipient opted out of the MESSAGE_RECEIVED push channel', async () => {
+    mockRequireAuth.mockResolvedValue({ user: { sub: MAN_ID, email: 'm@test.local' } });
+    prismaMock.message.count.mockResolvedValueOnce(1);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      role: 'USER',
+      profile: { gender: 'HOMME' },
+    } as never);
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: 'msg-nopush',
+      senderId: MAN_ID,
+      body: 'Coucou',
+      imageUpload: null,
+      createdAt: new Date(),
+    } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ firstName: 'Jean' } as never);
+    prismaMock.notificationPreferences.findUnique.mockResolvedValueOnce({
+      prefs: { MESSAGE_RECEIVED: { push: false } }, // inApp absent ⇒ still enabled
+    } as never);
+
+    const res = await POST(makePost({ body: 'Coucou' }), ctx());
+
+    expect(res.status).toBe(201);
+    expect(vi.mocked(sendPushToUser)).not.toHaveBeenCalled();
+    // The in-app channel is still on → its notification still fires.
+    expect(vi.mocked(createNotification)).toHaveBeenCalled();
   });
 
   it('propagates 401 from requireAuth without touching the DB', async () => {

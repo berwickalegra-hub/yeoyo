@@ -193,7 +193,7 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
       expect.anything(),
       'target-1',
-      expect.objectContaining({ url: expect.stringContaining('/app/') }),
+      expect.objectContaining({ url: expect.stringContaining('/app/demandes') }),
     );
   });
 
