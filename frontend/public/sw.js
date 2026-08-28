@@ -21,3 +21,42 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(fetch(event.request));
 });
+
+// Web Push — payload is JSON: { title, body, url, tag }. See
+// src/lib/server/push/index.ts. `tag` collapses repeat notifications for
+// the same conversation/request into one.
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    return;
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'YeOyo', {
+      body: data.body || '',
+      tag: data.tag,
+      icon: '/pwa/icon/192',
+      badge: '/pwa/icon/192',
+      data: { url: data.url || '/app' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/app';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client) client.navigate(target);
+          return undefined;
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});
