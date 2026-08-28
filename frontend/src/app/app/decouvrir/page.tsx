@@ -62,6 +62,8 @@ import { BoostConfirmModal } from '@/components/yeoyo/BoostConfirmModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { periodicPick, quotesForReligion, PROFILE_TIPS } from '@/lib/yeoyo/content';
 import { useCardExit } from '@/lib/yeoyo/useCardExit';
+import { usePushNotifications } from '@/lib/yeoyo/usePushNotifications';
+import { usePwaInstall } from '@/lib/yeoyo/usePwaInstall';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
 interface MyProfile {
@@ -166,6 +168,7 @@ const COMPLETION_BANNER_DISMISS_KEY = 'yeoyo-completion-banner-dismissed-at';
 const BANNER_SNOOZE_MS = 24 * 60 * 60 * 1000;
 const PREMIUM_BANNER_DISMISS_KEY = 'yeoyo-premium-banner-dismissed-at';
 const BOOST_BANNER_DISMISS_KEY = 'yeoyo-boost-banner-dismissed-at';
+const PUSH_BANNER_DISMISS_KEY = 'yeoyo-push-banner-dismissed-at';
 // Cycles the "Pourquoi faire confiance" slot between 3 variants across
 // visits (trust badges / featured profile of the day / a live nearby
 // stat) instead of always showing the same block — one visit = one step,
@@ -223,6 +226,10 @@ export default function DecouvrirPage() {
   const [boostBannerDismissed, setBoostBannerDismissed] = useState(false);
   const premiumBannerExit = useCardExit();
   const boostBannerExit = useCardExit();
+  const { state: pushState, enable: enablePush } = usePushNotifications();
+  const { install: installPwa } = usePwaInstall();
+  const [pushBannerDismissed, setPushBannerDismissed] = useState(false);
+  const pushBannerExit = useCardExit();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -275,6 +282,7 @@ export default function DecouvrirPage() {
     setCompletionBannerDismissed(isBannerSnoozed(COMPLETION_BANNER_DISMISS_KEY));
     setPremiumBannerDismissed(isBannerSnoozed(PREMIUM_BANNER_DISMISS_KEY));
     setBoostBannerDismissed(isBannerSnoozed(BOOST_BANNER_DISMISS_KEY));
+    setPushBannerDismissed(isBannerSnoozed(PUSH_BANNER_DISMISS_KEY));
 
     const visitCount = Number(localStorage.getItem(HERO_VISIT_COUNT_KEY) ?? 0);
     localStorage.setItem(HERO_VISIT_COUNT_KEY, String(visitCount + 1));
@@ -294,6 +302,11 @@ export default function DecouvrirPage() {
   function dismissBoostBanner() {
     snoozeBanner(BOOST_BANNER_DISMISS_KEY);
     setBoostBannerDismissed(true);
+  }
+
+  function dismissPushBanner() {
+    snoozeBanner(PUSH_BANNER_DISMISS_KEY);
+    setPushBannerDismissed(true);
   }
 
   // 2026-08-27 (explicit user ask): the card action here is a *favorite*
@@ -516,6 +529,58 @@ export default function DecouvrirPage() {
                   </button>
                 </div>
               )}
+
+              {!pushBannerDismissed &&
+                (pushState === 'default' || pushState === 'ios-needs-install') && (
+                  <div className={`animate-fade-in-up relative ${pushBannerExit.exitClassName}`}>
+                    <div className="flex w-full items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 pr-10">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                        <Icon name="bell" size={18} />
+                      </div>
+                      <div>
+                        <p className="font-headings text-sm font-semibold text-foreground">
+                          Active les notifications
+                        </p>
+                        {pushState === 'ios-needs-install' ? (
+                          <>
+                            <p className="font-body text-xs text-muted-foreground">
+                              Installe d’abord YeOyo sur ton écran d’accueil pour recevoir les
+                              alertes.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void installPwa()}
+                              className="mt-2 rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground"
+                            >
+                              Installer YeOyo
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-body text-xs text-muted-foreground">
+                              Sois prévenu·e dès qu’on t’écrit ou qu’on accepte ton match.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void enablePush()}
+                              className="mt-2 rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground"
+                            >
+                              Activer
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => pushBannerExit.trigger('left', dismissPushBanner)}
+                      aria-label="Fermer — me le rappeler plus tard"
+                      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                    >
+                      <Icon name="x" size={12} />
+                    </button>
+                  </div>
+                )}
 
               {/* Rotating hero slot — alternates across visits (not every
                   render) between trust badges, a bigger "coup de cœur du
