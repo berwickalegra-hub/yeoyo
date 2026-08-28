@@ -19,7 +19,7 @@
 // PATCHes both hit the row; the second wins. Acceptable for prefs UX.
 import 'server-only';
 
-export type ChannelPrefs = { email?: boolean; inApp?: boolean };
+export type ChannelPrefs = { email?: boolean; inApp?: boolean; push?: boolean };
 export type NotificationPrefs = Record<string, ChannelPrefs>;
 
 /** Narrow a Prisma `Json` column value down to `NotificationPrefs`, defaulting to `{}`. */
@@ -67,7 +67,7 @@ export function mergePrefs(
 export function isChannelEnabled(
   prefs: NotificationPrefs | null | undefined,
   eventType: string,
-  channel: 'email' | 'inApp',
+  channel: 'email' | 'inApp' | 'push',
 ): boolean {
   const event = prefs?.[eventType];
   if (!event) return true;

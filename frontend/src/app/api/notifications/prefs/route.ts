@@ -23,6 +23,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 const ChannelPrefs = z.object({
   email: z.boolean().optional(),
   inApp: z.boolean().optional(),
+  push: z.boolean().optional(),
 });
 const PatchBody = z.object({
   prefs: z.record(z.string().min(1), ChannelPrefs),

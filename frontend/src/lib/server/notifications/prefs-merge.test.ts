@@ -89,3 +89,26 @@ describe('isChannelEnabled (opt-out semantics, default-enabled)', () => {
     expect(isChannelEnabled(undefined, 'ANY_EVENT', 'inApp')).toBe(true);
   });
 });
+
+describe('isChannelEnabled — push channel', () => {
+  it('defaults push to enabled when the event has no override (opt-out)', () => {
+    expect(isChannelEnabled({}, 'MESSAGE_RECEIVED', 'push')).toBe(true);
+    expect(
+      isChannelEnabled({ MESSAGE_RECEIVED: { inApp: false } }, 'MESSAGE_RECEIVED', 'push'),
+    ).toBe(true);
+  });
+
+  it('respects an explicit push:false without touching inApp', () => {
+    const prefs = { MESSAGE_RECEIVED: { push: false, inApp: true } };
+    expect(isChannelEnabled(prefs, 'MESSAGE_RECEIVED', 'push')).toBe(false);
+    expect(isChannelEnabled(prefs, 'MESSAGE_RECEIVED', 'inApp')).toBe(true);
+  });
+
+  it('mergePrefs keeps push alongside a partial email override', () => {
+    const out = mergePrefs(
+      { MESSAGE_RECEIVED: { push: false } },
+      { MESSAGE_RECEIVED: { email: false } },
+    );
+    expect(out).toEqual({ MESSAGE_RECEIVED: { push: false, email: false } });
+  });
+});
