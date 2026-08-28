@@ -23,8 +23,12 @@ vi.mock('@/lib/server/blocks', () => ({
 vi.mock('@/lib/server/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('@/lib/server/push', () => ({
+  sendPushToUser: vi.fn(),
+}));
 
 import { requireAuth } from '@/lib/server/middleware';
+import { sendPushToUser } from '@/lib/server/push';
 import { POST } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
@@ -135,6 +139,34 @@ describe('POST /api/conversations/[id]/messages — first-message credit interac
 
     expect(res.status).toBe(201);
     expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('fires a web push to the recipient on a successful send', async () => {
+    mockRequireAuth.mockResolvedValue({ user: { sub: MAN_ID, email: 'm@test.local' } });
+    // messageCount 1 → no credit path, keeps the setup minimal; push fires
+    // regardless of the credit branch.
+    prismaMock.message.count.mockResolvedValueOnce(1);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      role: 'USER',
+      profile: { gender: 'HOMME' },
+    } as never);
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: 'msg-push',
+      senderId: MAN_ID,
+      body: 'Coucou',
+      imageUpload: null,
+      createdAt: new Date(),
+    } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ firstName: 'Jean' } as never);
+
+    const res = await POST(makePost({ body: 'Coucou' }), ctx());
+
+    expect(res.status).toBe(201);
+    expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
+      expect.anything(),
+      WOMAN_ID,
+      expect.objectContaining({ url: expect.stringContaining('/app/messages/') }),
+    );
   });
 
   it('propagates 401 from requireAuth without touching the DB', async () => {

@@ -19,8 +19,12 @@ vi.mock('@/lib/server/notifications/templates', () => ({
   contactRequestAccepted: vi.fn(() => ({ type: 'CONTACT_REQUEST_ACCEPTED' })),
   contactRequestDeclined: vi.fn(() => ({ type: 'CONTACT_REQUEST_DECLINED' })),
 }));
+vi.mock('@/lib/server/push', () => ({
+  sendPushToUser: vi.fn(),
+}));
 
 import { requireAuth } from '@/lib/server/middleware';
+import { sendPushToUser } from '@/lib/server/push';
 import { POST } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
@@ -185,6 +189,17 @@ describe('POST /api/contact-requests/[id]/respond — FIRST_MATCH_BONUS', () => 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string; conversationId: string };
     expect(body).toEqual({ status: 'ACCEPTED', conversationId: 'conv_1' });
+    // Match push goes to the original requester (the accepter already knows).
+    expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
+      expect.anything(),
+      REQUESTER_ID,
+      expect.objectContaining({ url: expect.stringContaining('/app/messages/') }),
+    );
+  });
+
+  it('does not push the requester on DECLINE', async () => {
+    await POST(makePost('req_1', { action: 'DECLINE' }), ctxWith('req_1'));
+    expect(vi.mocked(sendPushToUser)).not.toHaveBeenCalled();
   });
 });
 

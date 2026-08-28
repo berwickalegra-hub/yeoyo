@@ -19,6 +19,9 @@ vi.mock('@/lib/server/blocks', () => ({
 vi.mock('@/lib/server/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('@/lib/server/push', () => ({
+  sendPushToUser: vi.fn(),
+}));
 // Same mocking pattern as src/app/api/withdrawals/route.test.ts: spy on
 // lockUserTx so tests can assert it was invoked as the first statement
 // inside the transaction, without exercising the real
@@ -33,6 +36,7 @@ vi.mock('@/lib/server/withdrawals/lock', () => ({
 
 import { requireAuth } from '@/lib/server/middleware';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
+import { sendPushToUser } from '@/lib/server/push';
 import { POST, DELETE } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
@@ -184,6 +188,34 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     // gates quota regardless of flash) — no flash → no ADDITIONAL role check,
     // no spend attempted.
     expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
+    // New contact request → web push to the target (prefs default opt-in).
+    expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
+      expect.anything(),
+      'target-1',
+      expect.objectContaining({ url: expect.stringContaining('/app/') }),
+    );
+  });
+
+  it('does NOT push a new contact request when the target opted out of the CONTACT_REQUEST push channel', async () => {
+    prismaMock.contactRequest.findUnique
+      .mockResolvedValueOnce(null) // existingRequest — new request (pre-tx)
+      .mockResolvedValueOnce(null) // existingFresh — new request (in-tx)
+      .mockResolvedValueOnce(null); // reverseRequest — no mutual match
+    prismaMock.contactRequest.upsert.mockResolvedValueOnce({
+      id: 'cr-1',
+      requesterId: 'me-1',
+      targetId: 'target-1',
+      status: 'PENDING',
+      flashMessageBody: null,
+      createdAt: new Date(),
+    } as never);
+    prismaMock.notificationPreferences.findUnique.mockResolvedValueOnce({
+      prefs: { CONTACT_REQUEST: { push: false } },
+    } as never);
+
+    const res = await POST(makePost({ targetUserId: 'target-1' }));
+    expect(res.status).toBe(201);
+    expect(vi.mocked(sendPushToUser)).not.toHaveBeenCalled();
   });
 
   it('a flash like with sufficient credits charges 3 credits and stores flashMessageBody, still no Conversation', async () => {
@@ -319,6 +351,13 @@ describe('POST /api/likes — Message Flash + Conversation-on-accept-only', () =
     });
     const body = (await res.json()) as { conversationId: string | null };
     expect(body.conversationId).toBe('conv-new-1');
+    // Mutual match → ungated web push to the target (mirrors the always-on
+    // in-app match notification).
+    expect(vi.mocked(sendPushToUser)).toHaveBeenCalledWith(
+      expect.anything(),
+      'target-1',
+      expect.objectContaining({ url: expect.stringContaining('/app/messages/') }),
+    );
   });
 
   it('re-liking an existing PENDING request never re-charges or overwrites flashMessageBody', async () => {

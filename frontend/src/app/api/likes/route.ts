@@ -35,6 +35,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { isBlockedEitherWay } from '@/lib/server/blocks';
 import { createNotification } from '@/lib/server/notifications';
+import { sendPushToUser } from '@/lib/server/push';
 import {
   contactRequestReceived,
   contactRequestAccepted,
@@ -310,6 +311,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           likerProfile?.firstName ?? 'Quelqu’un',
         ),
       );
+      void sendPushToUser(prisma, targetUserId, {
+        title: `C'est un match avec ${likerProfile?.firstName ?? 'Quelqu’un'} !`,
+        body: 'Vous pouvez maintenant discuter.',
+        url: `/app/messages/${result.conversationId as string}`,
+        tag: `match:${result.matchedRequestId}`,
+      });
     } else if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
       await createNotification(
         prisma,
@@ -319,6 +326,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           likerProfile?.firstName ?? 'Quelqu’un',
         ),
       );
+      if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'push')) {
+        void sendPushToUser(prisma, targetUserId, {
+          title: `${likerProfile?.firstName ?? 'Quelqu’un'} s'intéresse à toi`,
+          body: 'Une nouvelle demande de contact t’attend.',
+          url: '/app/demandes',
+          tag: `req:${result.contactRequest.id}`,
+        });
+      }
     }
 
     return NextResponse.json(

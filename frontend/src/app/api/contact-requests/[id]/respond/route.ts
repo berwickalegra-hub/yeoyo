@@ -13,6 +13,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { orderedPair } from '@/lib/server/conversations/lib';
 import { createNotification } from '@/lib/server/notifications';
+import { sendPushToUser } from '@/lib/server/push';
 import {
   contactRequestAccepted,
   contactRequestDeclined,
@@ -158,6 +159,12 @@ export async function POST(
         accepterProfile?.firstName ?? 'Quelqu’un',
       ),
     );
+    void sendPushToUser(prisma, request.requesterId, {
+      title: `C'est un match avec ${accepterProfile?.firstName ?? 'Quelqu’un'} !`,
+      body: 'Ta demande a été acceptée — une conversation commence.',
+      url: `/app/messages/${conversationId}`,
+      tag: `match:${id}`,
+    });
 
     return NextResponse.json(
       { status: 'ACCEPTED', conversationId },

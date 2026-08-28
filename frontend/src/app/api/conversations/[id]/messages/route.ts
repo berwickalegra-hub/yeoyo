@@ -22,6 +22,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { createLogger } from '@/lib/server/logger';
 import { createNotification } from '@/lib/server/notifications';
+import { sendPushToUser } from '@/lib/server/push';
 import { messageReceived } from '@/lib/server/notifications/templates';
 import { isChannelEnabled, parsePrefs } from '@/lib/server/notifications/prefs-merge';
 import { isParticipant, otherParticipant, isMutedBy } from '@/lib/server/conversations/lib';
@@ -268,6 +269,18 @@ export async function POST(
           message.body || '📷 Photo',
         ),
       );
+    }
+
+    if (
+      !isMutedBy(conversation, recipientId) &&
+      isChannelEnabled(parsePrefs(recipientPrefsRow?.prefs), 'MESSAGE_RECEIVED', 'push')
+    ) {
+      void sendPushToUser(prisma, recipientId, {
+        title: `Nouveau message de ${senderProfile?.firstName ?? 'Quelqu’un'}`,
+        body: (message.body || '📷 Photo').slice(0, 140),
+        url: `/app/messages/${id}`,
+        tag: `msg:${id}`,
+      });
     }
 
     if (process.env.ABLY_API_KEY) {
