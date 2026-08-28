@@ -76,6 +76,7 @@ model User {
   profileViewsReceived    ProfileView[]             @relation("ProfileViewsReceived")
   favoritesGiven          Favorite[]                @relation("FavoritesGiven")
   favoritesReceived       Favorite[]                @relation("FavoritesReceived")
+  pushSubscriptions       PushSubscription[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -821,4 +822,21 @@ model CoachMessage {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Web Push Notifications — subscription metadata for each registered device.
+// One row per unique ServiceWorker registration (unique endpoint per device).
+// ───────────────────────────────────────────────────────────────────────
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
