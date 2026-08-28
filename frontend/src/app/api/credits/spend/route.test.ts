@@ -2,6 +2,12 @@
 // behaviour: a successful non-bypass spend must bump the matching
 // Profile.*UnlockedAt column inside the same transaction as the credit
 // debit, while a staff bypass must write no unlock marker at all.
+//
+// 2026-08-28: the route now also fetches the caller's Profile.gender to
+// decide the free-for-non-HOMME bypass (see route.ts's header comment) —
+// every "real paid spend" test below must mock `profile.findUnique` to
+// `{ gender: 'HOMME' }` or it would silently take the free bypass branch
+// instead of reaching spendCredits.
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,6 +46,7 @@ beforeEach(() => {
 describe('POST /api/credits/spend — permanent unlock bump', () => {
   it('bumps Profile.visitorsUnlockedAt on a successful non-bypass spend for view_visitors', async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ gender: 'HOMME' } as never);
     prismaMock.user.updateMany.mockResolvedValueOnce({ count: 1 } as never);
     prismaMock.creditTransaction.create.mockResolvedValueOnce({} as never);
     prismaMock.user.findUnique.mockResolvedValueOnce({ creditBalance: 4 } as never);
@@ -56,6 +63,7 @@ describe('POST /api/credits/spend — permanent unlock bump', () => {
 
   it('bumps Profile.favoritedByUnlockedAt on a successful non-bypass spend for view_favorited_by', async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ gender: 'HOMME' } as never);
     prismaMock.user.updateMany.mockResolvedValueOnce({ count: 1 } as never);
     prismaMock.creditTransaction.create.mockResolvedValueOnce({} as never);
     prismaMock.user.findUnique.mockResolvedValueOnce({ creditBalance: 4 } as never);
@@ -68,6 +76,24 @@ describe('POST /api/credits/spend — permanent unlock bump', () => {
       where: { userId: 'me-1' },
       data: { favoritedByUnlockedAt: expect.any(Date) },
     });
+  });
+
+  it('bumps the unlock marker but charges nothing for a non-HOMME (FEMME) account', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ gender: 'FEMME' } as never);
+    prismaMock.profile.update.mockResolvedValueOnce({} as never);
+
+    const res = await POST(makePost({ action: 'view_favorited_by' }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { bypass: boolean };
+    expect(body.bypass).toBe(true);
+    expect(prismaMock.profile.update).toHaveBeenCalledWith({
+      where: { userId: 'me-1' },
+      data: { favoritedByUnlockedAt: expect.any(Date) },
+    });
+    expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.creditTransaction.create).not.toHaveBeenCalled();
   });
 
   it('writes no unlock marker and returns unlimited bypass for ADMIN/SUPERADMIN staff', async () => {
@@ -84,6 +110,7 @@ describe('POST /api/credits/spend — permanent unlock bump', () => {
 
   it('writes no unlock marker and returns 402 when the balance is insufficient', async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ role: 'USER' } as never);
+    prismaMock.profile.findUnique.mockResolvedValueOnce({ gender: 'HOMME' } as never);
     prismaMock.user.updateMany.mockResolvedValueOnce({ count: 0 } as never);
     prismaMock.user.findUnique.mockResolvedValueOnce({ creditBalance: 0 } as never);
 

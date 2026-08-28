@@ -27,6 +27,13 @@ export type CreditsTxClient = Pick<Prisma.TransactionClient, 'user' | 'creditTra
 
 const STAFF_ROLES = new Set(['ADMIN', 'SUPERADMIN']);
 
+/** Exposed so callers can order a staff bypass ahead of their own bypass
+ * logic (e.g. POST /api/credits/spend's gender-free unlock) without
+ * duplicating this role set. */
+export function isStaffRole(role: string | null | undefined): boolean {
+  return !!role && STAFF_ROLES.has(role);
+}
+
 /** Central per-action cost table — the only place a credit price is defined. */
 export const CREDIT_COSTS = {
   view_visitors: 1,

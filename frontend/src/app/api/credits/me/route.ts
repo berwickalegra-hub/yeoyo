@@ -5,6 +5,16 @@
 // for these roles via lib/server/credits/ledger.ts's spendCredits, so the
 // UI reflects that instead of showing a real (likely 0) balance that would
 // misleadingly suggest they could be blocked.
+//
+// `visitorsFavoritesFree` (2026-08-28, explicit user decision after
+// reviewing docs/superpowers/specs/2026-08-26-affiliate-program-design.md's
+// documented "messagerie gratuite pour les femmes" rule): the written spec
+// only covers messaging (first_message/flash_message, gated in their own
+// routes by `profile.gender === 'HOMME'`) — "voir qui m'a visité" and "voir
+// qui m'a mis en favori" predate that rule and were never revisited. User
+// chose to extend the same principle to these two. `true` for FEMME and for
+// accounts with no profile/gender yet (never for HOMME) — see
+// POST /api/credits/spend for the matching server-side charge bypass.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -26,7 +36,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }),
       prisma.profile.findUnique({
         where: { userId: auth.user.sub },
-        select: { phone: true, phoneCountry: true, country: true },
+        select: { phone: true, phoneCountry: true, country: true, gender: true },
       }),
     ]);
 
@@ -35,11 +45,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         ? { phone: profile.phone, phoneCountry: profile.phoneCountry }
         : null;
     const unlimited = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+    const visitorsFavoritesFree = profile?.gender !== 'HOMME';
 
     return NextResponse.json(
       {
         balance: user?.creditBalance ?? 0,
         unlimited,
+        visitorsFavoritesFree,
         savedPhone,
         profileCountry: profile?.country ?? null,
       },

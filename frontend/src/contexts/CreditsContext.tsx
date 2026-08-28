@@ -17,12 +17,18 @@ interface SavedPhone {
 interface CreditsMeResponse {
   balance: number;
   unlimited: boolean;
+  visitorsFavoritesFree: boolean;
   savedPhone: SavedPhone | null;
 }
 
 interface CreditsContextValue {
   balance: number;
   unlimited: boolean;
+  /** True for non-HOMME accounts (2026-08-28, explicit user decision) —
+   * "voir qui m'a visité" / "voir qui m'a mis en favori" don't blur or
+   * charge for these accounts, same treatment as `unlimited` staff get.
+   * See POST /api/credits/spend for the matching server-side enforcement. */
+  visitorsFavoritesFree: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -33,12 +39,14 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [balance, setBalance] = useState(0);
   const [unlimited, setUnlimited] = useState(false);
+  const [visitorsFavoritesFree, setVisitorsFavoritesFree] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!user) {
       setBalance(0);
       setUnlimited(false);
+      setVisitorsFavoritesFree(false);
       setLoading(false);
       return;
     }
@@ -46,6 +54,7 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
       const res = await api<CreditsMeResponse>('/api/credits/me');
       setBalance(res.balance);
       setUnlimited(res.unlimited);
+      setVisitorsFavoritesFree(res.visitorsFavoritesFree);
     } catch {
       // Transient failure — keep the last known balance rather than
       // flashing 0 credits on a network blip.
@@ -61,7 +70,9 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   return (
-    <CreditsContext.Provider value={{ balance, unlimited, loading, refresh }}>
+    <CreditsContext.Provider
+      value={{ balance, unlimited, visitorsFavoritesFree, loading, refresh }}
+    >
       {children}
     </CreditsContext.Provider>
   );
@@ -70,6 +81,7 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
 const SSR_STUB: CreditsContextValue = {
   balance: 0,
   unlimited: false,
+  visitorsFavoritesFree: false,
   loading: true,
   refresh: async () => {},
 };

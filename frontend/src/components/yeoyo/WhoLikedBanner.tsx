@@ -42,10 +42,11 @@ export function WhoLikedBanner({
   unrevealedCount: number;
   onUnlocked: () => void;
 }) {
-  const { balance, unlimited, refresh: refreshCredits } = useCredits();
+  const { balance, unlimited, visitorsFavoritesFree, refresh: refreshCredits } = useCredits();
   const { toast } = useToast();
   const [showConfirm, setShowConfirm] = useState(false);
   const [spending, setSpending] = useState(false);
+  const freeToView = unlimited || visitorsFavoritesFree;
 
   if (total === 0) return null;
 
@@ -64,14 +65,14 @@ export function WhoLikedBanner({
   }
 
   function reveal() {
-    if (unlimited) {
+    if (freeToView) {
       void unlock();
       return;
     }
     setShowConfirm(true);
   }
 
-  const fullyRevealed = unlimited || unrevealedCount === 0;
+  const fullyRevealed = freeToView || unrevealedCount === 0;
 
   if (fullyRevealed) {
     return (

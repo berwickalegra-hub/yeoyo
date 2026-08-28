@@ -46,14 +46,15 @@ function timeAgo(iso: string): string {
 export default function VisiteursPage() {
   const user = useUser();
   const { toast } = useToast();
-  const { balance, unlimited, refresh: refreshCredits } = useCredits();
+  const { balance, unlimited, visitorsFavoritesFree, refresh: refreshCredits } = useCredits();
   const badgeCounts = useNavCounts();
   const [visitors, setVisitors] = useState<VisitorRow[]>([]);
   const [unrevealedCount, setUnrevealedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
   const [spending, setSpending] = useState(false);
-  const hasUnrevealed = unrevealedCount > 0 && !unlimited;
+  const freeToView = unlimited || visitorsFavoritesFree;
+  const hasUnrevealed = unrevealedCount > 0 && !freeToView;
 
   const load = useCallback(() => {
     return api<{ visitors: VisitorRow[]; unrevealedCount: number }>('/api/profile/visitors').then(
@@ -79,7 +80,7 @@ export default function VisiteursPage() {
   }
 
   function reveal() {
-    if (unlimited) {
+    if (freeToView) {
       void unlock();
       return;
     }
@@ -162,7 +163,7 @@ export default function VisiteursPage() {
         {!loading && visitors.length > 0 && (
           <div className="animate-fade-in flex flex-col gap-3">
             {visitors.map((v) =>
-              !unlimited && !v.profile.revealed ? (
+              !freeToView && !v.profile.revealed ? (
                 <button
                   key={v.profile.userId}
                   type="button"
