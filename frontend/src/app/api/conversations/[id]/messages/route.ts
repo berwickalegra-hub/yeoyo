@@ -280,7 +280,7 @@ export async function POST(
         body: (message.body || '📷 Photo').slice(0, 140),
         url: `/app/messages/${id}`,
         tag: `msg:${id}`,
-      });
+      }).catch(() => undefined);
     }
 
     if (process.env.ABLY_API_KEY) {

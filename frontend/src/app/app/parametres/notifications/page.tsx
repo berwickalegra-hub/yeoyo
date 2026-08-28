@@ -92,7 +92,21 @@ export default function NotificationsSettingsPage() {
               label="Notifications push"
               checked={pushState === 'granted'}
               disabled={pushState !== 'granted' && pushState !== 'default'}
-              onChange={(v) => void (v ? enablePush() : disablePush())}
+              onChange={(v) => {
+                void (async () => {
+                  try {
+                    if (v) await enablePush();
+                    else await disablePush();
+                  } catch {
+                    toast(
+                      v
+                        ? 'Impossible d’activer les notifications. Réessaie.'
+                        : 'Impossible de désactiver les notifications. Réessaie.',
+                      'error',
+                    );
+                  }
+                })();
+              }}
             />
           </SettingsRow>
         </SettingsSection>

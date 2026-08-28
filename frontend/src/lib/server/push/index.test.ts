@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { prismaMock } from '@/test-utils/prisma-mock';
 
 const sendNotification = vi.fn();
+const setVapidDetails = vi.fn();
 vi.mock('web-push', () => ({
   default: {
-    setVapidDetails: vi.fn(),
+    setVapidDetails: (...args: unknown[]) => setVapidDetails(...args),
     sendNotification: (...args: unknown[]) => sendNotification(...args),
   },
 }));
@@ -82,5 +83,22 @@ describe('sendPushToUser', () => {
       sendPushToUser(prismaMock as never, 'u1', { title: 't', body: 'b', url: '/app' }),
     ).resolves.toBeUndefined();
     expect(prismaMock.pushSubscription.delete).not.toHaveBeenCalled();
+  });
+
+  it('never throws when setVapidDetails() rejects a malformed VAPID_* config', async () => {
+    // Fresh module so the vapidReady/vapidBroken latches start clean.
+    vi.resetModules();
+    const { sendPushToUser: freshSend } = await import('./index');
+    configureVapid();
+    setVapidDetails.mockImplementationOnce(() => {
+      throw new Error('bad key');
+    });
+    prismaMock.pushSubscription.findMany.mockResolvedValueOnce([
+      { endpoint: 'e1', p256dh: 'a', auth: 'b' },
+    ] as never);
+    await expect(
+      freshSend(prismaMock as never, 'u1', { title: 't', body: 'b', url: '/app' }),
+    ).resolves.toBeUndefined();
+    expect(sendNotification).not.toHaveBeenCalled();
   });
 });

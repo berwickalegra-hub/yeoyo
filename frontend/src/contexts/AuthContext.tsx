@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError, clearCsrfToken, storeCsrfToken } from '@/lib/api';
 import { invalidateCachePrefix } from '@/lib/useApi';
 import { COOKIE_PREFIX } from '@/lib/constants';
+import { unsubscribeCurrentDevice } from '@/lib/yeoyo/usePushNotifications';
 
 export interface User {
   id: string;
@@ -82,6 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     setLoggingOut(true);
     try {
+      // Tear down this browser's push subscription BEFORE the logout POST —
+      // the DELETE needs the still-valid auth cookies. Internally guarded,
+      // never throws, but keep it inside the try regardless.
+      await unsubscribeCurrentDevice();
       await api('/api/auth/logout', { method: 'POST' });
     } catch {
       // ignore — cookie will expire anyway

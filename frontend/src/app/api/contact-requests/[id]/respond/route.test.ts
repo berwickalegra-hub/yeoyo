@@ -20,7 +20,7 @@ vi.mock('@/lib/server/notifications/templates', () => ({
   contactRequestDeclined: vi.fn(() => ({ type: 'CONTACT_REQUEST_DECLINED' })),
 }));
 vi.mock('@/lib/server/push', () => ({
-  sendPushToUser: vi.fn(),
+  sendPushToUser: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { requireAuth } from '@/lib/server/middleware';

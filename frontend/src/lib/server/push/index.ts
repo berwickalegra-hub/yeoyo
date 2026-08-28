@@ -19,14 +19,29 @@ export function isPushConfigured(): boolean {
 }
 
 let vapidReady = false;
-function ensureVapid(): void {
-  if (vapidReady) return;
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT as string,
-    process.env.VAPID_PUBLIC_KEY as string,
-    process.env.VAPID_PRIVATE_KEY as string,
-  );
-  vapidReady = true;
+let vapidBroken = false;
+/**
+ * `webpush.setVapidDetails()` validates its args and THROWS on a malformed
+ * `VAPID_SUBJECT` (not mailto:/URL) or a key of the wrong byte length. This
+ * runs on the `sendPushToUser` path, so it must never propagate — catch and
+ * latch instead, disabling push for the process lifetime.
+ */
+function ensureVapid(): boolean {
+  if (vapidReady) return true;
+  if (vapidBroken) return false;
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT as string,
+      process.env.VAPID_PUBLIC_KEY as string,
+      process.env.VAPID_PRIVATE_KEY as string,
+    );
+    vapidReady = true;
+    return true;
+  } catch (err) {
+    log.warn('push: invalid VAPID_* configuration — web push disabled', { error: err });
+    vapidBroken = true;
+    return false;
+  }
 }
 
 let warnedUnconfigured = false;
@@ -61,7 +76,7 @@ export async function sendPushToUser(
   }
   if (subs.length === 0) return;
 
-  ensureVapid();
+  if (!ensureVapid()) return;
   const body = JSON.stringify(payload);
 
   await Promise.allSettled(

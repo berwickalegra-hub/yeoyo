@@ -14,7 +14,7 @@ Voir [STATUS.md](STATUS.md) pour l'historique de migration.
 
 `/setup-kit` est une skill bundlée dans ce repo. Elle te guide de bout en bout : audit de ton environnement (Git, Node, pnpm, gh CLI), détection des cas piégeux (ZIP-download → blocker explicite, env file au mauvais endroit), installation des 2 plugins Claude Code manquants (superpowers + context-mode — via la palette UI de l'extension ou en fallback paste-ready CLI), création du compte Neon Postgres gratuit (la **seule** dépendance obligatoire), génération des secrets, `pnpm install`, migrations Prisma. Compte ~5-10 min, principalement à attendre les installs.
 
-Une fois `/setup-kit` terminé : **décris à Claude ce que tu veux construire**. Les 40 routes API (auth, paiements, admin, webhooks, cron, uploads) sont déjà câblées — tu n'as qu'à parler de ton produit, pas du plumbing. Si tu as un design Banani, dis « reproduis ces écrans-là » ; sinon, Claude propose une UI à partir de ta description.
+Une fois `/setup-kit` terminé : **décris à Claude ce que tu veux construire**. Les 101 routes API (auth, paiements, admin, webhooks, cron, uploads) sont déjà câblées — tu n'as qu'à parler de ton produit, pas du plumbing. Si tu as un design Banani, dis « reproduis ces écrans-là » ; sinon, Claude propose une UI à partir de ta description.
 
 Pour le détail (déploiement Vercel, surfaces optionnelles) : voir [WORKFLOW.md](WORKFLOW.md).
 
@@ -76,7 +76,7 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 
 ## Inventaire des routes
 
-40 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
+101 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
 
 ### Auth (`/api/auth/*`) — 10 routes
 | Méthode | Path | Auth |

@@ -562,7 +562,14 @@ export default function DecouvrirPage() {
                             </p>
                             <button
                               type="button"
-                              onClick={() => void enablePush()}
+                              onClick={() => {
+                                void enablePush().catch(() =>
+                                  toast(
+                                    'Impossible d’activer les notifications. Réessaie.',
+                                    'error',
+                                  ),
+                                );
+                              }}
                               className="mt-2 rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground"
                             >
                               Activer

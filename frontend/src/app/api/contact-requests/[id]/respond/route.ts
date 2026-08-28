@@ -164,7 +164,7 @@ export async function POST(
       body: 'Ta demande a été acceptée — une conversation commence.',
       url: `/app/messages/${conversationId}`,
       tag: `match:${id}`,
-    });
+    }).catch(() => undefined);
 
     return NextResponse.json(
       { status: 'ACCEPTED', conversationId },

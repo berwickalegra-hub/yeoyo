@@ -20,7 +20,7 @@ vi.mock('@/lib/server/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/server/push', () => ({
-  sendPushToUser: vi.fn(),
+  sendPushToUser: vi.fn().mockResolvedValue(undefined),
 }));
 // Same mocking pattern as src/app/api/withdrawals/route.test.ts: spy on
 // lockUserTx so tests can assert it was invoked as the first statement

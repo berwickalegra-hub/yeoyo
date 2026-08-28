@@ -316,7 +316,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         body: 'Vous pouvez maintenant discuter.',
         url: `/app/messages/${result.conversationId as string}`,
         tag: `match:${result.matchedRequestId}`,
-      });
+      }).catch(() => undefined);
     } else {
       if (isChannelEnabled(parsePrefs(targetPrefsRow?.prefs), 'CONTACT_REQUEST', 'inApp')) {
         await createNotification(
@@ -334,7 +334,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           body: 'Une nouvelle demande de contact t’attend.',
           url: '/app/demandes',
           tag: `req:${result.contactRequest.id}`,
-        });
+        }).catch(() => undefined);
       }
     }
 

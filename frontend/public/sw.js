@@ -51,9 +51,13 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ('focus' in client) {
-          client.focus();
-          if ('navigate' in client) client.navigate(target);
-          return undefined;
+          // Chain focus → navigate so waitUntil keeps the SW alive for both;
+          // focus() resolves to the WindowClient in modern browsers, guard
+          // for undefined and fall back to the original client.
+          return client.focus().then((c) => {
+            const w = c || client;
+            return 'navigate' in w ? w.navigate(target) : undefined;
+          });
         }
       }
       return self.clients.openWindow(target);

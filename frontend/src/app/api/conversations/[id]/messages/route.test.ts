@@ -24,7 +24,7 @@ vi.mock('@/lib/server/notifications', () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/server/push', () => ({
-  sendPushToUser: vi.fn(),
+  sendPushToUser: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { requireAuth } from '@/lib/server/middleware';
