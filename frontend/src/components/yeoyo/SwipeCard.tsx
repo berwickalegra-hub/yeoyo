@@ -94,6 +94,7 @@ export function SwipeCard({
   favoriteBusy,
   busy,
   creditBalance,
+  blurred,
 }: {
   profile: ProfileCard;
   onDismiss: (userId: string) => void;
@@ -103,6 +104,11 @@ export function SwipeCard({
   favoriteBusy?: boolean;
   busy?: boolean;
   creditBalance: number;
+  /** True while a blocking dialog (e.g. LimitReachedModal) sits on top —
+   * blurs the photo/info content instead of leaving it visually blank once
+   * interaction is disabled underneath (2026-08-29, explicit user report:
+   * a plain white card there read as a bug, "l'écran reste tout blanc"). */
+  blurred?: boolean;
 }) {
   const router = useRouter();
   const [dragX, setDragX] = useState(0);
@@ -169,10 +175,10 @@ export function SwipeCard({
     <>
       <div className="animate-fade-in-up mx-auto flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-full md:max-h-[680px] md:min-h-[380px]">
         <div
-          className="relative touch-pan-y select-none md:flex-1 md:overflow-y-auto"
+          className={`relative touch-pan-y select-none md:flex-1 md:overflow-y-auto ${blurred ? 'pointer-events-none blur-md' : ''}`}
           style={{
             transform: `translateX(${dragX}px) rotate(${dragX / 20}deg)`,
-            transition: dragging ? 'none' : 'transform 0.25s ease',
+            transition: dragging ? 'none' : 'transform 0.25s ease, filter 0.2s ease',
           }}
         >
           {/* Drag-to-swipe + tap-to-open handlers live on the photo area only

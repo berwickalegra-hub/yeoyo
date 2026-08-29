@@ -47,6 +47,7 @@ import { PhotoCarousel } from '@/components/yeoyo/PhotoCarousel';
 import { PhotoLightbox } from '@/components/yeoyo/PhotoLightbox';
 import { ProfileInfoSections } from '@/components/yeoyo/ProfileInfoSections';
 import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
+import { LimitReachedModal, type LimitReachedInfo } from '@/components/yeoyo/LimitReachedModal';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import type { ProfileCard } from '@/lib/yeoyo/types';
@@ -69,7 +70,12 @@ export default function ProfileDetailPage() {
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [showRequestSent, setShowRequestSent] = useState(false);
+  const [overlay, setOverlay] = useState<{
+    icon: 'heart' | 'star';
+    title: string;
+    subtitle?: string;
+  } | null>(null);
+  const [limitInfo, setLimitInfo] = useState<LimitReachedInfo | null>(null);
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number]['value'] | null>(
     null,
   );
@@ -106,9 +112,32 @@ export default function ProfileDetailPage() {
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId: profile.userId } });
       setLiked(true);
-      setShowRequestSent(true);
+      setOverlay({
+        icon: 'heart',
+        title: 'Demande envoyée !',
+        subtitle: 'On te préviendra si elle ou il accepte.',
+      });
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      if (err instanceof ApiError && err.code === 'CONTACT_REQUEST_QUOTA_EXCEEDED') {
+        const resetAt = (err.body?.quota as { resetAt?: string } | undefined)?.resetAt;
+        const resetLabel = resetAt
+          ? new Date(resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+          : null;
+        setLimitInfo({
+          icon: 'lock',
+          title: 'Limite mensuelle atteinte',
+          message: resetLabel
+            ? `Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie à partir du ${resetLabel}.`
+            : 'Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie le mois prochain.',
+          primaryAction: {
+            label: 'Quitter Découvrir',
+            onClick: () => router.push('/app/decouvrir'),
+          },
+          dismissLabel: 'Fermer',
+        });
+      } else {
+        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      }
     } finally {
       setBusy(false);
     }
@@ -121,10 +150,10 @@ export default function ProfileDetailPage() {
     try {
       if (next) {
         await api('/api/favorites', { method: 'POST', body: { targetUserId: profile.userId } });
-        toast('Ajouté à tes favoris', 'success');
+        setOverlay({ icon: 'star', title: 'Ajouté à tes favoris' });
       } else {
         await api('/api/favorites', { method: 'DELETE', body: { targetUserId: profile.userId } });
-        toast('Retiré de tes favoris', 'success');
+        setOverlay({ icon: 'star', title: 'Retiré de tes favoris' });
       }
       setFavorited(next);
     } catch (err) {
@@ -426,7 +455,14 @@ export default function ProfileDetailPage() {
           onClose={() => setLightboxOpen(false)}
         />
       )}
-      <RequestSentOverlay show={showRequestSent} onDone={() => setShowRequestSent(false)} />
+      <RequestSentOverlay
+        show={!!overlay}
+        onDone={() => setOverlay(null)}
+        icon={overlay?.icon}
+        title={overlay?.title}
+        subtitle={overlay?.subtitle}
+      />
+      <LimitReachedModal info={limitInfo} onClose={() => setLimitInfo(null)} />
     </AppShell>
   );
 }

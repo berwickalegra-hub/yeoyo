@@ -65,11 +65,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     });
 
-    // OAuth avatar (set at sign-in) wins over the dating profile's own
-    // photo when both exist — it's the account-level identity image.
+    // The dating profile's own photo wins over the OAuth account avatar
+    // (2026-08-29, explicit user ask: signing up with Google was showing
+    // the Gmail account picture in the nav instead of the photo uploaded
+    // during onboarding) — on this app the nav avatar should always be the
+    // photo other members see on the discovery cards, not a Google/Gmail
+    // identity image. OAuth avatar is only a fallback for accounts that
+    // haven't finished onboarding yet (no profile photo to show instead).
     const primaryPhotoKey = dbUser?.profile?.photos[0]?.fileUpload.key;
     const profilePhotoUrl = primaryPhotoKey ? cloudinaryUrlForKey(primaryPhotoKey) : null;
-    const avatarUrl = dbUser?.avatarUrl ?? profilePhotoUrl ?? null;
+    const avatarUrl = profilePhotoUrl ?? dbUser?.avatarUrl ?? null;
 
     const user = {
       // Keep `sub` for back-compat with the AuthContext payload contract

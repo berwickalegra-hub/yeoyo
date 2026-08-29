@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -21,6 +22,7 @@ import { AppShell } from '@/components/yeoyo/AppShell';
 import { SwipeCard } from '@/components/yeoyo/SwipeCard';
 import { ProfileGridCard } from '@/components/yeoyo/ProfileGridCard';
 import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
+import { LimitReachedModal, type LimitReachedInfo } from '@/components/yeoyo/LimitReachedModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { TOPNAV_ITEMS, type NavItem } from '@/components/yeoyo/nav-items';
 import type { ProfileCard } from '@/lib/yeoyo/types';
@@ -91,6 +93,7 @@ function buildQuery(filters: Filters, page: number): string {
 
 export default function ExplorerPage() {
   const user = useUser();
+  const router = useRouter();
   const { toast } = useToast();
   const { balance: creditBalance, refresh: refreshCredits } = useCredits();
   const badgeCounts = useNavCounts();
@@ -114,7 +117,45 @@ export default function ExplorerPage() {
   const [stats, setStats] = useState<StatsToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [showRequestSent, setShowRequestSent] = useState(false);
+  const [overlay, setOverlay] = useState<{
+    icon: 'heart' | 'star' | 'zap';
+    title: string;
+    subtitle?: string;
+  } | null>(null);
+  const [limitInfo, setLimitInfo] = useState<LimitReachedInfo | null>(null);
+
+  // The two CONTACT_REQUEST_QUOTA_EXCEEDED / INSUFFICIENT_CREDITS blockers
+  // are the only errors that get the persistent modal — everything else
+  // (network hiccup, validation) stays a transient toast, per the explicit
+  // user distinction: brief "something happened" notices vs. a hard stop
+  // that needs the user to actually read it and choose what's next.
+  function handleLikeError(err: unknown): void {
+    if (err instanceof ApiError && err.code === 'CONTACT_REQUEST_QUOTA_EXCEEDED') {
+      const resetAt = (err.body?.quota as { resetAt?: string } | undefined)?.resetAt;
+      const resetLabel = resetAt
+        ? new Date(resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+        : null;
+      setLimitInfo({
+        icon: 'lock',
+        title: 'Limite mensuelle atteinte',
+        message: resetLabel
+          ? `Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie à partir du ${resetLabel}.`
+          : 'Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie le mois prochain.',
+        primaryAction: { label: 'Quitter Découvrir', onClick: () => router.push('/app/decouvrir') },
+        dismissLabel: 'Continuer à parcourir',
+      });
+    } else if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
+      setLimitInfo({
+        icon: 'gem',
+        title: 'Crédits insuffisants',
+        message: 'Il te faut plus de crédits pour envoyer ce message flash.',
+        primaryAction: { label: 'Acheter des crédits', href: '/app/credits' },
+        dismissLabel: 'Plus tard',
+      });
+    } else {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    }
+  }
 
   const loadDeck = useCallback(async (nextFilters: Filters) => {
     setLoading(true);
@@ -159,10 +200,10 @@ export default function ExplorerPage() {
     try {
       if (alreadyFavorited) {
         await api('/api/favorites', { method: 'DELETE', body: { targetUserId } });
-        toast('Retiré des favoris', 'success');
+        setOverlay({ icon: 'star', title: 'Retiré des favoris' });
       } else {
         await api('/api/favorites', { method: 'POST', body: { targetUserId } });
-        toast('Ajouté aux favoris', 'success');
+        setOverlay({ icon: 'star', title: 'Ajouté aux favoris' });
       }
       setDeck((prev) =>
         prev.map((p) => (p.userId === targetUserId ? { ...p, favorited: !alreadyFavorited } : p)),
@@ -208,10 +249,14 @@ export default function ExplorerPage() {
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
       setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
-      setShowRequestSent(true);
+      setOverlay({
+        icon: 'heart',
+        title: 'Demande envoyée !',
+        subtitle: 'On te préviendra si elle ou il accepte.',
+      });
       advance();
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      handleLikeError(err);
     } finally {
       setBusyUserId(null);
     }
@@ -225,15 +270,15 @@ export default function ExplorerPage() {
         body: { targetUserId, flashMessageBody: message },
       });
       setDeck((prev) => prev.map((p) => (p.userId === targetUserId ? { ...p, liked: true } : p)));
-      toast('Message flash envoyé !', 'success');
+      setOverlay({
+        icon: 'zap',
+        title: 'Message flash envoyé !',
+        subtitle: 'Ton message a été transmis avec ta demande.',
+      });
       void refreshCredits();
       advance();
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'INSUFFICIENT_CREDITS') {
-        toast('Solde de crédits insuffisant pour ce message flash.', 'error');
-      } else {
-        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
-      }
+      handleLikeError(err);
     } finally {
       setBusyUserId(null);
     }
@@ -253,9 +298,13 @@ export default function ExplorerPage() {
       // advances past the liked card automatically) — remove it so a
       // pending request never sits there with a toggleable heart.
       setDeck((prev) => prev.filter((p) => p.userId !== targetUserId));
-      setShowRequestSent(true);
+      setOverlay({
+        icon: 'heart',
+        title: 'Demande envoyée !',
+        subtitle: 'On te préviendra si elle ou il accepte.',
+      });
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      handleLikeError(err);
     } finally {
       setBusyUserId(null);
     }
@@ -381,6 +430,7 @@ export default function ExplorerPage() {
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}
                   creditBalance={creditBalance}
+                  blurred={!!limitInfo}
                 />
 
                 {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
@@ -634,6 +684,7 @@ export default function ExplorerPage() {
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}
                   creditBalance={creditBalance}
+                  blurred={!!limitInfo}
                 />
                 <div aria-hidden="true" className="hidden lg:block" />
               </div>
@@ -706,7 +757,14 @@ export default function ExplorerPage() {
           </div>
         )}
       </div>
-      <RequestSentOverlay show={showRequestSent} onDone={() => setShowRequestSent(false)} />
+      <RequestSentOverlay
+        show={!!overlay}
+        onDone={() => setOverlay(null)}
+        icon={overlay?.icon}
+        title={overlay?.title}
+        subtitle={overlay?.subtitle}
+      />
+      <LimitReachedModal info={limitInfo} onClose={() => setLimitInfo(null)} />
     </AppShell>
   );
 }
