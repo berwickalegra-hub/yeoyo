@@ -175,10 +175,10 @@ export function SwipeCard({
     <>
       <div className="animate-fade-in-up mx-auto flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface md:h-full md:max-h-[680px] md:min-h-[380px]">
         <div
-          className={`relative touch-pan-y select-none md:flex-1 md:overflow-y-auto ${blurred ? 'pointer-events-none blur-md' : ''}`}
+          className="relative touch-pan-y select-none md:flex-1 md:overflow-y-auto"
           style={{
             transform: `translateX(${dragX}px) rotate(${dragX / 20}deg)`,
-            transition: dragging ? 'none' : 'transform 0.25s ease, filter 0.2s ease',
+            transition: dragging ? 'none' : 'transform 0.25s ease',
           }}
         >
           {/* Drag-to-swipe + tap-to-open handlers live on the photo area only
@@ -187,127 +187,151 @@ export function SwipeCard({
             vertical drag with ~0 horizontal movement) was misread as a tap
             and navigated to the profile page. Scoping them to just the
             photo means scrolling the info section is now plain scrolling —
-            no click, no navigation. */}
-          <div
-            className="relative"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <PhotoCarousel
-              photoUrls={profile.photoUrls}
-              name={profile.firstName}
-              heightPx={340}
-              onIndexChange={setPhotoIndex}
-            />
-            {profile.boosted && (
-              <div
-                className={`absolute left-3 flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 ${hasMultiplePhotos ? 'top-6' : 'top-3'}`}
-              >
-                <Icon name="zap" size={12} className="text-primary-foreground" />
-                <span className="font-body text-xs font-bold text-primary-foreground">
-                  En avant
-                </span>
-              </div>
-            )}
-            {onFavorite && (
-              <button
-                type="button"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFavorite(profile.userId);
-                }}
-                disabled={favoriteBusy}
-                aria-label={profile.favorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-                className={`absolute right-3 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 ${hasMultiplePhotos ? 'top-6' : 'top-3'} ${favoriteBusy ? 'opacity-50' : ''}`}
-              >
-                <Icon
-                  name="star"
-                  size={16}
-                  fill={profile.favorited ? 'currentColor' : 'none'}
-                  className={profile.favorited ? 'text-gold' : 'text-foreground'}
-                />
-              </button>
-            )}
-            {likeOpacity > 0 && (
-              <div
-                className="absolute right-4 top-4 rotate-12 rounded-lg border-4 border-primary px-3 py-1"
-                style={{ opacity: likeOpacity }}
-              >
-                <span className="font-headings text-lg font-bold text-primary">DEMANDER</span>
-              </div>
-            )}
-            {passOpacity > 0 && (
-              <div
-                className="absolute left-4 top-4 -rotate-12 rounded-lg border-4 border-red-400 px-3 py-1"
-                style={{ opacity: passOpacity }}
-              >
-                <span className="font-headings text-lg font-bold text-red-400">PASSER</span>
-              </div>
-            )}
+            no click, no navigation.
+            2026-08-29 (explicit user reference — a competitor's own
+            "locked" card treatment): once blocked, only the PHOTO blurs —
+            name/bio/tags below stay fully readable, matching that
+            reference instead of blanking the whole card. The lock badge +
+            "reviens plus tard" label sit in a sibling `<div>` right after
+            this one, deliberately outside the blurred element — a CSS
+            `filter` applies to descendants too, so the reassurance message
+            would blur along with the photo if it lived inside — so it lives
+            in its own non-blurred `relative` wrapper one level up instead,
+            sized to the photo by the same "one flow child, rest absolute"
+            layout the photo div already relies on. */}
+          <div className="relative">
             <div
-              role="button"
-              tabIndex={0}
-              aria-label={`Voir le profil de ${profile.firstName}`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => router.push(`/app/profils/${profile.userId}`)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  router.push(`/app/profils/${profile.userId}`);
-                }
-              }}
-              className="absolute inset-x-0 bottom-0 cursor-pointer bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14"
+              className={`relative transition-[filter] duration-200 ${blurred ? 'pointer-events-none blur-md' : ''}`}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
             >
-              <div className="flex items-baseline gap-2">
-                <span className="font-headings text-xl font-bold text-white">
-                  {profile.firstName}
-                </span>
-                <span className="font-body text-base text-white/80">{profile.age} ans</span>
-                {profile.verified && (
-                  <span className="flex items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5">
-                    <Icon name="shield-check" size={12} className="text-verified" />
-                    <span className="font-body text-xs font-medium text-white">Vérifié</span>
-                  </span>
-                )}
-                {/* Signals this row (unlike the photo above it) is the tap
-                    target that leaves the deck for the profile page. */}
-                <Icon
-                  name="chevron-right"
-                  size={16}
-                  className="ml-auto flex-shrink-0 text-white/60"
-                />
-              </div>
-              {(profile.city || profile.commune) && (
-                <div className="mt-1 flex items-center gap-1 text-white/80">
-                  <Icon name="map-pin" size={13} />
-                  <span className="font-body text-sm">
-                    {[profile.city, profile.commune].filter(Boolean).join(', ')}
+              <PhotoCarousel
+                photoUrls={profile.photoUrls}
+                name={profile.firstName}
+                heightPx={340}
+                onIndexChange={setPhotoIndex}
+              />
+              {profile.boosted && (
+                <div
+                  className={`absolute left-3 flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 ${hasMultiplePhotos ? 'top-6' : 'top-3'}`}
+                >
+                  <Icon name="zap" size={12} className="text-primary-foreground" />
+                  <span className="font-body text-xs font-bold text-primary-foreground">
+                    En avant
                   </span>
                 </div>
               )}
-              {profile.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {profile.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-lg bg-white/15 px-2 py-1 font-body text-xs text-white"
-                    >
-                      {tag}
+              {onFavorite && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFavorite(profile.userId);
+                  }}
+                  disabled={favoriteBusy}
+                  aria-label={profile.favorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                  className={`absolute right-3 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 ${hasMultiplePhotos ? 'top-6' : 'top-3'} ${favoriteBusy ? 'opacity-50' : ''}`}
+                >
+                  <Icon
+                    name="star"
+                    size={16}
+                    fill={profile.favorited ? 'currentColor' : 'none'}
+                    className={profile.favorited ? 'text-gold' : 'text-foreground'}
+                  />
+                </button>
+              )}
+              {likeOpacity > 0 && (
+                <div
+                  className="absolute right-4 top-4 rotate-12 rounded-lg border-4 border-primary px-3 py-1"
+                  style={{ opacity: likeOpacity }}
+                >
+                  <span className="font-headings text-lg font-bold text-primary">DEMANDER</span>
+                </div>
+              )}
+              {passOpacity > 0 && (
+                <div
+                  className="absolute left-4 top-4 -rotate-12 rounded-lg border-4 border-red-400 px-3 py-1"
+                  style={{ opacity: passOpacity }}
+                >
+                  <span className="font-headings text-lg font-bold text-red-400">PASSER</span>
+                </div>
+              )}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Voir le profil de ${profile.firstName}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => router.push(`/app/profils/${profile.userId}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    router.push(`/app/profils/${profile.userId}`);
+                  }
+                }}
+                className="absolute inset-x-0 bottom-0 cursor-pointer bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-14"
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="font-headings text-xl font-bold text-white">
+                    {profile.firstName}
+                  </span>
+                  <span className="font-body text-base text-white/80">{profile.age} ans</span>
+                  {profile.verified && (
+                    <span className="flex items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5">
+                      <Icon name="shield-check" size={12} className="text-verified" />
+                      <span className="font-body text-xs font-medium text-white">Vérifié</span>
                     </span>
-                  ))}
+                  )}
+                  {/* Signals this row (unlike the photo above it) is the tap
+                    target that leaves the deck for the profile page. */}
+                  <Icon
+                    name="chevron-right"
+                    size={16}
+                    className="ml-auto flex-shrink-0 text-white/60"
+                  />
                 </div>
-              )}
-            </div>
-            {/* Scroll hint — there's always more below the photo
+                {(profile.city || profile.commune) && (
+                  <div className="mt-1 flex items-center gap-1 text-white/80">
+                    <Icon name="map-pin" size={13} />
+                    <span className="font-body text-sm">
+                      {[profile.city, profile.commune].filter(Boolean).join(', ')}
+                    </span>
+                  </div>
+                )}
+                {profile.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {profile.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-lg bg-white/15 px-2 py-1 font-body text-xs text-white"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Scroll hint — there's always more below the photo
               (ProfileInfoSections + action bar), so this is unconditional,
               not gated on content length. `pointer-events-none` so it never
               intercepts the drag/tap gesture layered underneath. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-1.5 flex justify-center">
-              <Icon name="chevron-down" size={16} className="scroll-hint text-white/70" />
+              <div className="pointer-events-none absolute inset-x-0 bottom-1.5 flex justify-center">
+                <Icon name="chevron-down" size={16} className="scroll-hint text-white/70" />
+              </div>
             </div>
+
+            {blurred && (
+              <div className="animate-fade-in pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface/95 text-primary shadow-lg">
+                  <Icon name="lock" size={24} />
+                </span>
+                <p className="rounded-full bg-surface/95 px-4 py-1.5 font-body text-sm font-semibold text-foreground shadow-lg">
+                  Reviens plus tard
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-4 p-4">

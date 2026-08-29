@@ -9,6 +9,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
@@ -76,9 +77,29 @@ export default function MessagesPage() {
               </div>
             )}
             {!loading && conversations.length === 0 && (
-              <p className="px-5 py-3 font-body text-sm text-muted-foreground">
-                Aucune conversation pour l’instant — accepte une demande de contact pour démarrer.
-              </p>
+              <div className="animate-fade-in-up flex flex-col items-center gap-3 px-6 py-14 text-center">
+                <div className="relative">
+                  <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon name="message-circle" size={32} />
+                  </span>
+                  <span className="absolute -right-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-md">
+                    <Icon name="heart" size={14} fill="currentColor" />
+                  </span>
+                </div>
+                <p className="font-headings text-base font-semibold text-foreground">
+                  Tes conversations arrivent ici
+                </p>
+                <p className="max-w-[240px] font-body text-sm text-muted-foreground">
+                  Dès qu&rsquo;une demande de contact est acceptée, votre discussion démarre
+                  automatiquement.
+                </p>
+                <Link
+                  href="/app/explorer"
+                  className="mt-1 rounded-xl bg-primary px-5 py-2.5 font-headings text-sm font-semibold text-primary-foreground"
+                >
+                  Découvrir des profils
+                </Link>
+              </div>
             )}
             {!loading && threads.length === 0 && newMatches.length > 0 && (
               <p className="px-5 py-4 font-body text-sm text-muted-foreground">

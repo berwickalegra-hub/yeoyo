@@ -665,7 +665,15 @@ export default function MessageThreadPage() {
   let lastDateKey = '';
 
   return (
-    <div className="flex h-screen flex-col bg-background font-body">
+    // `h-dvh` (not `h-screen`/100vh) — same mobile Safari fix already
+    // applied at the root layout (see layout.tsx's comment): 100vh there is
+    // the "toolbar collapsed" height, taller than what's actually visible,
+    // which pushed this composer below the fold on mobile until the user
+    // scrolled the whole page (explicit user report, 2026-08-29 — "le
+    // bouton et la zone de texte descendent en bas... je trouve que c'est
+    // juste sur le mobile"). This page renders its own root (no AppShell),
+    // so it needed the same fix applied independently.
+    <div className="flex h-dvh flex-col bg-background font-body">
       <TopNav
         active="messages"
         user={{ name: user.email, avatarUrl: user.avatarUrl }}

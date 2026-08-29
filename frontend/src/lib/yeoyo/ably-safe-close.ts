@@ -55,21 +55,28 @@ export function installAblyRejectionGuard(): void {
 // machine after the fact turned out to be). Memoized at module scope so
 // every realtime consumer on the page (inbox list, open thread, …) shares
 // one check instead of each firing its own.
+//
+// 2026-08-29 — this used to probe by POSTing straight to
+// /api/realtime/token, so an unconfigured environment's expected 503
+// surfaced as a genuine "503 (Service Unavailable)" console entry
+// (explicit user report — technically correct, but reads as a bug even
+// though isRealtimeConfigured() already degrades gracefully from it).
+// GET /api/realtime/status answers the same question and always returns
+// 200, so the "not configured" case no longer logs as a failed request.
 let cachedConfigured: boolean | null = null;
 
 export async function isRealtimeConfigured(): Promise<boolean> {
   if (cachedConfigured !== null) return cachedConfigured;
   try {
-    const res = await fetch('/api/realtime/token', {
-      method: 'POST',
-      credentials: 'include',
-    });
-    // Any non-503 response (200 with a real token, or even an auth/5xx
-    // hiccup unrelated to configuration) means ABLY_API_KEY is set — only
-    // the specific "not configured" signal permanently disables realtime
-    // for this page session; anything else lets the real Ably client's own
-    // retry/backoff handle transient failures as designed.
-    cachedConfigured = res.status !== 503;
+    const res = await fetch('/api/realtime/status', { credentials: 'include' });
+    if (!res.ok) {
+      // Auth hiccup or similar, unrelated to Ably configuration — let the
+      // real Ably client's own retry/backoff handle it as designed.
+      cachedConfigured = true;
+      return cachedConfigured;
+    }
+    const body = (await res.json()) as { configured?: boolean };
+    cachedConfigured = body.configured ?? true;
   } catch {
     // Network blip on the pre-check itself — don't permanently disable
     // realtime over it; let the real connection attempt decide.
