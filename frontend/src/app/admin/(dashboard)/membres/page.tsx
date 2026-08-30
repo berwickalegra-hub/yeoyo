@@ -29,6 +29,24 @@ export default function AdminMembresPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
+  // Hard-delete is SUPERADMIN-only (DELETE /api/admin/users/[id]), so the
+  // "Supprimer" button only renders once we know the signed-in admin's role.
+  const [myRole, setMyRole] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ admin: { role: string } }>('/api/admin/me')
+      .then((res) => {
+        if (!cancelled) setMyRole(res.admin.role);
+      })
+      .catch(() => {
+        /* layout already guards /admin/* — a failure here just hides the button */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function load(reset: boolean) {
     setLoading(true);
@@ -55,6 +73,35 @@ export default function AdminMembresPage() {
     // Runs once on mount only — `load` intentionally reads the latest
     // `q`/`cursor` via closure rather than being a dependency itself.
   }, []);
+
+  // Permanent, cascading delete — reserved for SUPERADMIN. The typed-email
+  // prompt mirrors the API's `confirmEmail` fat-finger guard (same idea as
+  // the member-facing DELETE /api/account flow) so a mistap can't wipe the
+  // wrong row.
+  async function deleteUser(user: AdminUser) {
+    const typed = window.prompt(
+      `Suppression DÉFINITIVE de ce compte (sans retour possible).\n\n` +
+        `Pour confirmer, retape l'adresse email exacte :\n${user.email}`,
+    );
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== user.email.toLowerCase()) {
+      toast("L'email ne correspond pas — suppression annulée", 'error');
+      return;
+    }
+    setDeletingId(user.id);
+    try {
+      await api(`/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        body: { confirmEmail: typed.trim(), reason: 'Admin panel deletion' },
+      });
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      toast('Compte supprimé', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function toggleStatus(user: AdminUser) {
     const nextStatus = user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
@@ -179,6 +226,16 @@ export default function AdminMembresPage() {
                           className="btn-press rounded-lg border border-border px-3 py-1 font-body text-xs text-muted-foreground"
                         >
                           {u.status === 'ACTIVE' ? 'Suspendre' : 'Restaurer'}
+                        </button>
+                      )}
+                      {myRole === 'SUPERADMIN' && u.role === 'USER' && (
+                        <button
+                          type="button"
+                          onClick={() => void deleteUser(u)}
+                          disabled={deletingId === u.id}
+                          className="btn-press rounded-lg border border-red-500/40 px-3 py-1 font-body text-xs text-red-500 disabled:opacity-50"
+                        >
+                          {deletingId === u.id ? 'Suppression…' : 'Supprimer'}
                         </button>
                       )}
                       <input

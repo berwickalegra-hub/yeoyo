@@ -228,6 +228,31 @@ function PillOption({
   );
 }
 
+// Red "you still need to fill…" banner shown when the user taps Continuer
+// with a required field empty (2026-08-31, explicit user ask — greyed-out
+// buttons left beginners guessing which field was blocking).
+function MissingFieldsBanner({ names }: { names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 font-body text-sm text-red-600"
+    >
+      <Icon name="info" size={16} className="mt-0.5 shrink-0" />
+      <span>
+        {names.length === 1 ? 'Ce champ est obligatoire : ' : 'Il te manque : '}
+        <strong>{names.join(', ')}</strong>.
+      </span>
+    </div>
+  );
+}
+
+// Border class for an input/select — red outline when it's a required field
+// still empty after a failed Continuer tap, the normal border otherwise.
+function missingRing(active: boolean): string {
+  return active ? 'border-red-500 ring-2 ring-red-500/20' : 'border-border';
+}
+
 // Callers key each `<WizardShell>` invocation by step id (see the three
 // call sites below) so React remounts this whole subtree on every step
 // change — the cheapest way to guarantee the `.animate-fade-in-up` on the
@@ -286,6 +311,12 @@ export default function OnboardingPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordConfirmError, setPasswordConfirmError] = useState<string | null>(null);
   const [termsError, setTermsError] = useState<string | null>(null);
+  // Names of the required profile-step fields the user still needs to fill.
+  // The "Continuer" buttons no longer just sit disabled+greyed (a beginner
+  // couldn't tell WHICH field was blocking) — they stay clickable and, on a
+  // click with something missing, this drives a red banner + red field
+  // outlines (2026-08-31, explicit user ask).
+  const [missingFields, setMissingFields] = useState<string[]>([]);
   const [googleRedirecting, setGoogleRedirecting] = useState(false);
   // Progressive disclosure — email/password fields stay hidden until the
   // user picks "Continuer avec email" (2026-08-19 explicit ask, reference:
@@ -310,6 +341,12 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkingExistingProfile, setCheckingExistingProfile] = useState(true);
+
+  // Drop any "champ manquant" highlight when the user moves between steps
+  // (forward or via the back arrow) — the next Continuer tap re-checks.
+  useEffect(() => {
+    setMissingFields([]);
+  }, [step]);
 
   // Live preview of the selected/dropped photos — object URLs are cheap and
   // local (no upload happens until "Terminer et explorer"), revoked on
@@ -944,16 +981,26 @@ export default function OnboardingPage() {
               value={data.firstName}
               onChange={(e) => setData((d) => ({ ...d, firstName: e.target.value }))}
               placeholder="ex. Nadège"
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className={`rounded-lg border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${missingRing(
+                missingFields.includes('Prénom'),
+              )}`}
             />
           </label>
 
           <div className="flex flex-col gap-2">
             <label className="font-body text-sm text-foreground">Date de naissance</label>
-            <DateOfBirthFields
-              value={data.dateOfBirth}
-              onChange={(iso) => setData((d) => ({ ...d, dateOfBirth: iso }))}
-            />
+            <div
+              className={
+                missingFields.includes('Date de naissance')
+                  ? 'rounded-lg ring-2 ring-red-500/30'
+                  : ''
+              }
+            >
+              <DateOfBirthFields
+                value={data.dateOfBirth}
+                onChange={(iso) => setData((d) => ({ ...d, dateOfBirth: iso }))}
+              />
+            </div>
           </div>
 
           {error && (
@@ -962,16 +1009,27 @@ export default function OnboardingPage() {
             </p>
           )}
 
+          <MissingFieldsBanner names={missingFields} />
+
           <button
             type="button"
-            disabled={!data.gender || !data.firstName || !data.dateOfBirth}
             onClick={() => {
+              const miss: string[] = [];
+              if (!data.gender) miss.push('Genre');
+              if (!data.firstName.trim()) miss.push('Prénom');
+              if (!data.dateOfBirth) miss.push('Date de naissance');
+              if (miss.length > 0) {
+                setMissingFields(miss);
+                toast('Complète les champs en rouge pour continuer.', 'error');
+                return;
+              }
               if (data.dateOfBirth && ageFromIso(data.dateOfBirth) < MIN_AGE_YEARS) {
                 const msg = `Tu dois avoir au moins ${MIN_AGE_YEARS} ans pour utiliser YeOyo.`;
                 setError(msg);
                 toast(msg, 'error');
                 return;
               }
+              setMissingFields([]);
               setError(null);
               setStep(2);
             }}
@@ -1018,7 +1076,9 @@ export default function OnboardingPage() {
               value={data.city}
               onChange={(e) => setData((d) => ({ ...d, city: e.target.value }))}
               placeholder="ex. Kinshasa"
-              className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className={`rounded-lg border bg-surface px-4 py-3 font-body text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${missingRing(
+                missingFields.includes('Ville'),
+              )}`}
             />
             <datalist id="onboarding-city-suggestions">
               {(data.country
@@ -1142,12 +1202,24 @@ export default function OnboardingPage() {
             </div>
           </div>
 
+          <MissingFieldsBanner names={missingFields} />
+
           <button
             type="button"
-            disabled={
-              !data.country || !data.city.trim() || !data.maritalStatus || !data.childrenCount
-            }
-            onClick={() => setStep(3)}
+            onClick={() => {
+              const miss: string[] = [];
+              if (!data.country) miss.push('Pays');
+              if (!data.city.trim()) miss.push('Ville');
+              if (!data.maritalStatus) miss.push('Situation familiale');
+              if (!data.childrenCount) miss.push("Nombre d'enfants");
+              if (miss.length > 0) {
+                setMissingFields(miss);
+                toast('Complète les champs en rouge pour continuer.', 'error');
+                return;
+              }
+              setMissingFields([]);
+              setStep(3);
+            }}
             className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             Continuer
@@ -1238,10 +1310,19 @@ export default function OnboardingPage() {
             />
           </div>
 
+          <MissingFieldsBanner names={missingFields} />
+
           <button
             type="button"
-            disabled={!data.intent}
-            onClick={() => setStep(4)}
+            onClick={() => {
+              if (!data.intent) {
+                setMissingFields(['Ton intention']);
+                toast('Choisis ton intention pour continuer.', 'error');
+                return;
+              }
+              setMissingFields([]);
+              setStep(4);
+            }}
             className="mt-1 rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
           >
             Continuer
@@ -1410,14 +1491,28 @@ export default function OnboardingPage() {
           <div className="mt-1 flex flex-col gap-2">
             <button
               type="button"
-              disabled={submitting || !photoFiles[0]}
-              onClick={() => void onFinish()}
+              disabled={submitting}
+              onClick={() => {
+                if (!photoFiles[0]) {
+                  setMissingFields(['Photo de profil']);
+                  toast('Ajoute une première photo pour continuer.', 'error');
+                  return;
+                }
+                setMissingFields([]);
+                void onFinish();
+              }}
               className="rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
             >
               {submitting ? 'Finalisation…' : 'Terminer et explorer 🎉'}
             </button>
             {!photoFiles[0] && (
-              <p className="text-center font-body text-xs text-muted-foreground">
+              <p
+                className={`text-center font-body text-xs ${
+                  missingFields.includes('Photo de profil')
+                    ? 'font-semibold text-red-600'
+                    : 'text-muted-foreground'
+                }`}
+              >
                 Une première photo est obligatoire pour continuer.
               </p>
             )}

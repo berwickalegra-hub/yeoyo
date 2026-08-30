@@ -102,6 +102,27 @@ export function AdminSidebar({
         },
       ],
     },
+    // ADMIN+ (not MODERATOR) — read-only back-office listings whose APIs
+    // (GET /api/admin/orders, /api/admin/audit-log) are requireAdmin('ADMIN').
+    ...(role !== 'MODERATOR'
+      ? [
+          {
+            label: 'Finance',
+            items: [
+              { href: '/admin/transactions', label: 'Transactions', icon: 'banknote' as IconName },
+              ...(role === 'SUPERADMIN'
+                ? [{ href: '/admin/affilies', label: 'Affiliés', icon: 'users' as IconName }]
+                : []),
+            ],
+          },
+          {
+            label: 'Système',
+            items: [
+              { href: '/admin/journal', label: "Journal d'activité", icon: 'layers' as IconName },
+            ],
+          },
+        ]
+      : []),
     ...(role === 'SUPERADMIN'
       ? [
           {
@@ -115,10 +136,6 @@ export function AdminSidebar({
               },
             ],
           },
-          {
-            label: 'Finance',
-            items: [{ href: '/admin/affilies', label: 'Affiliés', icon: 'users' as IconName }],
-          },
         ]
       : []),
   ];
@@ -126,8 +143,8 @@ export function AdminSidebar({
   const inertGroups = [
     { label: 'Utilisateurs', items: ['Suspensions'] },
     { label: 'Activité', items: ['Likes & Matches', 'Messages', 'Demandes'] },
-    { label: 'Finance', items: ['Abonnements', 'Transactions'] },
-    { label: 'Système', items: ['Configuration', 'Logs'] },
+    { label: 'Finance', items: ['Abonnements'] },
+    { label: 'Système', items: ['Configuration'] },
   ];
 
   const content = (

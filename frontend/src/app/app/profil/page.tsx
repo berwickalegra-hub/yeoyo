@@ -453,16 +453,37 @@ export default function ProfilPage() {
 
         {profile && (
           <div className="mx-auto flex max-w-5xl flex-col gap-5">
-            {/* No completion banner here (removed 2026-08-14, second pass) —
-                it used to send the user away to a second page to fill in
-                fields that live right here on this same page, which is
-                exactly the split-across-two-pages confusion that caused the
-                reported bug (fields shown "complete" on the destination page
-                while the banner kept reappearing, because the last missing
-                field — bio — was actually below this banner, on this page).
-                The one remaining completion nudge lives on Découvrir only,
-                dismissible, since a banner sitting on top of the very
-                fields it's pointing at is redundant, not helpful. */}
+            {/* Completion banner — reinstated 2026-08-31 (explicit user ask:
+                "les champs non complétés, que ce soit vraiment visible").
+                Safe now that EVERY completeness-tracked field lives on this
+                one page (see file header): the banner only names what's
+                missing, it never navigates away — the fix for the old
+                split-across-two-pages bug. */}
+            {(() => {
+              const missing: string[] = [];
+              if (profile.photos.length === 0) missing.push('une photo');
+              if (!profile.bio || !profile.bio.trim()) missing.push('ta vision du mariage (bio)');
+              if (!profile.country) missing.push('ton pays');
+              if (!profile.city || !profile.city.trim()) missing.push('ta ville');
+              if (missing.length === 0) return null;
+              return (
+                <div
+                  role="alert"
+                  className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4"
+                >
+                  <Icon name="info" size={18} className="mt-0.5 shrink-0 text-red-600" />
+                  <div>
+                    <p className="font-headings text-sm font-bold text-red-700">
+                      Ton profil est incomplet
+                    </p>
+                    <p className="mt-0.5 font-body text-sm text-red-700/90">
+                      Complète {missing.join(', ')} ci-dessous — un profil complet est bien plus
+                      visible.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Identity block */}
             <div className="flex flex-col gap-6 rounded-xl border border-border bg-surface p-6 sm:flex-row sm:items-start">
@@ -589,10 +610,21 @@ export default function ProfilPage() {
                 </div>
 
                 {/* Vision du mariage — real bio field, inline editable */}
-                <div className="rounded-xl border border-border bg-surface p-5">
+                <div
+                  className={`rounded-xl border bg-surface p-5 ${
+                    !profile.bio || !profile.bio.trim()
+                      ? 'border-red-500/50 ring-1 ring-red-500/20'
+                      : 'border-border'
+                  }`}
+                >
                   <div className="mb-4 flex items-center justify-between">
                     <p className="font-headings text-base font-bold text-foreground">
                       Ma vision du mariage
+                      {(!profile.bio || !profile.bio.trim()) && (
+                        <span className="ml-2 font-body text-xs font-semibold text-red-600">
+                          À compléter
+                        </span>
+                      )}
                     </p>
                     {!editingBio && (
                       <button

@@ -328,7 +328,27 @@ export default function MessageThreadPage() {
           const data = msg.data as ThreadMessage;
           if (seenIds.current.has(data.id)) return;
           seenIds.current.add(data.id);
-          setMessages((prev) => [...prev, { ...data, fromSelf: data.senderId === user.id }]);
+          setMessages((prev) => {
+            // The POST response already inserted this exact row — do nothing.
+            if (prev.some((m) => m.id === data.id)) return prev;
+            const incoming = { ...data, fromSelf: data.senderId === user.id };
+            // Our own message echoed back by Ably: the echo can beat the
+            // POST response, so reconcile it with the optimistic "pending"
+            // bubble in place instead of appending a second copy (this race
+            // was the "message appears twice on my screen" bug).
+            if (incoming.fromSelf) {
+              const optimisticIdx = prev.findIndex(
+                (m) =>
+                  m.tempId && m.pending && m.senderId === data.senderId && m.body === data.body,
+              );
+              if (optimisticIdx !== -1) {
+                const next = prev.slice();
+                next[optimisticIdx] = incoming;
+                return next;
+              }
+            }
+            return [...prev, incoming];
+          });
         });
 
         channel.subscribe('read', (msg) => {
@@ -470,7 +490,14 @@ export default function MessageThreadPage() {
         body: { body },
       });
       seenIds.current.add(res.id);
-      setMessages((prev) => prev.map((m) => (m.tempId === tempId ? res : m)));
+      setMessages((prev) =>
+        // If the Ably echo already reconciled the optimistic bubble, `res.id`
+        // is present — just drop any leftover temp bubble instead of adding
+        // a second copy. Otherwise do the normal temp → real swap.
+        prev.some((m) => m.id === res.id)
+          ? prev.filter((m) => m.tempId !== tempId)
+          : prev.map((m) => (m.tempId === tempId ? res : m)),
+      );
       setFirstMessageCost(0);
       void refreshCredits();
       void reload();
@@ -521,7 +548,11 @@ export default function MessageThreadPage() {
         body: { body: target.body },
       });
       seenIds.current.add(res.id);
-      setMessages((prev) => prev.map((m) => (m.tempId === tempId ? res : m)));
+      setMessages((prev) =>
+        prev.some((m) => m.id === res.id)
+          ? prev.filter((m) => m.tempId !== tempId)
+          : prev.map((m) => (m.tempId === tempId ? res : m)),
+      );
       setFirstMessageCost(0);
       void refreshCredits();
       void reload();
@@ -549,7 +580,7 @@ export default function MessageThreadPage() {
       });
       if (!seenIds.current.has(res.id)) {
         seenIds.current.add(res.id);
-        setMessages((prev) => [...prev, res]);
+        setMessages((prev) => (prev.some((m) => m.id === res.id) ? prev : [...prev, res]));
       }
       setFirstMessageCost(0);
       void refreshCredits();
