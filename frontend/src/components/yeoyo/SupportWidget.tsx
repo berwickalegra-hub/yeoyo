@@ -79,7 +79,6 @@ async function uploadImageWithAuthRetry(file: File): Promise<string> {
 
 export function SupportWidget() {
   const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<SupportMsg[]>([]);
@@ -88,10 +87,19 @@ export function SupportWidget() {
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftInputRef = useRef<HTMLInputElement>(null);
+
+  // Refetch on every open, not just the first — an admin reply sent while
+  // the panel was closed must show up the next time it's reopened, not only
+  // after a full page reload (2026-08-30, explicit user ask to make sure
+  // every part of this widget actually works, not just its first open).
+  useEffect(() => {
+    if (open) void load();
+  }, [open]);
 
   useEffect(() => {
-    if (open && !loaded) void load();
-  }, [open, loaded]);
+    if (open) draftInputRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -102,7 +110,7 @@ export function SupportWidget() {
     try {
       const res = await api<{ messages: SupportMsg[] }>('/api/support/messages');
       setMessages(res.messages);
-      setLoaded(true);
+      setError(null);
     } catch {
       setError('Impossible de charger tes messages pour le moment.');
     } finally {
@@ -176,7 +184,7 @@ export function SupportWidget() {
           </div>
 
           <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4">
-            {loading && (
+            {loading && messages.length === 0 && (
               <p className="text-center font-body text-sm text-muted-foreground">Chargement…</p>
             )}
 
@@ -255,6 +263,7 @@ export function SupportWidget() {
                 <Icon name="camera" size={16} />
               </button>
               <input
+                ref={draftInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -271,7 +280,11 @@ export function SupportWidget() {
                 aria-label="Envoyer"
                 className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-50"
               >
-                <Icon name="send" size={16} />
+                {sending ? (
+                  <Icon name="refresh-cw" size={16} className="animate-spin" />
+                ) : (
+                  <Icon name="send" size={16} />
+                )}
               </button>
             </div>
           </div>

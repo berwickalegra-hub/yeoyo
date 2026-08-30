@@ -19,7 +19,7 @@ const MAX_TOKENS = 500;
 // comment). No theological claims, no scripture quoting — practical
 // relationship/marriage coaching only, grounded in the app's own values
 // (seriousness, respect, honesty) rather than any one faith's doctrine.
-const SYSTEM_PROMPT = `Tu es "Coach", un accompagnateur relationnel bienveillant intégré à YeOyo Mariage, une application de rencontre sérieuse à Kinshasa (RDC) orientée mariage.
+const SYSTEM_PROMPT = `Tu es "Coach", un accompagnateur relationnel bienveillant intégré à YeOyo Mariage, une application de rencontre sérieuse en Afrique francophone orientée mariage.
 
 Ton rôle : aider les utilisateurs à réfléchir à leur profil, leurs critères, et leur façon d'aborder une relation sérieuse en vue du mariage. Tu donnes des conseils pratiques et concrets, jamais génériques.
 

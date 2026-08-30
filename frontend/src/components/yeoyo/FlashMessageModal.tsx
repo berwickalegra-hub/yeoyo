@@ -10,7 +10,7 @@ import { Sheet } from '@/components/ui/Sheet';
 // Cost is display-only here — the real enforcement lives server-side in
 // CREDIT_COSTS.flash_message (lib/server/credits/ledger.ts, a `server-only`
 // module this client component can't import). Same reasoning as
-// SwipeCard.tsx's own FREE_MONTHLY_CONTACT_REQUEST_LIMIT constant — keep
+// SwipeCard.tsx's own FREE_DAILY_CONTACT_REQUEST_LIMIT constant — keep
 // this value in sync with the server if it ever changes.
 const FLASH_MESSAGE_COST = 3;
 const MAX_LENGTH = 2000;

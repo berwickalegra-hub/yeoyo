@@ -54,6 +54,13 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Toggle } from '@/components/ui/Toggle';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { SuggestionChips } from '@/components/yeoyo/SuggestionChips';
+import {
+  BIO_SUGGESTIONS,
+  QUALITIES_SUGGESTIONS,
+  FLAWS_SUGGESTIONS,
+  DEALBREAKERS_SUGGESTIONS,
+} from '@/lib/yeoyo/content';
 import {
   INTENT_LABELS,
   RELIGION_LABELS,
@@ -611,6 +618,7 @@ export default function ProfilPage() {
                         className="w-full rounded-lg border border-border bg-background p-3 font-body text-sm text-foreground"
                         placeholder="Pour moi, le mariage c'est..."
                       />
+                      <SuggestionChips suggestions={BIO_SUGGESTIONS} onSelect={setBioDraft} />
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
@@ -675,6 +683,10 @@ export default function ProfilPage() {
                           className="w-full rounded-lg border border-border bg-background p-3 font-body text-sm text-foreground"
                           placeholder="Ex : Déterminé(e), patient(e), à l'écoute…"
                         />
+                        <SuggestionChips
+                          suggestions={QUALITIES_SUGGESTIONS}
+                          onSelect={setQualitiesDraft}
+                        />
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
@@ -731,6 +743,7 @@ export default function ProfilPage() {
                           className="w-full rounded-lg border border-border bg-background p-3 font-body text-sm text-foreground"
                           placeholder="Ex : Un peu impatient(e), perfectionniste…"
                         />
+                        <SuggestionChips suggestions={FLAWS_SUGGESTIONS} onSelect={setFlawsDraft} />
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
@@ -1235,6 +1248,10 @@ export default function ProfilPage() {
                           rows={3}
                           className="w-full rounded-lg border border-border bg-background p-3 font-body text-sm text-foreground"
                           placeholder="Le manque de sincérité, l'infidélité…"
+                        />
+                        <SuggestionChips
+                          suggestions={DEALBREAKERS_SUGGESTIONS}
+                          onSelect={(text) => setSearchDraft((d) => ({ ...d, dealbreakers: text }))}
                         />
                       </label>
                       <div className="flex items-center justify-end gap-2">

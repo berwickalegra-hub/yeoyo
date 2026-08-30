@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'YeOyo — Rencontres sérieuses pour les Congolais',
+    name: 'YeOyo — Rencontres sérieuses en Afrique francophone',
     short_name: 'YeOyo',
-    description: 'La rencontre sérieuse, faite pour les Congolais. Profils vérifiés par IA.',
+    description:
+      'La rencontre sérieuse, faite pour l’Afrique francophone. Profils vérifiés par IA.',
     start_url: '/',
     scope: '/',
     display: 'standalone',

@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { isIos, isStandalone } from '@/lib/yeoyo/platform';
+import { unsubscribeCurrentDevice } from '@/lib/yeoyo/push-unsubscribe';
+
+export { unsubscribeCurrentDevice };
 
 export type PushState =
   | 'unsupported'
@@ -12,23 +16,6 @@ export type PushState =
   | 'default'
   | 'granted'
   | 'denied';
-
-/** Unsubscribe this browser and delete its server row. Safe to call anytime
- *  (no-op if there's no SW / no subscription). Never throws. */
-export async function unsubscribeCurrentDevice(): Promise<void> {
-  try {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
-    await api('/api/push/subscribe', { method: 'DELETE', body: { endpoint: sub.endpoint } }).catch(
-      () => undefined,
-    );
-    await sub.unsubscribe().catch(() => undefined);
-  } catch {
-    /* logout must never be blocked by push teardown */
-  }
-}
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
@@ -44,10 +31,19 @@ export function usePushNotifications(): {
   enable: () => Promise<void>;
   disable: () => Promise<void>;
 } {
+  const { user: authUser, loading: authLoading } = useAuth();
+  const authReady = !authLoading && !!authUser;
   const [state, setState] = useState<PushState>('unsupported');
   const [vapidKey, setVapidKey] = useState<string | null>(null);
 
   useEffect(() => {
+    // Wait for AuthProvider's own /api/auth/me to resolve first. Firing the
+    // vapid-public-key check in parallel with it 401s in lockstep whenever
+    // the access token has already expired (e.g. reopening the app after
+    // 15+ min) — the api() wrapper silently refreshes and retries, but the
+    // first failed request still logs to the console — 2026-08-30, explicit
+    // user report of 401 noise on Découvrir.
+    if (!authReady) return;
     let cancelled = false;
     void (async () => {
       const supported =
@@ -90,7 +86,7 @@ export function usePushNotifications(): {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authReady]);
 
   const enable = useCallback(async () => {
     if (!vapidKey) return;

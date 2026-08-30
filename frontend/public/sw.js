@@ -19,7 +19,18 @@ self.addEventListener('fetch', (event) => {
   // handling further up — 2026-08-18, explicit user report of uploads and
   // navigation intermittently failing with exactly this signature.
   if (event.request.method !== 'GET') return;
-  event.respondWith(fetch(event.request));
+  // Catch here, not just up in page code: an unhandled rejection from this
+  // fetch surfaces as a scary "FetchEvent resulted in a network error
+  // response" + "Uncaught TypeError: Failed to fetch" pair in devtools even
+  // when it's just a transient hiccup (dev-server HMR reload, or the tab
+  // navigating away mid-request aborts it) — 2026-08-30, explicit user
+  // report from the Découvrir page. Returning a Response instead of letting
+  // the promise reject keeps the passthrough behavior but resolves quietly.
+  event.respondWith(
+    fetch(event.request).catch(
+      () => new Response(null, { status: 503, statusText: 'Service Unavailable' }),
+    ),
+  );
 });
 
 // Web Push — payload is JSON: { title, body, url, tag }. See

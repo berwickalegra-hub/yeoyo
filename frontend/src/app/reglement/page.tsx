@@ -60,7 +60,7 @@ const SECTIONS: RuleSection[] = [
     icon: 'users',
     number: '04',
     title: 'La famille, à ton rythme',
-    intro: 'Le mariage se construit rarement seul en RDC — YeOyo encourage :',
+    intro: 'Le mariage se construit rarement seul — YeOyo encourage :',
     items: [
       'L’implication progressive de la famille quand la relation devient sérieuse',
       'La transparence avec tes proches sur ta démarche',
@@ -120,7 +120,7 @@ export default function ReglementPage() {
           </h1>
           <p className="max-w-md font-body text-sm text-muted-foreground">
             Pour garantir un espace sérieux et respectueux, tous les membres s’engagent à respecter
-            ces règles, dans l’esprit de la démarche matrimoniale en RDC.
+            ces règles, dans l’esprit de la démarche matrimoniale en Afrique francophone.
           </p>
         </div>
 

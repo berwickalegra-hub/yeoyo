@@ -20,6 +20,10 @@ export interface LimitReachedInfo {
   primaryAction?: { label: string; href: string } | { label: string; onClick: () => void };
   /** Dismiss button label — defaults to "Fermer". */
   dismissLabel?: string;
+  /** Short label shown on the blurred SwipeCard behind this modal (2026-08-30,
+   * explicit user ask: a message "sur le fond", distinct from this dialog's
+   * own text) — omit to fall back to SwipeCard's generic "Reviens plus tard". */
+  cardMessage?: string;
 }
 
 export function LimitReachedModal({

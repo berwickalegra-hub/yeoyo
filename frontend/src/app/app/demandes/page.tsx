@@ -312,8 +312,8 @@ export default function DemandesPage() {
                   Demandes de contact
                 </p>
                 <p className="font-body text-xs text-muted-foreground">
-                  5 demandes de contact gratuites par mois. Répondre à une demande reçue et discuter
-                  reste toujours gratuit.
+                  10 demandes de contact gratuites par jour. Répondre à une demande reçue et
+                  discuter reste toujours gratuit.
                 </p>
               </div>
             </div>

@@ -131,16 +131,15 @@ export default function ExplorerPage() {
   // that needs the user to actually read it and choose what's next.
   function handleLikeError(err: unknown): void {
     if (err instanceof ApiError && err.code === 'CONTACT_REQUEST_QUOTA_EXCEEDED') {
-      const resetAt = (err.body?.quota as { resetAt?: string } | undefined)?.resetAt;
-      const resetLabel = resetAt
-        ? new Date(resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
-        : null;
+      // Daily cap now (2026-08-30, explicit user ask — was monthly), so the
+      // reset is always "tomorrow": no need for the exact calendar date the
+      // monthly version showed.
       setLimitInfo({
         icon: 'lock',
-        title: 'Limite mensuelle atteinte',
-        message: resetLabel
-          ? `Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie à partir du ${resetLabel}.`
-          : 'Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie le mois prochain.',
+        title: 'Limite quotidienne atteinte',
+        message:
+          'Tu as envoyé tes 10 demandes gratuites d’aujourd’hui. Reviens demain pour continuer.',
+        cardMessage: 'Demandes du jour terminées — reviens demain',
         primaryAction: { label: 'Quitter Découvrir', onClick: () => router.push('/app/decouvrir') },
         dismissLabel: 'Continuer à parcourir',
       });
@@ -431,6 +430,7 @@ export default function ExplorerPage() {
                   busy={busyUserId === current.userId}
                   creditBalance={creditBalance}
                   blurred={!!limitInfo}
+                  blurredMessage={limitInfo?.cardMessage}
                 />
 
                 {/* Side panel — "Filtres actifs"/"Mes stats du jour", desktop
@@ -685,6 +685,7 @@ export default function ExplorerPage() {
                   busy={busyUserId === current.userId}
                   creditBalance={creditBalance}
                   blurred={!!limitInfo}
+                  blurredMessage={limitInfo?.cardMessage}
                 />
                 <div aria-hidden="true" className="hidden lg:block" />
               </div>

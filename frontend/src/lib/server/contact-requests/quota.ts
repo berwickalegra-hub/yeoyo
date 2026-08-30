@@ -1,27 +1,22 @@
-// Free-tier monthly contact-request cap (the landing page's own comparison
-// table used to advertise "5 / mois" free vs "Illimitées" Premium — this was
-// pure marketing copy with no server-side enforcement until 2026-08-17).
+// Free-tier daily contact-request cap (2026-08-30, explicit user ask: was
+// monthly until now — the landing page's own comparison table used to
+// advertise "5 / mois" free vs "Illimitées" Premium, pure marketing copy
+// with no server-side enforcement until 2026-08-17; now a 10/day cap that
+// resets every night instead of once a month).
 // ADMIN/SUPERADMIN are unlimited (2026-08-25: this used to bypass for ACTIVE
 // Premium subscribers — the Subscription model is gone in favor of the
 // credit system per the new product spec, which never mentioned this quota,
 // so the bypass now follows the same staff-only pattern as
 // lib/server/credits/ledger.ts instead of reintroducing a paid tier here).
-// Counting via a createdAt range query mirrors message-quota.ts's daily cap
-// rather than a separate counter row that could drift out of sync.
+// Counting via a createdAt range query (not a separate counter row that
+// could drift out of sync) mirrors the app's other daily caps — see
+// lib/server/daily-quota.ts, shared with Coach's message limit and the
+// profile stats-today route.
 import 'server-only';
 import { prisma } from '@/lib/server/prisma';
+import { startOfUtcDay, nextUtcMidnight } from '@/lib/server/daily-quota';
 
-export const FREE_MONTHLY_CONTACT_REQUEST_LIMIT = 5;
-
-function startOfUtcMonth(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-}
-
-function nextUtcMonth(): Date {
-  const start = startOfUtcMonth();
-  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
-}
+export const FREE_DAILY_CONTACT_REQUEST_LIMIT = 10;
 
 export async function contactRequestQuotaStatus(
   userId: string,
@@ -30,12 +25,12 @@ export async function contactRequestQuotaStatus(
   const isStaff = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   if (isStaff) return { remaining: null, limit: null, resetAt: null };
 
-  const sentThisMonth = await prisma.contactRequest.count({
-    where: { requesterId: userId, createdAt: { gte: startOfUtcMonth() } },
+  const sentToday = await prisma.contactRequest.count({
+    where: { requesterId: userId, createdAt: { gte: startOfUtcDay() } },
   });
   return {
-    remaining: Math.max(0, FREE_MONTHLY_CONTACT_REQUEST_LIMIT - sentThisMonth),
-    limit: FREE_MONTHLY_CONTACT_REQUEST_LIMIT,
-    resetAt: nextUtcMonth().toISOString(),
+    remaining: Math.max(0, FREE_DAILY_CONTACT_REQUEST_LIMIT - sentToday),
+    limit: FREE_DAILY_CONTACT_REQUEST_LIMIT,
+    resetAt: nextUtcMidnight().toISOString(),
   };
 }

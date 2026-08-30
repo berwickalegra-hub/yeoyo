@@ -91,7 +91,7 @@ const MUSLIM_QUOTES: Quote[] = [
 const GENERAL_QUOTES: Quote[] = [
   {
     text: 'Un seul doigt ne peut pas laver le visage — le mariage se construit à deux.',
-    reference: 'Proverbe congolais',
+    reference: 'Proverbe africain',
   },
   {
     text: "Ce n'est pas parce qu'on se ressemble qu'on s'entend, c'est parce qu'on s'entend qu'on se ressemble.",
@@ -99,7 +99,7 @@ const GENERAL_QUOTES: Quote[] = [
   },
   {
     text: 'Avant de construire la maison, on choisit bien le terrain.',
-    reference: 'Proverbe congolais',
+    reference: 'Proverbe africain',
   },
   { text: 'La patience est la clé qui ouvre toutes les portes.', reference: 'Proverbe africain' },
   {

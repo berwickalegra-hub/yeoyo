@@ -16,7 +16,7 @@
 //      polish pass, not core functionality.
 'use client';
 
-import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
@@ -298,24 +298,46 @@ export default function OnboardingPage() {
   const [devCode, setDevCode] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  // Index 0 is always the mandatory primary photo; 1..5 are the optional
+  // extra photos added in the same step (2026-08-30 explicit user ask —
+  // previously onboarding only ever collected one photo, extras had to
+  // wait until Mon profil after finishing). Mirrors POST /api/profile/
+  // photos' own MAX_PHOTOS=6 cap.
+  const MAX_ONBOARDING_PHOTOS = 6;
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const extraPhotoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkingExistingProfile, setCheckingExistingProfile] = useState(true);
 
-  // Live preview of the selected/dropped photo — object URLs are cheap and
+  // Live preview of the selected/dropped photos — object URLs are cheap and
   // local (no upload happens until "Terminer et explorer"), revoked on
   // every change so we don't leak blob URLs across re-selections.
   useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(photoFile);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photoFile]);
+    const urls = photoFiles.map((f) => URL.createObjectURL(f));
+    setPhotoPreviews(urls);
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [photoFiles]);
+
+  function setPrimaryPhoto(file: File | null) {
+    setPhotoFiles((prev) => {
+      if (!file) return prev.slice(1);
+      const next = [...prev];
+      next[0] = file;
+      return next;
+    });
+  }
+
+  function addExtraPhoto(file: File) {
+    setPhotoFiles((prev) => (prev.length >= MAX_ONBOARDING_PHOTOS ? prev : [...prev, file]));
+  }
+
+  function removeExtraPhoto(index: number) {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // Prefills the promo field from an affiliate referral link
   // (https://yeoyo.net/onboarding?promo=CODE). Read once on mount — the
@@ -518,14 +540,12 @@ export default function OnboardingPage() {
     }
   }
 
-  async function onFinish(skipPhoto: boolean) {
+  async function onFinish() {
+    if (photoFiles.length === 0) return; // button stays disabled, but guard anyway
     setSubmitting(true);
     setError(null);
     try {
-      let photoUploadId: string | undefined;
-      if (!skipPhoto && photoFile) {
-        photoUploadId = await uploadPhotoWithAuthRetry(photoFile);
-      }
+      const photoUploadId = await uploadPhotoWithAuthRetry(photoFiles[0] as File);
 
       await api('/api/profile', {
         method: 'POST',
@@ -546,6 +566,21 @@ export default function OnboardingPage() {
           photoUploadId,
         },
       });
+
+      // Extra photos (beyond the mandatory first one) are a nice-to-have —
+      // uploaded best-effort, one at a time, so a single failed upload
+      // (network blip, oversized file) never blocks finishing onboarding
+      // once the profile + primary photo are already saved. The user can
+      // always add more from Mon profil afterward.
+      for (const file of photoFiles.slice(1)) {
+        try {
+          const uploadId = await uploadPhotoWithAuthRetry(file);
+          await api('/api/profile/photos', { method: 'POST', body: { uploadId } });
+        } catch {
+          /* best-effort, see comment above */
+        }
+      }
+
       // AuthContext's cached `user.profileCompleted` is still false at this
       // point (it was fetched before the profile existed) — without this,
       // AppShell's redirect gate on /app/decouvrir sees the stale flag and
@@ -1230,20 +1265,20 @@ export default function OnboardingPage() {
             onDrop={(e) => {
               e.preventDefault();
               const dropped = e.dataTransfer.files?.[0];
-              if (dropped) setPhotoFile(dropped);
+              if (dropped) setPrimaryPhoto(dropped);
             }}
             className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed py-12 transition-colors ${
-              photoPreview
+              photoPreviews[0]
                 ? 'border-primary bg-secondary/10'
                 : 'border-border bg-surface hover:border-primary/50'
             }`}
           >
             <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-muted">
-              {photoPreview ? (
+              {photoPreviews[0] ? (
                 <>
                   {/* Local blob: preview — next/image can't optimize object URLs. */}
                   <img
-                    src={photoPreview}
+                    src={photoPreviews[0]}
                     alt="Aperçu de ta photo de profil"
                     className="h-24 w-24 rounded-full object-cover"
                   />
@@ -1257,22 +1292,81 @@ export default function OnboardingPage() {
             </div>
             <div className="text-center">
               <p className="mb-1 font-headings text-base font-semibold text-foreground">
-                {photoFile ? 'Photo sélectionnée ✓' : 'Ajoute ta photo'}
+                {photoFiles[0] ? 'Photo sélectionnée ✓' : 'Ajoute ta photo'}
+                <span className="ml-1 font-body text-sm font-normal text-red-500">*</span>
               </p>
               <p className="max-w-[220px] truncate font-body text-sm text-muted-foreground">
-                {photoFile ? photoFile.name : 'Glisse ici ou clique pour sélectionner'}
+                {photoFiles[0] ? photoFiles[0].name : 'Glisse ici ou clique pour sélectionner'}
               </p>
             </div>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
               className="hidden"
-              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => setPrimaryPhoto(e.target.files?.[0] ?? null)}
             />
             <span className="rounded-lg bg-primary px-6 py-2.5 font-headings text-sm font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-transform active:scale-95">
-              {photoFile ? 'Changer de photo' : 'Choisir une photo'}
+              {photoFiles[0] ? 'Changer de photo' : 'Choisir une photo'}
             </span>
           </label>
+
+          {photoFiles[0] && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-body text-xs uppercase tracking-widest text-muted-foreground">
+                  Photos supplémentaires (optionnel)
+                </p>
+                <span className="font-body text-xs text-muted-foreground">
+                  {photoFiles.length} / {MAX_ONBOARDING_PHOTOS}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {photoFiles.slice(1).map((file, i) => (
+                  <div
+                    key={`${file.name}-${file.lastModified}-${i}`}
+                    className="relative aspect-square overflow-hidden rounded-lg border-2 border-border"
+                  >
+                    {photoPreviews[i + 1] && (
+                      <img
+                        src={photoPreviews[i + 1]}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeExtraPhoto(i + 1)}
+                      aria-label="Retirer cette photo"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-foreground/50"
+                    >
+                      <Icon name="x" size={9} className="text-background" />
+                    </button>
+                  </div>
+                ))}
+                {photoFiles.length < MAX_ONBOARDING_PHOTOS && (
+                  <button
+                    type="button"
+                    onClick={() => extraPhotoInputRef.current?.click()}
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground"
+                  >
+                    <Icon name="plus" size={18} />
+                    <span className="font-body text-xs">Ajouter</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={extraPhotoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) addExtraPhoto(picked);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+          )}
 
           <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-secondary/20 p-4">
             <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
@@ -1316,20 +1410,17 @@ export default function OnboardingPage() {
           <div className="mt-1 flex flex-col gap-2">
             <button
               type="button"
-              disabled={submitting}
-              onClick={() => void onFinish(false)}
+              disabled={submitting || !photoFiles[0]}
+              onClick={() => void onFinish()}
               className="rounded-xl bg-primary py-4 font-headings text-base font-semibold text-primary-foreground shadow-md shadow-primary/25 transition-all hover:shadow-lg active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
             >
               {submitting ? 'Finalisation…' : 'Terminer et explorer 🎉'}
             </button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void onFinish(true)}
-              className="rounded-xl border border-border bg-surface py-3 font-body text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 disabled:opacity-50"
-            >
-              Passer pour l&rsquo;instant
-            </button>
+            {!photoFiles[0] && (
+              <p className="text-center font-body text-xs text-muted-foreground">
+                Une première photo est obligatoire pour continuer.
+              </p>
+            )}
           </div>
         </div>
       )}

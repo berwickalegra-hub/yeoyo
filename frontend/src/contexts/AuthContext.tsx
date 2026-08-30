@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError, clearCsrfToken, storeCsrfToken } from '@/lib/api';
 import { invalidateCachePrefix } from '@/lib/useApi';
 import { COOKIE_PREFIX } from '@/lib/constants';
-import { unsubscribeCurrentDevice } from '@/lib/yeoyo/usePushNotifications';
+import { unsubscribeCurrentDevice } from '@/lib/yeoyo/push-unsubscribe';
 
 export interface User {
   id: string;

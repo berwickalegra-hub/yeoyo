@@ -35,9 +35,8 @@ export default function ConditionsUtilisationPage() {
         <div className="flex flex-col gap-5 font-body text-sm leading-relaxed text-foreground">
           <p>
             YeOyo est une application de mise en relation dédiée à la rencontre sérieuse et au
-            mariage, pensée pour les Congolais en République Démocratique du Congo et dans la
-            diaspora. En créant un compte, tu acceptes les présentes conditions dans leur
-            intégralité, ainsi que le{' '}
+            mariage, pensée pour l&rsquo;Afrique francophone et sa diaspora. En créant un compte, tu
+            acceptes les présentes conditions dans leur intégralité, ainsi que le{' '}
             <Link href="/reglement" className="font-medium text-primary hover:underline">
               règlement de la communauté
             </Link>{' '}
@@ -100,8 +99,8 @@ export default function ConditionsUtilisationPage() {
               4. Crédits et paiement
             </h2>
             <p className="mb-2">
-              La création de compte et un usage de base (dont 5 demandes de contact gratuites par
-              mois, répondre aux messages reçus, et consulter les profils) sont gratuits. Certaines
+              La création de compte et un usage de base (dont 10 demandes de contact gratuites par
+              jour, répondre aux messages reçus, et consulter les profils) sont gratuits. Certaines
               actions supplémentaires — voir qui t&rsquo;a mis en favori, voir qui a visité ton
               profil, booster la visibilité de ton profil pendant 24h, ou envoyer le premier message
               d&rsquo;une conversation — consomment des crédits, achetés une seule fois sous forme

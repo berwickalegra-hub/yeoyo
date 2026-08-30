@@ -113,12 +113,12 @@ const TESTIMONIALS = [
     quote:
       "J'avais peur des arnaques. Ici tout le monde est vérifié, je me sens respectée. YeOyo c'est vraiment différent.",
     name: 'Rosette M.',
-    city: 'Lubumbashi',
+    city: 'Abidjan',
   },
   {
     quote: "Simple, rapide, sérieux. J'ai trouvé ma moitié en moins d'un mois. Merci YeOyo.",
     name: 'Patrick N.',
-    city: 'Goma',
+    city: 'Douala',
   },
 ];
 
@@ -133,7 +133,7 @@ const FAQ_ITEMS = [
   {
     question: 'Est-ce vraiment gratuit ?',
     answer:
-      'Oui. La création de profil, 3 photos, 5 demandes de contact par mois et la messagerie de base sont gratuites, pour toujours. Les crédits sont optionnels, pour celles et ceux qui veulent voir qui les a mis en favori, qui a visité leur profil, ou booster leur visibilité.',
+      'Oui. La création de profil, 3 photos, 10 demandes de contact par jour et la messagerie de base sont gratuites, pour toujours. Les crédits sont optionnels, pour celles et ceux qui veulent voir qui les a mis en favori, qui a visité leur profil, ou booster leur visibilité.',
   },
   {
     question: 'Comment fonctionne la vérification des profils ?',
@@ -151,7 +151,7 @@ const FAQ_ITEMS = [
       "Non. Un crédit acheté reste sur ton compte tant que tu ne l'utilises pas — pas d'abonnement, pas de reconduction, pas de date limite.",
   },
 ];
-const FOOTER_CITIES = ['Kinshasa', 'Lubumbashi', 'Goma', 'Matadi', 'Kisangani'];
+const FOOTER_CITIES = ['Kinshasa', 'Abidjan', 'Dakar', 'Douala', 'Cotonou', 'Lomé'];
 const FOOTER_LEGAL = ['Règlement', 'Confidentialité', 'Mentions légales', 'CGV'];
 
 // Matches Banani's neutral bordered pill exactly (border-border/text-
@@ -203,7 +203,7 @@ export default function LandingPage() {
       <section className="px-5 pb-12 pt-10 lg:flex lg:items-center lg:gap-16 lg:px-12 lg:pb-24 lg:pt-20 xl:mx-auto xl:max-w-6xl">
         <div className="lg:max-w-xl lg:flex-1">
           <div className="animate-hero-rise" style={{ animationDelay: '0ms' }}>
-            <SectionEyebrow icon="map-pin" label="Fait pour les Congolais sérieux" />
+            <SectionEyebrow icon="map-pin" label="Fait pour l'Afrique francophone sérieuse" />
           </div>
           <h1
             className="animate-hero-rise mt-4 font-headings text-3xl font-bold leading-tight text-foreground lg:text-5xl"
@@ -246,7 +246,7 @@ export default function LandingPage() {
           >
             <Image
               src="/images/hero-couple.jpg"
-              alt="Couple congolais élégant sur un rooftop à Kinshasa"
+              alt="Couple élégant sur un rooftop"
               width={1536}
               height={1024}
               className="h-full w-full object-cover"
@@ -350,7 +350,7 @@ export default function LandingPage() {
             Ta moitié te cherche aussi.
           </h2>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-primary-foreground/90 lg:text-lg">
-            Rejoins des milliers de Congolais sérieux qui ont choisi YeOyo.
+            Rejoins des milliers de membres sérieux qui ont choisi YeOyo.
           </p>
           <Link
             href="/onboarding"
@@ -384,7 +384,7 @@ export default function LandingPage() {
               includedFeatures={[
                 'Création de profil complet',
                 '3 photos de profil',
-                '5 demandes de contact par mois',
+                '10 demandes de contact par jour',
                 'Voir tous les profils',
                 'Répondre aux messages reçus',
                 'Accepter ou refuser une demande',
@@ -435,7 +435,7 @@ export default function LandingPage() {
           <div className="aspect-[4/3] w-full sm:aspect-[16/9]">
             <Image
               src="https://storage.googleapis.com/banani-generated-images/generated-images/b49704bd-8128-4ef4-b9ec-8f3aff0f3f27.jpg"
-              alt="Couple congolais souriant, membres vérifiés YeOyo"
+              alt="Couple souriant, membres vérifiés YeOyo"
               width={1024}
               height={640}
               className="h-full w-full object-cover"
@@ -444,7 +444,7 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/75 via-foreground/10 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-6 text-center lg:p-10">
             <p className="font-headings text-lg font-bold text-background lg:text-2xl">
-              +50 000 Congolais sérieux nous font déjà confiance
+              +50 000 membres sérieux nous font déjà confiance
             </p>
           </div>
         </Reveal>
@@ -454,7 +454,7 @@ export default function LandingPage() {
       <section className="bg-muted px-5 py-12 lg:px-12 lg:py-20">
         <Reveal className="text-center xl:mx-auto xl:max-w-5xl">
           <SectionEyebrow icon="heart" label="Ils l'ont fait" tone="surface" />
-          <SectionHeading>Des Congolais qui ont trouvé leur moitié</SectionHeading>
+          <SectionHeading>Ils ont trouvé leur moitié</SectionHeading>
         </Reveal>
         <div className="mx-auto mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:mt-16 lg:max-w-5xl lg:grid-cols-3 lg:gap-8">
           {TESTIMONIALS.map((t, i) => (
@@ -514,8 +514,8 @@ export default function LandingPage() {
             <span className="font-headings text-sm font-bold text-background">YeOyo</span>
           </div>
           <p className="font-body text-xs leading-relaxed text-background/60">
-            La première application de rencontres sérieuses pensée pour les Congolais. Trouve ta
-            moitié.
+            La première application de rencontres sérieuses pensée pour l&rsquo;Afrique francophone.
+            Trouve ta moitié.
           </p>
           <div className="flex flex-wrap gap-5">
             {NAV_LINKS.map((link) => (
@@ -524,7 +524,9 @@ export default function LandingPage() {
               </a>
             ))}
           </div>
-          <p className="font-body text-xs text-background/60">contact@yeoyo.cd · Kinshasa, RDC</p>
+          <p className="font-body text-xs text-background/60">
+            contact@yeoyo.cd · Afrique francophone
+          </p>
           <p className="font-body text-xs text-background/60">
             © 2025 YeOyo. Tous droits réservés.
           </p>
@@ -538,8 +540,8 @@ export default function LandingPage() {
                 <span className="font-headings text-base font-bold text-background">YeOyo</span>
               </div>
               <p className="max-w-xs font-body text-xs leading-relaxed text-background/60">
-                La première application de rencontres sérieuses pensée pour les Congolais. Trouve ta
-                moitié.
+                La première application de rencontres sérieuses pensée pour l&rsquo;Afrique
+                francophone. Trouve ta moitié.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {/* Generic on purpose: the payment page is hosted by the
@@ -585,14 +587,14 @@ export default function LandingPage() {
                 ))}
               </div>
               <p className="mt-4 font-body text-xs text-background/60">contact@yeoyo.cd</p>
-              <p className="font-body text-xs text-background/60">Kinshasa, RDC</p>
+              <p className="font-body text-xs text-background/60">Afrique francophone</p>
             </div>
           </div>
           <div className="mx-auto mt-8 flex max-w-6xl items-center justify-between border-t border-background/10 pt-6">
             <p className="font-body text-xs text-background/60">
               © 2025 YeOyo. Tous droits réservés.
             </p>
-            <p className="font-body text-xs text-background/60">Conçu avec ❤️ à Kinshasa</p>
+            <p className="font-body text-xs text-background/60">Conçu avec ❤️ en Afrique</p>
           </div>
         </div>
       </footer>

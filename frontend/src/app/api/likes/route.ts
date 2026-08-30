@@ -110,7 +110,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           {
             code: 'CONTACT_REQUEST_QUOTA_EXCEEDED',
             message:
-              'Tu as atteint la limite de demandes de contact gratuites pour ce mois-ci. Réessaie le mois prochain.',
+              'Tu as atteint la limite de demandes de contact gratuites pour aujourd’hui. Reviens demain pour continuer.',
             quota: { remaining: quota.remaining, limit: quota.limit, resetAt: quota.resetAt },
           },
           { status: 403, headers: { 'x-request-id': ctx.requestId } },

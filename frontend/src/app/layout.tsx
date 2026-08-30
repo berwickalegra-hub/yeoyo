@@ -37,7 +37,7 @@ const ptSerif = PT_Serif({
 
 export const metadata: Metadata = {
   title: 'YeOyo',
-  description: 'La rencontre sérieuse, faite pour les Congolais.',
+  description: 'La rencontre sérieuse, faite pour l’Afrique francophone.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

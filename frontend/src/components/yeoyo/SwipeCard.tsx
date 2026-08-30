@@ -76,8 +76,8 @@ import { FlashMessageModal } from '@/components/yeoyo/FlashMessageModal';
 const SWIPE_THRESHOLD = 90;
 const CLICK_THRESHOLD = 6;
 // Display copy only — enforced server-side in
-// lib/server/contact-requests/quota.ts (FREE_MONTHLY_CONTACT_REQUEST_LIMIT).
-const FREE_MONTHLY_CONTACT_REQUEST_LIMIT = 5;
+// lib/server/contact-requests/quota.ts (FREE_DAILY_CONTACT_REQUEST_LIMIT).
+const FREE_DAILY_CONTACT_REQUEST_LIMIT = 10;
 // Distance the card flies off-screen before the parent's onLike/onDismiss
 // actually fires — reuses the drag transform's own 0.25s transition (see
 // the `style` below) instead of layering a competing CSS animation on an
@@ -95,6 +95,7 @@ export function SwipeCard({
   busy,
   creditBalance,
   blurred,
+  blurredMessage,
 }: {
   profile: ProfileCard;
   onDismiss: (userId: string) => void;
@@ -109,6 +110,11 @@ export function SwipeCard({
    * interaction is disabled underneath (2026-08-29, explicit user report:
    * a plain white card there read as a bug, "l'écran reste tout blanc"). */
   blurred?: boolean;
+  /** Label shown under the lock icon while blurred — defaults to "Reviens
+   * plus tard" (e.g. the daily contact-request quota gives a more specific
+   * "reviens demain" one, 2026-08-30 explicit user ask). No effect unless
+   * `blurred` is true. */
+  blurredMessage?: string | undefined;
 }) {
   const router = useRouter();
   const [dragX, setDragX] = useState(0);
@@ -328,7 +334,7 @@ export function SwipeCard({
                   <Icon name="lock" size={24} />
                 </span>
                 <p className="rounded-full bg-surface/95 px-4 py-1.5 font-body text-sm font-semibold text-foreground shadow-lg">
-                  Reviens plus tard
+                  {blurredMessage ?? 'Reviens plus tard'}
                 </p>
               </div>
             )}
@@ -426,7 +432,7 @@ export function SwipeCard({
           type="button"
           onClick={() => flyOff(1, () => onLike(profile.userId))}
           disabled={busy || liked || exiting}
-          aria-label={`Demander — ${FREE_MONTHLY_CONTACT_REQUEST_LIMIT} demandes gratuites par mois`}
+          aria-label={`Demander — ${FREE_DAILY_CONTACT_REQUEST_LIMIT} demandes gratuites par jour`}
           className={`btn-success-flash relative flex h-14 flex-shrink-0 items-center gap-2 rounded-full px-6 font-body text-sm font-bold shadow-md shadow-secondary/25 transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
         >
           {busy ? (

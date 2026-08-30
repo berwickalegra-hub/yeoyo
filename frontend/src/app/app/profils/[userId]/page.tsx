@@ -119,16 +119,14 @@ export default function ProfileDetailPage() {
       });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'CONTACT_REQUEST_QUOTA_EXCEEDED') {
-        const resetAt = (err.body?.quota as { resetAt?: string } | undefined)?.resetAt;
-        const resetLabel = resetAt
-          ? new Date(resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
-          : null;
+        // Daily cap now (2026-08-30, explicit user ask — was monthly), so
+        // the reset is always "tomorrow": no need for the exact calendar
+        // date the monthly version showed.
         setLimitInfo({
           icon: 'lock',
-          title: 'Limite mensuelle atteinte',
-          message: resetLabel
-            ? `Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie à partir du ${resetLabel}.`
-            : 'Tu as envoyé tes 5 demandes gratuites de ce mois-ci. Réessaie le mois prochain.',
+          title: 'Limite quotidienne atteinte',
+          message:
+            'Tu as envoyé tes 10 demandes gratuites d’aujourd’hui. Reviens demain pour continuer.',
           primaryAction: {
             label: 'Quitter Découvrir',
             onClick: () => router.push('/app/decouvrir'),
