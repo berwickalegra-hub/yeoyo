@@ -77,8 +77,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const targetProfile = await prisma.profile.findUnique({ where: { userId: targetUserId } });
+    const [targetProfile, actorProfile] = await Promise.all([
+      prisma.profile.findUnique({ where: { userId: targetUserId } }),
+      prisma.profile.findUnique({
+        where: { userId: auth.user.sub },
+        select: { demo: true },
+      }),
+    ]);
     if (!targetProfile || !targetProfile.onboardingCompletedAt) {
+      return NextResponse.json(
+        { code: 'PROFILE_NOT_FOUND', message: 'Target profile not found' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    // Demo and real accounts can't reach each other (discovery hides them
+    // both ways — this is the matching guard on the mutation path).
+    if (targetProfile.demo !== (actorProfile?.demo ?? false)) {
       return NextResponse.json(
         { code: 'PROFILE_NOT_FOUND', message: 'Target profile not found' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },

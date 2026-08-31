@@ -54,7 +54,20 @@ export async function GET(
     });
 
     const isSelf = userId === auth.user.sub;
-    if (!profile || !profile.onboardingCompletedAt || (!profile.visibilityPublic && !isSelf)) {
+    // Demo/illustration profiles and real profiles never see each other —
+    // same rule the discovery routes enforce (schema.prisma Profile.demo).
+    const viewer = isSelf
+      ? null
+      : await prisma.profile.findUnique({
+          where: { userId: auth.user.sub },
+          select: { demo: true },
+        });
+    if (
+      !profile ||
+      !profile.onboardingCompletedAt ||
+      (!profile.visibilityPublic && !isSelf) ||
+      (!isSelf && profile.demo !== (viewer?.demo ?? false))
+    ) {
       return NextResponse.json(
         { code: 'PROFILE_NOT_FOUND', message: 'Profile not found' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },

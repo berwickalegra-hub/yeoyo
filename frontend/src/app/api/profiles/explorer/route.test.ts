@@ -44,6 +44,7 @@ function makeProfile(overrides: Partial<Profile> & { userId: string }): Profile 
     languages: [],
     visibilityPublic: true,
     onlineStatusVisible: true,
+    demo: false,
     searchPrefs: null,
     verifiedAt: null,
     verificationStatus: 'PENDING',
@@ -109,6 +110,32 @@ describe('GET /api/profiles/explorer — already-liked exclusion', () => {
     const notIn = (args?.where?.userId as { notIn: string[] } | undefined)?.notIn ?? [];
     expect(notIn).toContain('sent-to');
     expect(notIn).toContain('asked-me');
+  });
+
+  it('Test 3c: a real viewer only sees real profiles (demo: false in the query)', async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(
+      makeProfile({ userId: 'me-1', gender: 'HOMME', demo: false }),
+    );
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    expect(args?.where?.demo).toBe(false);
+  });
+
+  it('Test 3d: a demo viewer only sees demo profiles (demo: true in the query)', async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(
+      makeProfile({ userId: 'me-1', gender: 'HOMME', demo: true }),
+    );
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    expect(args?.where?.demo).toBe(true);
   });
 
   it('Test 3: scopes the Like lookup to the caller as likerId', async () => {

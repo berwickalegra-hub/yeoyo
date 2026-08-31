@@ -63,7 +63,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRequireAuth.mockResolvedValue(authedCtx);
   mockIsBlocked.mockResolvedValue(false);
-  prismaMock.profile.findUnique.mockResolvedValue({ onboardingCompletedAt: new Date() } as never);
+  prismaMock.profile.findUnique.mockResolvedValue({
+    onboardingCompletedAt: new Date(),
+    demo: false,
+  } as never);
   prismaMock.notificationPreferences.findUnique.mockResolvedValue(null);
   prismaMock.$transaction.mockImplementation((cb: unknown) => {
     if (typeof cb === 'function') {

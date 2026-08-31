@@ -377,6 +377,13 @@ model Profile {
   languages             String[]  @default([])
   visibilityPublic      Boolean   @default(true)
   onlineStatusVisible   Boolean   @default(true)
+  // Illustration/demo profile (the pre-launch seed batches — see
+  // scripts/seed-yeoyo-*.ts). Real users NEVER see a demo profile in
+  // discovery or on a profile page, regardless of country; only other
+  // demo accounts do, so the seed set can still be filmed for promo
+  // material. Set in bulk by scripts/park-demo-profiles.ts (2026-08-31,
+  // explicit pre-launch ask). Nothing sets this true at runtime.
+  demo                  Boolean   @default(false)
   // Flexible discovery filters — { ageMin, ageMax, commune, intent: [...] }.
   // JSON like NotificationPreferences.prefs, to avoid a migration per new filter.
   searchPrefs           Json?

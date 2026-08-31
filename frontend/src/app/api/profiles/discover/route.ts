@@ -56,6 +56,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         ...(genderFilter ? { gender: genderFilter } : {}),
         visibilityPublic: true,
         onboardingCompletedAt: { not: null },
+        // Real users see real users; demo accounts see demo accounts only.
+        demo: me.demo,
       },
       include: { photos: { orderBy: { order: 'asc' }, include: { fileUpload: true } } },
       orderBy: { createdAt: 'desc' },

@@ -113,6 +113,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
       onboardingCompletedAt: { not: null },
+      // Real users only ever see real users; demo/illustration accounts
+      // only see each other (so the seed set can still be filmed for promo
+      // material without ever leaking into a real user's feed). See
+      // Profile.demo in schema.prisma.
+      demo: me.demo,
       ...countryFilter,
       ...(q.commune ? { commune: q.commune } : {}),
       ...(q.intent ? { intent: q.intent } : {}),
