@@ -65,6 +65,7 @@ beforeEach(() => {
   prismaMock.blockedUser.findMany.mockResolvedValue([]);
   prismaMock.like.findMany.mockResolvedValue([] as never);
   prismaMock.favorite.findMany.mockResolvedValue([] as never);
+  prismaMock.contactRequest.findMany.mockResolvedValue([] as never);
 });
 
 describe('GET /api/profiles/explorer — already-liked exclusion', () => {
@@ -91,6 +92,23 @@ describe('GET /api/profiles/explorer — already-liked exclusion', () => {
 
     expect(res.status).toBe(200);
     expect(body.profiles.find((p: { userId: string }) => p.userId === 'user-b').liked).toBe(false);
+  });
+
+  it('Test 3b: excludes anyone with an active contact request either direction (2026-08-31)', async () => {
+    // requester === me → exclude the target; target === me → exclude the requester.
+    prismaMock.contactRequest.findMany.mockResolvedValue([
+      { requesterId: 'me-1', targetId: 'sent-to' },
+      { requesterId: 'asked-me', targetId: 'me-1' },
+    ] as never);
+    prismaMock.profile.count.mockResolvedValue(0 as never);
+    prismaMock.profile.findMany.mockResolvedValue([] as never);
+
+    await GET(makeGet());
+
+    const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
+    const notIn = (args?.where?.userId as { notIn: string[] } | undefined)?.notIn ?? [];
+    expect(notIn).toContain('sent-to');
+    expect(notIn).toContain('asked-me');
   });
 
   it('Test 3: scopes the Like lookup to the caller as likerId', async () => {

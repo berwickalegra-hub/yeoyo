@@ -67,6 +67,9 @@ export default function ProfileDetailPage() {
   // request — the primary button then reads "Accepter la demande" and
   // accepts it directly instead of sending a fresh one (2026-08-31 ask).
   const [incomingRequestId, setIncomingRequestId] = useState<string | null>(null);
+  // Set when the two are already matched — the primary button opens the
+  // existing conversation instead of offering a (dead) "Demander".
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const popping = useLikePop(liked);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -94,11 +97,13 @@ export default function ProfileDetailPage() {
         liked: boolean;
         favorited: boolean;
         incomingRequestId: string | null;
+        conversationId: string | null;
       }>(`/api/profiles/${params.userId}`);
       setProfile(res.profile);
       setLiked(res.liked);
       setFavorited(res.favorited);
       setIncomingRequestId(res.incomingRequestId);
+      setConversationId(res.conversationId);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setNotFound(true);
@@ -355,7 +360,17 @@ export default function ProfileDetailPage() {
                       <Icon name="star" size={18} fill={favorited ? 'currentColor' : 'none'} />
                     )}
                   </button>
-                  {incomingRequestId ? (
+                  {conversationId ? (
+                    // Already matched — go straight to the conversation.
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/app/messages/${conversationId}`)}
+                      className="btn-success-flash flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 text-primary-foreground"
+                    >
+                      <Icon name="message-circle" size={17} />
+                      <span className="font-body text-sm font-semibold">Voir la conversation</span>
+                    </button>
+                  ) : incomingRequestId ? (
                     // This person already asked us — one prominent button that
                     // accepts their request and opens the conversation.
                     <button

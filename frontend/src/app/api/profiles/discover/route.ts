@@ -15,6 +15,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
+import { activeContactRequestUserIds } from '@/lib/server/contact-requests/connections';
 
 const CANDIDATE_POOL_SIZE = 20;
 
@@ -35,11 +36,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const oppositeGender = me.gender === 'HOMME' ? 'FEMME' : 'HOMME';
     const genderFilter =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
-    const [alreadyLiked, blocked] = await Promise.all([
+    const [alreadyLiked, blocked, contactTied] = await Promise.all([
       prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
       blockedUserIds(auth.user.sub),
+      // Already asked / asked us / matched — surfaced in Demandes and
+      // Messages, never as a fresh "Profil du jour".
+      activeContactRequestUserIds(auth.user.sub),
     ]);
-    const excludeIds = [auth.user.sub, ...alreadyLiked.map((l) => l.likedId), ...blocked];
+    const excludeIds = [
+      auth.user.sub,
+      ...alreadyLiked.map((l) => l.likedId),
+      ...blocked,
+      ...contactTied,
+    ];
 
     const candidates = await prisma.profile.findMany({
       where: {

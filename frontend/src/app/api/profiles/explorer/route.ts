@@ -35,6 +35,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { toProfileCard } from '@/lib/server/profile/card';
 import { blockedUserIds } from '@/lib/server/blocks';
+import { activeContactRequestUserIds } from '@/lib/server/contact-requests/connections';
 
 const DEFAULT_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 24;
@@ -80,11 +81,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // `gender` override via the filter panel.
     const defaultGender =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
-    const [blocked, alreadyLiked] = await Promise.all([
+    const [blocked, alreadyLiked, contactTied] = await Promise.all([
       blockedUserIds(auth.user.sub),
       prisma.like.findMany({ where: { likerId: auth.user.sub }, select: { likedId: true } }),
+      // Anyone we've already asked, who has asked us, or who we've matched
+      // with — they belong in Demandes / Messages, not back in the deck with
+      // a fresh "Demander" button (2026-08-31, explicit user report).
+      activeContactRequestUserIds(auth.user.sub),
     ]);
-    const excluded = [auth.user.sub, ...blocked, ...alreadyLiked.map((l) => l.likedId)];
+    const excluded = [
+      auth.user.sub,
+      ...blocked,
+      ...alreadyLiked.map((l) => l.likedId),
+      ...contactTied,
+    ];
 
     // An explicit ?country= is a deliberate filter choice from the panel —
     // strict equality. The implicit me.country default must NOT exclude
