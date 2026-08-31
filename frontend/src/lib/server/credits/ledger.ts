@@ -93,7 +93,7 @@ export async function spendCredits(
 export interface GrantInput {
   userId: string;
   amount: number;
-  type: 'PURCHASE' | 'ADMIN_GRANT' | 'WELCOME_GIFT';
+  type: 'PURCHASE' | 'ADMIN_GRANT' | 'WELCOME_GIFT' | 'REFERRAL_CONVERSION';
   action: string;
   relatedOrderId?: string;
 }

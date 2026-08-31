@@ -187,6 +187,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       verificationStatus: 'VERIFIED',
       verifiedAt: new Date(),
     } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'aff_1', role: 'AFFILIATE' } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
     prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
 
@@ -218,6 +219,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       ...profile,
       verificationStatus: 'VERIFIED',
     } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'aff_1', role: 'AFFILIATE' } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
     prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
 
@@ -262,6 +264,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       ...profile,
       verificationStatus: 'VERIFIED',
     } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'aff_1', role: 'AFFILIATE' } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce({ id: 'already_exists' } as never);
 
     const res = await POST(makePost('p_dup', { action: 'APPROVE' }), ctxWith('p_dup'));
@@ -285,6 +288,7 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       ...profile,
       verificationStatus: 'VERIFIED',
     } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'aff_1', role: 'AFFILIATE' } as never);
     prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
     prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 0 } as never);
 
@@ -295,5 +299,104 @@ describe('/api/admin/verification-queue/[id]/process', () => {
     expect(prismaMock.affiliateEarning.createMany).toHaveBeenCalledWith(
       expect.objectContaining({ skipDuplicates: true }),
     );
+  });
+
+  describe('peer referral points (non-AFFILIATE referrer)', () => {
+    it('awards 10 points and does not convert when under the 100-point threshold', async () => {
+      const profile = seedProfile({ id: 'p_points_1', referredByAffiliateId: 'ref_1' });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_1', role: 'USER' } as never);
+      prismaMock.referralBonus.count.mockResolvedValueOnce(3);
+      prismaMock.referralBonus.createMany.mockResolvedValueOnce({ count: 1 } as never);
+      prismaMock.user.update.mockResolvedValueOnce({ referralPoints: 30 } as never);
+
+      const res = await POST(makePost('p_points_1', { action: 'APPROVE' }), ctxWith('p_points_1'));
+      expect(res.status).toBe(200);
+      expect(prismaMock.referralBonus.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [{ referrerId: 'ref_1', referredUserId: 'user_1', points: 10 }],
+          skipDuplicates: true,
+        }),
+      );
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'ref_1' },
+        data: { referralPoints: { increment: 10 } },
+        select: { referralPoints: true },
+      });
+      // Under 100 points (30) — no conversion, so no second user.update and
+      // no credit transaction.
+      expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.creditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('auto-converts to credits when the 100-point threshold is crossed', async () => {
+      const profile = seedProfile({ id: 'p_points_2', referredByAffiliateId: 'ref_2' });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_2', role: 'USER' } as never);
+      prismaMock.referralBonus.count.mockResolvedValueOnce(0);
+      prismaMock.referralBonus.createMany.mockResolvedValueOnce({ count: 1 } as never);
+      // Balance was 95, +10 crosses to 105 — 1 credit granted, remainder 5.
+      prismaMock.user.update
+        .mockResolvedValueOnce({ referralPoints: 105 } as never) // increment
+        .mockResolvedValueOnce({ referralPoints: 5 } as never) // remainder write
+        .mockResolvedValueOnce({ creditBalance: 6 } as never); // grantCredits' own update
+      prismaMock.creditTransaction.create.mockResolvedValueOnce({} as never);
+
+      const res = await POST(makePost('p_points_2', { action: 'APPROVE' }), ctxWith('p_points_2'));
+      expect(res.status).toBe(200);
+      expect(prismaMock.user.update).toHaveBeenNthCalledWith(2, {
+        where: { id: 'ref_2' },
+        data: { referralPoints: 5 },
+      });
+      expect(prismaMock.creditTransaction.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'ref_2',
+          type: 'REFERRAL_CONVERSION',
+          amount: 1,
+          action: 'referral_points_conversion',
+          relatedOrderId: null,
+        },
+      });
+    });
+
+    it('awards nothing once the referrer already has 10 bonuses this month', async () => {
+      const profile = seedProfile({ id: 'p_points_3', referredByAffiliateId: 'ref_3' });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_3', role: 'USER' } as never);
+      prismaMock.referralBonus.count.mockResolvedValueOnce(10);
+
+      const res = await POST(makePost('p_points_3', { action: 'APPROVE' }), ctxWith('p_points_3'));
+      expect(res.status).toBe(200);
+      expect(prismaMock.referralBonus.createMany).not.toHaveBeenCalled();
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('never touches the points path for an AFFILIATE-role referrer (mutual exclusivity)', async () => {
+      const profile = seedProfile({ id: 'p_points_4', referredByAffiliateId: 'aff_1' });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'aff_1', role: 'AFFILIATE' } as never);
+      prismaMock.affiliateEarning.findFirst.mockResolvedValueOnce(null);
+      prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
+
+      await POST(makePost('p_points_4', { action: 'APPROVE' }), ctxWith('p_points_4'));
+      expect(prismaMock.referralBonus.count).not.toHaveBeenCalled();
+      expect(prismaMock.referralBonus.createMany).not.toHaveBeenCalled();
+    });
   });
 });
