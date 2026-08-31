@@ -23,6 +23,7 @@ import { hashPassword, generateVerificationCode } from '@/lib/server/auth';
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
+import { verifyTurnstileToken } from '@/lib/server/auth/turnstile';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { drainOutboxNow } from '@/lib/server/outbox/drain-now';
 import { grantCredits, WELCOME_GIFT_CREDITS } from '@/lib/server/credits/ledger';
@@ -38,6 +39,10 @@ const Body = z.object({
   // normalized to uppercase before lookup since generateUniqueAffiliateCode
   // only ever produces uppercase codes.
   promoCode: z.string().trim().optional(),
+  // Cloudflare Turnstile widget token. Optional in the schema so the field is
+  // a no-op when Turnstile is not configured; verifyTurnstileToken() decides
+  // whether it's actually required (it is, iff TURNSTILE_SECRET_KEY is set).
+  turnstileToken: z.string().optional(),
 });
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
@@ -70,7 +75,28 @@ export async function POST(req: NextRequest): Promise<Response> {
       res.headers.set('x-request-id', ctx.requestId);
       return res;
     }
-    const { email, password, promoCode } = parsed.data;
+    const { email, password, promoCode, turnstileToken } = parsed.data;
+
+    // 1b. Anti-bot check (Cloudflare Turnstile). No-op unless TURNSTILE_SECRET_KEY
+    //     is set. Runs before any DB work so bot traffic is rejected cheaply.
+    //     Email-independent, so it doesn't affect the enumeration-resistance of
+    //     the new-user / existing-user branches below.
+    const captcha = await verifyTurnstileToken(
+      turnstileToken,
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    );
+    if (!captcha.ok) {
+      log.warn('signup blocked by turnstile', { reason: captcha.reason });
+      const res = NextResponse.json(
+        {
+          error: 'CAPTCHA_FAILED',
+          message: 'Vérification anti-robot échouée. Recharge la page et réessaie.',
+        },
+        { status: 400 },
+      );
+      res.headers.set('x-request-id', ctx.requestId);
+      return res;
+    }
 
     // 2. Password policy gates BEFORE looking up user (D-22 — keep the no-user
     //    and existing-user branches symmetric below).
@@ -133,17 +159,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     const code = generateVerificationCode();
     const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
 
-    // Resolve the referring affiliate BEFORE the transaction — a bad/unknown
+    // Resolve the referring user BEFORE the transaction — a bad/unknown
     // code must NEVER block or error signup, so this is a plain best-effort
-    // lookup, not a guard. Only an AFFILIATE-role account can refer.
+    // lookup, not a guard. Any account with an affiliateCode can refer
+    // (2026-08-31 — previously AFFILIATE-role only). What the referrer
+    // earns for it depends on their role, decided later at verification
+    // time — see POST /api/admin/verification-queue/[id]/process.
     let referredByAffiliateId: string | undefined;
     if (promoCode) {
-      const affiliate = await prisma.user.findUnique({
+      const referrer = await prisma.user.findUnique({
         where: { affiliateCode: promoCode.toUpperCase() },
-        select: { id: true, role: true },
+        select: { id: true },
       });
-      if (affiliate && affiliate.role === 'AFFILIATE') {
-        referredByAffiliateId = affiliate.id;
+      if (referrer) {
+        referredByAffiliateId = referrer.id;
       }
     }
 

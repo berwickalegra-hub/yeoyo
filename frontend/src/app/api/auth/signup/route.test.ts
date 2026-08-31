@@ -24,10 +24,16 @@ vi.mock('@/lib/server/auth/dummy-bcrypt', () => ({
 vi.mock('@/lib/server/auth/hibp', () => ({
   isPwned: vi.fn().mockResolvedValue(false),
 }));
+// Turnstile is inert in the test env (no TURNSTILE_SECRET_KEY) — mock it so the
+// default is an explicit pass and one test can force a rejection.
+vi.mock('@/lib/server/auth/turnstile', () => ({
+  verifyTurnstileToken: vi.fn().mockResolvedValue({ ok: true }),
+}));
 
 import { POST } from './route';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { isPwned } from '@/lib/server/auth/hibp';
+import { verifyTurnstileToken } from '@/lib/server/auth/turnstile';
 import { enqueueOutbox } from '@/lib/server/outbox';
 
 function makeReq(body: unknown): NextRequest {
@@ -179,6 +185,36 @@ describe('POST /api/auth/signup', () => {
     }
   });
 
+  it('rejects with CAPTCHA_FAILED before any DB work when Turnstile says no', async () => {
+    vi.mocked(verifyTurnstileToken).mockResolvedValueOnce({ ok: false, reason: 'invalid-input' });
+    const res = await POST(
+      makeReq({ email: 'bot@example.com', password: 'a-strong-passphrase', turnstileToken: 'x' }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('CAPTCHA_FAILED');
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it('forwards the turnstile token from the request body to verifyTurnstileToken', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'u-ts' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
+    prismaMock.creditTransaction.create.mockResolvedValue({} as never);
+
+    const res = await POST(
+      makeReq({
+        email: 'ok@example.com',
+        password: 'a-strong-passphrase',
+        turnstileToken: 'tok-123',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(vi.mocked(verifyTurnstileToken).mock.calls[0]?.[0]).toBe('tok-123');
+  });
+
   it("source exports runtime = 'nodejs' (Phase 0 guard)", () => {
     const src = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
     expect(src).toMatch(/export\s+const\s+runtime\s*=\s*['"]nodejs['"]/);
@@ -234,10 +270,10 @@ describe('POST /api/auth/signup — promoCode', () => {
     );
   });
 
-  it('ignores a code that resolves to a non-AFFILIATE user', async () => {
+  it('sets referredByAffiliateId when promoCode matches a regular (non-AFFILIATE) user', async () => {
     prismaMock.user.findUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'someone', role: 'USER' } as never);
+      .mockResolvedValueOnce({ id: 'someone' } as never);
     prismaMock.user.create.mockResolvedValue({ id: 'new_user_3' } as never);
     prismaMock.verificationCode.create.mockResolvedValue({} as never);
     prismaMock.user.update.mockResolvedValue({ creditBalance: 5 } as never);
@@ -247,13 +283,13 @@ describe('POST /api/auth/signup — promoCode', () => {
       makeReq({
         email: 'noref2@test.local',
         password: 'a-strong-enough-password',
-        promoCode: 'NOTANAFF',
+        promoCode: 'REGULARUSER',
       }),
     );
     expect(res.status).toBe(201);
     expect(prismaMock.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.not.objectContaining({ referredByAffiliateId: expect.anything() }),
+        data: expect.objectContaining({ referredByAffiliateId: 'someone' }),
       }),
     );
   });
