@@ -4,6 +4,11 @@
 // as the discovery routes (blocked either-way or non-public/incomplete
 // profiles 404 rather than leaking existence) plus `liked`, so the detail
 // screen can render "déjà aimé" instead of a raw duplicate-like error.
+//
+// 2026-08-31 (explicit user ask): also returns `incomingRequestId` — the id
+// of a PENDING contact request this person has already sent to the viewer —
+// so the detail screen can show "Accepter la demande" instead of "Demander"
+// when the viewer stumbles onto the profile of someone who already asked.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -48,8 +53,12 @@ export async function GET(
       );
     }
 
-    const [liked, favorited] = isSelf
-      ? [false, false]
+    const [liked, favorited, incomingRequest]: [
+      boolean,
+      boolean,
+      { id: string; status: string } | null,
+    ] = isSelf
+      ? [false, false, null]
       : await Promise.all([
           prisma.like
             .findUnique({
@@ -63,7 +72,18 @@ export async function GET(
               select: { id: true },
             })
             .then((row) => !!row),
+          prisma.contactRequest.findUnique({
+            where: { requesterId_targetId: { requesterId: userId, targetId: auth.user.sub } },
+            select: { id: true, status: true },
+          }),
         ]);
+
+    // Only a still-open request is actionable from the profile screen.
+    const incomingRequestId =
+      incomingRequest &&
+      (incomingRequest.status === 'PENDING' || incomingRequest.status === 'VIEWED')
+        ? incomingRequest.id
+        : null;
 
     // Best-effort: powers the "Visiteurs" screen. Never blocks the response
     // — a failed write here shouldn't turn a profile view into an error page.
@@ -80,6 +100,7 @@ export async function GET(
         profile: toProfileCard(profile),
         liked,
         favorited,
+        incomingRequestId,
         isSelf,
       },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

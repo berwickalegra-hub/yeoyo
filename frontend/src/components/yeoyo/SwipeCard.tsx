@@ -90,6 +90,7 @@ export function SwipeCard({
   onDismiss,
   onLike,
   onFlash,
+  onAdvance,
   onFavorite,
   favoriteBusy,
   busy,
@@ -99,8 +100,18 @@ export function SwipeCard({
 }: {
   profile: ProfileCard;
   onDismiss: (userId: string) => void;
-  onLike: (userId: string) => void;
-  onFlash: (userId: string, message: string) => void;
+  // 2026-08-31 (explicit user report — the card slid away the instant
+  // "Demander" was tapped, then the "Demande envoyée" confirmation landed
+  // late, on top of the NEXT profile): `onLike`/`onFlash` now do the
+  // network work FIRST and resolve to `true` only on success. The card
+  // stays put (button spinner) until then; on success it flies off and
+  // `onAdvance()` moves the deck on, on failure it just stays.
+  onLike: (userId: string) => Promise<boolean>;
+  onFlash: (userId: string, message: string) => Promise<boolean>;
+  /** Advance the deck to the next profile — called once the slide-off
+   * finishes after a successful "Demander" / flash. (Passing a profile
+   * advances through `onDismiss` instead, since it has no network step.) */
+  onAdvance: () => void;
   onFavorite?: (userId: string) => void;
   favoriteBusy?: boolean;
   busy?: boolean;
@@ -145,6 +156,30 @@ export function SwipeCard({
     setTimeout(after, EXIT_DURATION_MS);
   }
 
+  // "Demander" / swipe-right: run the contact request FIRST (parent shows
+  // the button spinner via `busy` and the centre-screen confirmation), then
+  // fly the card off and advance only if it actually went through.
+  async function commitLike() {
+    if (busy || exiting || liked) return;
+    const ok = await onLike(profile.userId);
+    if (ok) flyOff(1, onAdvance);
+    else setDragX(0);
+  }
+
+  async function commitFlash(message: string) {
+    if (busy || exiting || liked) return;
+    const ok = await onFlash(profile.userId, message);
+    if (ok) flyOff(1, onAdvance);
+    else setDragX(0);
+  }
+
+  // "Passer" has no network step — fly off immediately; `onDismiss`
+  // advances the deck itself.
+  function commitPass() {
+    if (busy || exiting) return;
+    flyOff(-1, () => onDismiss(profile.userId));
+  }
+
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (busy || exiting) return;
     pointerIdRef.current = e.pointerId;
@@ -162,9 +197,12 @@ export function SwipeCard({
     pointerIdRef.current = null;
     setDragging(false);
     if (dragX > SWIPE_THRESHOLD) {
-      flyOff(1, () => onLike(profile.userId));
+      // Snap back to rest while the request is in flight — the card only
+      // leaves once `commitLike` confirms it succeeded.
+      setDragX(0);
+      void commitLike();
     } else if (dragX < -SWIPE_THRESHOLD) {
-      flyOff(-1, () => onDismiss(profile.userId));
+      commitPass();
     } else if (Math.abs(dragX) < CLICK_THRESHOLD) {
       setShowLightbox(true);
       setDragX(0);
@@ -374,7 +412,7 @@ export function SwipeCard({
           balance={creditBalance}
           onSend={(message) => {
             setShowFlashModal(false);
-            flyOff(1, () => onFlash(profile.userId, message));
+            void commitFlash(message);
           }}
         />
       </div>
@@ -412,7 +450,7 @@ export function SwipeCard({
       <>
         <button
           type="button"
-          onClick={() => flyOff(-1, () => onDismiss(profile.userId))}
+          onClick={commitPass}
           disabled={busy || exiting}
           aria-label="Passer ce profil"
           className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-red-200 bg-red-50 shadow-md transition-transform active:scale-95 disabled:opacity-50"
@@ -430,7 +468,7 @@ export function SwipeCard({
         </button>
         <button
           type="button"
-          onClick={() => flyOff(1, () => onLike(profile.userId))}
+          onClick={() => void commitLike()}
           disabled={busy || liked || exiting}
           aria-label={`Demander — ${FREE_DAILY_CONTACT_REQUEST_LIMIT} demandes gratuites par jour`}
           className={`btn-success-flash relative flex h-14 flex-shrink-0 items-center gap-2 rounded-full px-6 font-body text-sm font-bold shadow-md shadow-secondary/25 transition-colors ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}

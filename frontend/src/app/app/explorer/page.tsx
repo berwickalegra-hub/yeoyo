@@ -243,7 +243,11 @@ export default function ExplorerPage() {
     advance();
   }
 
-  async function onLike(targetUserId: string) {
+  // Returns true only when the request actually went through — SwipeCard
+  // waits for that before playing the slide-off + advancing, so the
+  // "Demande envoyée" confirmation never lands on the next profile
+  // (2026-08-31, explicit user report).
+  async function onLike(targetUserId: string): Promise<boolean> {
     setBusyUserId(targetUserId);
     try {
       await api('/api/likes', { method: 'POST', body: { targetUserId } });
@@ -253,15 +257,16 @@ export default function ExplorerPage() {
         title: 'Demande envoyée !',
         subtitle: 'On te préviendra si elle ou il accepte.',
       });
-      advance();
+      return true;
     } catch (err) {
       handleLikeError(err);
+      return false;
     } finally {
       setBusyUserId(null);
     }
   }
 
-  async function onFlash(targetUserId: string, message: string) {
+  async function onFlash(targetUserId: string, message: string): Promise<boolean> {
     setBusyUserId(targetUserId);
     try {
       await api('/api/likes', {
@@ -275,9 +280,10 @@ export default function ExplorerPage() {
         subtitle: 'Ton message a été transmis avec ta demande.',
       });
       void refreshCredits();
-      advance();
+      return true;
     } catch (err) {
       handleLikeError(err);
+      return false;
     } finally {
       setBusyUserId(null);
     }
@@ -425,6 +431,7 @@ export default function ExplorerPage() {
                   onDismiss={onDismiss}
                   onLike={onLike}
                   onFlash={onFlash}
+                  onAdvance={advance}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}
@@ -680,6 +687,7 @@ export default function ExplorerPage() {
                   onDismiss={onDismiss}
                   onLike={onLike}
                   onFlash={onFlash}
+                  onAdvance={advance}
                   onFavorite={onFavorite}
                   favoriteBusy={favoritingUserId === current.userId}
                   busy={busyUserId === current.userId}

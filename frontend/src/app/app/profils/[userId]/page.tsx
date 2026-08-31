@@ -63,6 +63,10 @@ export default function ProfileDetailPage() {
   const [profile, setProfile] = useState<ProfileCard | null>(null);
   const [liked, setLiked] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  // Set when THIS person has already sent the viewer a still-open contact
+  // request — the primary button then reads "Accepter la demande" and
+  // accepts it directly instead of sending a fresh one (2026-08-31 ask).
+  const [incomingRequestId, setIncomingRequestId] = useState<string | null>(null);
   const popping = useLikePop(liked);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -85,12 +89,16 @@ export default function ProfileDetailPage() {
     setLoading(true);
     setNotFound(false);
     try {
-      const res = await api<{ profile: ProfileCard; liked: boolean; favorited: boolean }>(
-        `/api/profiles/${params.userId}`,
-      );
+      const res = await api<{
+        profile: ProfileCard;
+        liked: boolean;
+        favorited: boolean;
+        incomingRequestId: string | null;
+      }>(`/api/profiles/${params.userId}`);
       setProfile(res.profile);
       setLiked(res.liked);
       setFavorited(res.favorited);
+      setIncomingRequestId(res.incomingRequestId);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setNotFound(true);
@@ -133,6 +141,41 @@ export default function ProfileDetailPage() {
           },
           dismissLabel: 'Fermer',
         });
+      } else {
+        toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // This person already asked us — accept their request straight from their
+  // profile (creates the conversation server-side) and jump into the chat.
+  async function onAcceptRequest() {
+    if (!incomingRequestId || busy) return;
+    setBusy(true);
+    try {
+      const res = await api<{ status: string; conversationId: string | null }>(
+        `/api/contact-requests/${incomingRequestId}/respond`,
+        { method: 'POST', body: { action: 'ACCEPT' } },
+      );
+      setIncomingRequestId(null);
+      setLiked(true);
+      if (res.conversationId) {
+        router.push(`/app/messages/${res.conversationId}`);
+      } else {
+        setOverlay({
+          icon: 'heart',
+          title: 'Demande acceptée !',
+          subtitle: 'Vous pouvez discuter.',
+        });
+      }
+    } catch (err) {
+      // A stale button (request withdrawn / already handled elsewhere) — just
+      // refresh the profile so the right button shows.
+      if (err instanceof ApiError && (err.status === 404 || err.status === 409)) {
+        toast('Cette demande n’est plus disponible.', 'error');
+        void load();
       } else {
         toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
       }
@@ -312,26 +355,44 @@ export default function ProfileDetailPage() {
                       <Icon name="star" size={18} fill={favorited ? 'currentColor' : 'none'} />
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void onLike()}
-                    disabled={busy || liked}
-                    className={`btn-success-flash flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
-                  >
-                    {busy ? (
-                      <Icon name="refresh-cw" size={17} className="animate-spin" />
-                    ) : (
-                      <Icon
-                        name="heart"
-                        size={17}
-                        fill={liked ? 'currentColor' : 'none'}
-                        className={popping ? 'animate-heart-pop' : ''}
-                      />
-                    )}
-                    <span className="font-body text-sm font-semibold">
-                      {liked ? 'Envoyée' : 'Demander'}
-                    </span>
-                  </button>
+                  {incomingRequestId ? (
+                    // This person already asked us — one prominent button that
+                    // accepts their request and opens the conversation.
+                    <button
+                      type="button"
+                      onClick={() => void onAcceptRequest()}
+                      disabled={busy}
+                      className={`btn-success-flash flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 text-primary-foreground ${busy ? 'opacity-50' : ''}`}
+                    >
+                      {busy ? (
+                        <Icon name="refresh-cw" size={17} className="animate-spin" />
+                      ) : (
+                        <Icon name="heart" size={17} fill="currentColor" />
+                      )}
+                      <span className="font-body text-sm font-semibold">Accepter la demande</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void onLike()}
+                      disabled={busy || liked}
+                      className={`btn-success-flash flex h-12 flex-1 items-center justify-center gap-2 rounded-full px-5 ${busy ? 'opacity-50' : ''} ${liked ? 'bg-secondary/70 text-secondary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+                    >
+                      {busy ? (
+                        <Icon name="refresh-cw" size={17} className="animate-spin" />
+                      ) : (
+                        <Icon
+                          name="heart"
+                          size={17}
+                          fill={liked ? 'currentColor' : 'none'}
+                          className={popping ? 'animate-heart-pop' : ''}
+                        />
+                      )}
+                      <span className="font-body text-sm font-semibold">
+                        {liked ? 'Envoyée' : 'Demander'}
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 <ProfileInfoSections
