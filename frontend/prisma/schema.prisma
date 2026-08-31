@@ -104,6 +104,19 @@ model User {
   affiliateEarnings AffiliateEarning[] @relation("AffiliateEarnings")
   earningsGenerated AffiliateEarning[] @relation("ReferredUserEarnings")
 
+  // Peer-to-peer referral program (2026-08-31) — every regular user can
+  // refer other regular users through the same affiliateCode/promoCode
+  // mechanism as the AFFILIATE cash program above, but earns points
+  // instead of FCFA. Incremented by ReferralBonus rows (10 points per
+  // verified referral) and drained automatically into
+  // CreditTransaction(type=REFERRAL_CONVERSION) every time it crosses a
+  // 100-point threshold. See POST /api/admin/verification-queue/[id]/process
+  // and lib/server/referrals/points.ts for the constants.
+  referralPoints Int @default(0)
+
+  referralBonusesGiven    ReferralBonus[] @relation("ReferralBonusesGiven")
+  referralBonusesReceived ReferralBonus[] @relation("ReferralBonusesReceived")
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -204,6 +217,27 @@ model AffiliateEarning {
 
   @@index([affiliateId, paidAt])
   @@index([referredUserId, type])
+}
+
+// One row per successfully rewarded peer-to-peer referral (2026-08-31).
+// referredUserId is unique — a given referred account can trigger this
+// bonus at most once, ever, enforced at the database level (a full unique
+// constraint, not a partial index like AffiliateEarning's, since this
+// table only ever holds this one kind of row). Also the source of truth
+// for the monthly cap: count rows for a referrer created since the start
+// of the current calendar month. Rows are inserted by
+// POST /api/admin/verification-queue/[id]/process; point/cap constants
+// live in lib/server/referrals/points.ts.
+model ReferralBonus {
+  id             String   @id @default(cuid())
+  referrerId     String
+  referrer       User     @relation("ReferralBonusesGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId String   @unique
+  referredUser   User     @relation("ReferralBonusesReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  points         Int
+  createdAt      DateTime @default(now())
+
+  @@index([referrerId, createdAt])
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -387,13 +421,29 @@ model Profile {
   // Flexible discovery filters — { ageMin, ageMax, commune, intent: [...] }.
   // JSON like NotificationPreferences.prefs, to avoid a migration per new filter.
   searchPrefs           Json?
-  // Set by an admin via the Admin Panel's "Vérification IA" queue for now
-  // (no AI vendor wired yet — see .planning/banani/IMPLEMENTATION-PLAN.md §3.4).
-  // verificationStatus drives the queue itself (PENDING = awaiting review);
-  // verifiedAt is only set together with VERIFIED, kept for its existing
-  // consumer (profile/card.ts's `verified: !!p.verifiedAt`).
-  verifiedAt            DateTime?
-  verificationStatus    String    @default("PENDING") // PENDING | VERIFIED | REJECTED
+  // Identity verification (2026-08-31 — self-service flow added, see
+  // /app/verification + /api/profile/verification). Lifecycle:
+  //   UNVERIFIED  default — nothing submitted
+  //   PENDING     the user uploaded a code-in-hand selfie, awaiting an admin
+  //   VERIFIED    admin approved — sets verifiedAt, drives the public badge
+  //               (profile/card.ts's `verified: !!p.verifiedAt`)
+  //   REJECTED    admin refused — verificationRejectionReason holds why; the
+  //               user can redo (a new code is issued, status → PENDING)
+  // The admin queue is `verificationStatus = 'PENDING'` — genuinely-submitted
+  // profiles only, oldest verificationSubmittedAt first.
+  verifiedAt                  DateTime?
+  verificationStatus          String    @default("UNVERIFIED")
+  // Cloudinary key of the code-in-hand selfie the user submitted. Cleared
+  // once the admin resolves the request (approve or reject).
+  verificationSelfieKey       String?
+  // Short code (e.g. "YO-4821") we ask the user to write on paper and hold
+  // in the selfie — proves the photo is fresh and really them. Regenerated
+  // on each new attempt; cleared once resolved.
+  verificationCode            String?
+  verificationSubmittedAt     DateTime?
+  // Admin's free-text note on the last REJECT — shown to the user so they
+  // know what to fix before resubmitting.
+  verificationRejectionReason String?
   onboardingCompletedAt DateTime?
   // Set by POST /api/profile/boost. While in the future, the profile sorts
   // first in /api/profiles/explorer (tie-break only — gender/preference
@@ -750,7 +800,7 @@ model CreditTransaction {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type           String // PURCHASE | SPEND | ADMIN_GRANT | WELCOME_GIFT
+  type           String // PURCHASE | SPEND | ADMIN_GRANT | WELCOME_GIFT | REFERRAL_CONVERSION
   amount         Int // positive for PURCHASE/ADMIN_GRANT, negative for SPEND
   // e.g. "credit_pack:serieux", "view_visitors", "view_favorited_by",
   // "boost", "first_message", "admin_grant" — free-form action label,
