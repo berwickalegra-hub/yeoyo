@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
@@ -21,10 +21,17 @@ interface OrderRow {
 
 interface CreditTransactionRow {
   id: string;
-  type: 'PURCHASE' | 'SPEND' | 'ADMIN_GRANT' | 'WELCOME_GIFT';
+  type: 'PURCHASE' | 'SPEND' | 'ADMIN_GRANT' | 'WELCOME_GIFT' | 'REFERRAL_CONVERSION';
   amount: number;
   action: string;
   createdAt: string;
+}
+
+interface ReferralInfo {
+  affiliateCode: string;
+  referralPoints: number;
+  pointsPerCredit: number;
+  referralUrl: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -34,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   first_message: 'Premier message envoyé',
   admin_grant: 'Ajustement par YeOyo',
   welcome_gift: 'Cadeau de bienvenue',
+  referral_points_conversion: 'Points de parrainage convertis',
 };
 
 function creditActionLabel(action: string): string {
@@ -55,6 +63,23 @@ export default function PaiementPage() {
   const [creditTxLoaded, setCreditTxLoaded] = useState(false);
   const [creditTxCursor, setCreditTxCursor] = useState<string | null>(null);
   const [creditTxLoadingMore, setCreditTxLoadingMore] = useState(false);
+  const [referral, setReferral] = useState<ReferralInfo | null>(null);
+
+  useEffect(() => {
+    api<ReferralInfo>('/api/referral/me')
+      .then(setReferral)
+      .catch(() => undefined); // non-critical — section just stays hidden
+  }, []);
+
+  async function copyReferralLink() {
+    if (!referral) return;
+    try {
+      await navigator.clipboard.writeText(referral.referralUrl);
+      toast('Lien copié !', 'success');
+    } catch {
+      toast('Impossible de copier le lien', 'error');
+    }
+  }
 
   const loadCreditTx = useCallback(
     async (cursor?: string) => {
@@ -182,6 +207,38 @@ export default function PaiementPage() {
             </div>
           </details>
         </SettingsSection>
+
+        {referral && (
+          <SettingsSection
+            title="Parrainage"
+            description="Invite tes proches — chaque compte vérifié te rapporte des points, convertis automatiquement en crédits."
+          >
+            <SettingsRow label="Ton code" helper={referral.affiliateCode}>
+              <button
+                type="button"
+                onClick={() => void copyReferralLink()}
+                className="btn-premium rounded-lg px-4 py-2 font-body text-sm font-semibold"
+              >
+                Copier le lien
+              </button>
+            </SettingsRow>
+            <div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/30">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{
+                    width: `${Math.min(100, (referral.referralPoints / referral.pointsPerCredit) * 100)}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-2 font-body text-xs text-muted-foreground">
+                {referral.referralPoints}/{referral.pointsPerCredit} points — encore{' '}
+                {referral.pointsPerCredit - referral.referralPoints} points pour ton prochain
+                crédit.
+              </p>
+            </div>
+          </SettingsSection>
+        )}
       </div>
     </AppShell>
   );
