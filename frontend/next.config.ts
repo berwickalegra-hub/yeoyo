@@ -3,14 +3,47 @@ import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
 // Static security headers applied to every response.
-// Set via next.config.ts (not middleware.ts) so Vercel's edge can serve them
+// Set via next.config.ts (not proxy.ts) so Vercel's edge can serve them
 // from the CDN cache without invoking a function — zero per-request latency.
+const isDev = process.env.NODE_ENV !== 'production';
+
+// Content-Security-Policy — shipped in *Report-Only* mode first.
 //
-// CSP is intentionally NOT included here. App Router pages need a per-request
-// nonce (server-rendered) for inline scripts; ship CSP via middleware.ts when
-// the first frontend page lands. For now, the API-only surface doesn't render
-// HTML and doesn't need CSP.
+// Report-Only means the browser NEVER blocks anything: it only posts a console
+// warning (and a report, if report-uri is set) when a resource would have been
+// refused. That lets us watch real traffic for a few days, confirm nothing
+// legitimate trips it, then promote this to the enforcing `Content-Security-Policy`
+// header by renaming the key below — a one-line change.
+//
+// No nonce: a nonce-based strict CSP forces every page into dynamic rendering
+// (no static optimization, no CDN caching, higher cost) which is a bad trade for
+// this app right now. `'unsafe-inline'` on script/style is the price of keeping
+// static rendering; the policy still blocks injected <script src=…> from foreign
+// origins, inline event handlers via strict-dynamic-free script-src, plugins
+// (object-src 'none'), <base> hijacking, and cross-origin form posts.
+const csp = [
+  "default-src 'self'",
+  // challenges.cloudflare.com = Cloudflare Turnstile widget script + iframe.
+  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://res.cloudinary.com https://*.googleusercontent.com https://storage.googleapis.com https://images.pexels.com",
+  "font-src 'self' data:",
+  // Cloudinary (direct upload), Ably (realtime + REST + fallback hosts), Sentry ingest.
+  `connect-src 'self' https://api.cloudinary.com https://*.ably.io https://*.ably-realtime.com wss://*.ably.io wss://*.ably-realtime.com https://*.sentry.io${
+    isDev ? ' ws://localhost:* http://localhost:*' : ''
+  }`,
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "media-src 'self' https://res.cloudinary.com",
+  "frame-src 'self' https://challenges.cloudflare.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 const securityHeaders = [
+  { key: 'Content-Security-Policy-Report-Only', value: csp },
   {
     key: 'Strict-Transport-Security',
     value: 'max-age=63072000; includeSubDomains; preload',

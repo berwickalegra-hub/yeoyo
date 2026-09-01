@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
+import { log } from '@/lib/server/observability/log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,11 +33,11 @@ export async function GET() {
       checks.database = { ok: true, latencyMs: Date.now() - t0 };
     } catch (err) {
       allOk = false;
-      checks.database = {
-        ok: false,
-        latencyMs: Date.now() - t0,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      // Generic client-facing string only — the real error (which can carry
+      // the DB host / connection string) goes to the server log. /api/readyz
+      // is unauthenticated, so it must not double as a recon endpoint.
+      log.error('readyz: database probe failed', { err });
+      checks.database = { ok: false, latencyMs: Date.now() - t0, error: 'unreachable' };
     }
   }
 
@@ -47,11 +48,8 @@ export async function GET() {
       checks.redis = { ok: true, latencyMs: Date.now() - t0 };
     } catch (err) {
       allOk = false;
-      checks.redis = {
-        ok: false,
-        latencyMs: Date.now() - t0,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      log.error('readyz: redis probe failed', { err });
+      checks.redis = { ok: false, latencyMs: Date.now() - t0, error: 'unreachable' };
     }
   }
 

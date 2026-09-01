@@ -28,6 +28,7 @@ import { Icon } from '@/components/ui/Icon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { GoogleIcon } from '@/components/ui/GoogleIcon';
 import { PasswordInput } from '@/components/yeoyo/PasswordInput';
+import { TurnstileWidget, isTurnstileEnabled } from '@/components/yeoyo/TurnstileWidget';
 import { BrandMark } from '@/components/yeoyo/BrandMark';
 import { DateOfBirthFields } from '@/components/yeoyo/DateOfBirthFields';
 import { COUNTRIES, KINSHASA_COMMUNES, MAJOR_CITIES_BY_COUNTRY } from '@/lib/yeoyo/constants';
@@ -311,6 +312,11 @@ export default function OnboardingPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordConfirmError, setPasswordConfirmError] = useState<string | null>(null);
   const [termsError, setTermsError] = useState<string | null>(null);
+  // Cloudflare Turnstile anti-bot token for the email-signup form. Stays null
+  // until the widget solves; `turnstileReset` is bumped to force a fresh
+  // challenge after a failed submit (tokens are single-use).
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileReset, setTurnstileReset] = useState(0);
   // Names of the required profile-step fields the user still needs to fill.
   // The "Continuer" buttons no longer just sit disabled+greyed (a beginner
   // couldn't tell WHICH field was blocking) — they stay clickable and, on a
@@ -469,6 +475,10 @@ export default function OnboardingPage() {
       setTermsError('Merci d’accepter les conditions pour continuer.');
       hasError = true;
     }
+    if (isTurnstileEnabled() && !turnstileToken) {
+      setError('Merci de patienter une seconde, la vérification anti-robot se termine.');
+      hasError = true;
+    }
     if (hasError) return;
 
     setSubmitting(true);
@@ -479,10 +489,15 @@ export default function OnboardingPage() {
           email: data.email,
           password,
           ...(data.promoCode.trim() ? { promoCode: data.promoCode.trim() } : {}),
+          ...(turnstileToken ? { turnstileToken } : {}),
         },
       });
       setStep('verify');
     } catch (err) {
+      // The Turnstile token just got spent (or rejected) — force a fresh one
+      // so the next attempt isn't guaranteed to fail on a stale token.
+      setTurnstileToken(null);
+      setTurnstileReset((n) => n + 1);
       if (err instanceof ApiError) {
         // Signup is enumeration-resistant by design (POST /api/auth/signup
         // always returns 201 whether the email is new or already taken) —
@@ -824,6 +839,15 @@ export default function OnboardingPage() {
                 className="rounded-lg border border-border bg-surface px-4 py-3 font-body text-sm uppercase text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </label>
+
+            {/* Anti-bot check — renders nothing unless NEXT_PUBLIC_TURNSTILE_SITE_KEY
+                is set. Managed mode is usually invisible / a one-tap checkbox. */}
+            <TurnstileWidget
+              onToken={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+              resetSignal={turnstileReset}
+              className="min-h-[65px]"
+            />
 
             {error && (
               <p role="alert" className="font-body text-sm text-red-500">

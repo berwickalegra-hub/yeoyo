@@ -1,0 +1,36 @@
+# Automated dependency-update PRs.
+# GitHub opens a PR when a dependency has a newer version; CI (.github/workflows/ci.yml)
+# runs format + lint + typecheck + test + build + `pnpm audit --prod --audit-level=high`
+# on each one, so a bad bump is caught before merge.
+version: 2
+updates:
+  # npm / pnpm workspace — the lockfile lives at the repo root.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR per week for all non-breaking dev-tooling bumps (eslint, vitest,
+      # prettier, types, …) — keeps the noise down.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      # One PR for non-breaking production bumps.
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+    # Security advisories still get their own immediate PR regardless of grouping.
+
+  # Keep the GitHub Actions in ci.yml current (checkout, setup-node, pnpm, …).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
