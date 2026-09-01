@@ -290,6 +290,7 @@ function AccountMenu({ user }: { user: SidebarUser }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu du compte"
         aria-expanded={open}
+        data-tour="compte"
         className="flex items-center gap-1.5"
       >
         <UserAvatar
@@ -462,6 +463,7 @@ export function TopNav({
                 <Link
                   key={item.id}
                   href={item.href}
+                  data-tour={item.id}
                   className="flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium text-primary lg:px-4"
                 >
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary shadow-md shadow-primary/30">
@@ -480,6 +482,7 @@ export function TopNav({
               <Link
                 key={item.id}
                 href={item.href}
+                data-tour={item.id}
                 className={`relative flex flex-col items-center gap-0.5 rounded-md px-3 py-2 font-body text-xs font-medium lg:px-4 ${
                   isActive ? 'text-primary' : 'text-muted-foreground'
                 }`}

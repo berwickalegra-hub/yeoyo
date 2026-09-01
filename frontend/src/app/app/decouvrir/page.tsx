@@ -54,6 +54,8 @@ import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
+import { GuidedTour } from '@/components/yeoyo/GuidedTour';
+import { TOUR_STEPS, hasSeenTour, markTourSeen } from '@/lib/yeoyo/guided-tour';
 import { RecommendedProfileCard } from '@/components/yeoyo/RecommendedProfileCard';
 import { ProfileCardSkeleton } from '@/components/yeoyo/ProfileCardSkeleton';
 import { ProfilePhotoCover } from '@/components/yeoyo/ProfilePhotoCover';
@@ -73,6 +75,9 @@ interface MyProfile {
   religion: string | null;
   intent: string;
   bio: string | null;
+  qualities: string | null;
+  flaws: string | null;
+  interests: string[];
   maritalStatus: string | null;
   childrenCount: string | null;
   wantsChildren: string | null;
@@ -140,8 +145,15 @@ const TRUST_ITEMS = [
 // times within the same 12h window, changes automatically after.
 const QUOTE_ROTATION_HOURS = 12;
 
-const COMPLETENESS_FIELDS = [
+// The checklist behind the "Profil complété" % — kept in sync with the
+// red "À compléter" markers on /app/profil (2026-08-31 explicit user ask:
+// the nudge and the page should agree on what's missing). Photos, vision,
+// qualités, défauts and centres d'intérêt are the parts the user cares
+// about most; the rest are the softer onboarding-optional fields.
+const COMPLETENESS_TEXT_FIELDS = [
   'bio',
+  'qualities',
+  'flaws',
   'commune',
   'religion',
   'maritalStatus',
@@ -151,8 +163,13 @@ const COMPLETENESS_FIELDS = [
 ] as const;
 
 function completeness(p: MyProfile): number {
-  const done = COMPLETENESS_FIELDS.filter((f) => !!p[f]).length;
-  return Math.round((done / COMPLETENESS_FIELDS.length) * 100);
+  const checks = [
+    p.hasPhoto,
+    p.interests.length > 0,
+    ...COMPLETENESS_TEXT_FIELDS.map((f) => !!p[f]),
+  ];
+  const done = checks.filter(Boolean).length;
+  return Math.round((done / checks.length) * 100);
 }
 
 // Completion nudge is dismissible (explicit user ask, 2026-08-14 second
@@ -230,6 +247,18 @@ export default function DecouvrirPage() {
   const { install: installPwa } = usePwaInstall();
   const [pushBannerDismissed, setPushBannerDismissed] = useState(false);
   const pushBannerExit = useCardExit();
+  // First-visit guided tour — shown once (localStorage flag). Waits for the
+  // page to settle (not loading, profile complete) so the nav buttons it
+  // spotlights are actually on screen.
+  const [showTour, setShowTour] = useState(false);
+  useEffect(() => {
+    if (loading || needsOnboarding) return;
+    if (!hasSeenTour()) setShowTour(true);
+  }, [loading, needsOnboarding]);
+  const closeTour = useCallback(() => {
+    setShowTour(false);
+    markTourSeen();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -932,6 +961,8 @@ export default function DecouvrirPage() {
         onConfirm={activateBoost}
         confirming={boosting}
       />
+
+      {showTour && <GuidedTour steps={TOUR_STEPS} onClose={closeTour} />}
     </AppShell>
   );
 }

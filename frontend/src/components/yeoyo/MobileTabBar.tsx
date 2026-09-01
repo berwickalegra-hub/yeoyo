@@ -142,6 +142,7 @@ export function MobileTabBar({
             <Link
               key={item.id}
               href={item.href}
+              data-tour={item.id}
               className="relative flex flex-1 flex-col items-center justify-end gap-1 pb-2"
             >
               <span className="absolute -top-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/40">
@@ -160,6 +161,7 @@ export function MobileTabBar({
           <Link
             key={item.id}
             href={item.href}
+            data-tour={item.id}
             className={`relative flex flex-1 flex-col items-center justify-center gap-1 ${
               isActive ? 'text-primary' : 'text-muted-foreground'
             }`}
