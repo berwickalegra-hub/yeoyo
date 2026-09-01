@@ -309,7 +309,11 @@ describe('/api/admin/verification-queue/[id]/process', () => {
         ...profile,
         verificationStatus: 'VERIFIED',
       } as never);
-      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_1', role: 'USER' } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'ref_1',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as never);
       prismaMock.referralBonus.count.mockResolvedValueOnce(3);
       prismaMock.referralBonus.createMany.mockResolvedValueOnce({ count: 1 } as never);
       prismaMock.user.update.mockResolvedValueOnce({ referralPoints: 30 } as never);
@@ -340,7 +344,11 @@ describe('/api/admin/verification-queue/[id]/process', () => {
         ...profile,
         verificationStatus: 'VERIFIED',
       } as never);
-      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_2', role: 'USER' } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'ref_2',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as never);
       prismaMock.referralBonus.count.mockResolvedValueOnce(0);
       prismaMock.referralBonus.createMany.mockResolvedValueOnce({ count: 1 } as never);
       // Balance was 95, +10 crosses to 105 — 1 credit granted, remainder 5.
@@ -374,7 +382,11 @@ describe('/api/admin/verification-queue/[id]/process', () => {
         ...profile,
         verificationStatus: 'VERIFIED',
       } as never);
-      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'ref_3', role: 'USER' } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'ref_3',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as never);
       prismaMock.referralBonus.count.mockResolvedValueOnce(10);
 
       const res = await POST(makePost('p_points_3', { action: 'APPROVE' }), ctxWith('p_points_3'));
@@ -395,6 +407,48 @@ describe('/api/admin/verification-queue/[id]/process', () => {
       prismaMock.affiliateEarning.createMany.mockResolvedValueOnce({ count: 1 } as never);
 
       await POST(makePost('p_points_4', { action: 'APPROVE' }), ctxWith('p_points_4'));
+      expect(prismaMock.referralBonus.count).not.toHaveBeenCalled();
+      expect(prismaMock.referralBonus.createMany).not.toHaveBeenCalled();
+    });
+
+    it('awards nothing to a SUSPENDED referrer', async () => {
+      const profile = seedProfile({ id: 'p_points_5', referredByAffiliateId: 'ref_5' });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'ref_5',
+        role: 'USER',
+        status: 'SUSPENDED',
+      } as never);
+
+      const res = await POST(makePost('p_points_5', { action: 'APPROVE' }), ctxWith('p_points_5'));
+      expect(res.status).toBe(200);
+      expect(prismaMock.referralBonus.count).not.toHaveBeenCalled();
+      expect(prismaMock.referralBonus.createMany).not.toHaveBeenCalled();
+    });
+
+    it('awards nothing on a self-referral (referrer id equals the referred user id)', async () => {
+      const profile = seedProfile({
+        id: 'p_points_6',
+        userId: 'user_1',
+        referredByAffiliateId: 'user_1',
+      });
+      prismaMock.profile.findUnique.mockResolvedValueOnce(profile as never);
+      prismaMock.profile.update.mockResolvedValueOnce({
+        ...profile,
+        verificationStatus: 'VERIFIED',
+      } as never);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        id: 'user_1',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as never);
+
+      const res = await POST(makePost('p_points_6', { action: 'APPROVE' }), ctxWith('p_points_6'));
+      expect(res.status).toBe(200);
       expect(prismaMock.referralBonus.count).not.toHaveBeenCalled();
       expect(prismaMock.referralBonus.createMany).not.toHaveBeenCalled();
     });

@@ -61,6 +61,7 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       referredByAffiliateId: 'aff_1',
+      referredByAffiliate: { role: 'AFFILIATE' },
       profile: { gender: 'HOMME' },
     } as never);
     prismaMock.affiliateEarning.create.mockResolvedValueOnce({} as never);
@@ -124,6 +125,28 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     expect(prismaMock.affiliateEarning.create).not.toHaveBeenCalled();
   });
 
+  it('never inserts a commission when the referrer is not an AFFILIATE-role account', async () => {
+    seedSucceeded();
+    const order = seedOrder({
+      id: 'order_6',
+      userId: 'user_6',
+      status: 'PENDING',
+      providerChargeId: 'charge_6',
+      amount: 100000,
+      metadata: { packId: 'decouverte' },
+    });
+    prismaMock.order.findUnique.mockResolvedValueOnce(order as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      referredByAffiliateId: 'regular_user_1',
+      referredByAffiliate: { role: 'USER' },
+      profile: { gender: 'HOMME' },
+    } as never);
+
+    await reconcileChariowOrder(prismaMock, 'order_6');
+    expect(prismaMock.affiliateEarning.create).not.toHaveBeenCalled();
+  });
+
   it('never inserts a commission once the 30-day window has passed', async () => {
     seedSucceeded({ settledAt: new Date('2026-09-05T00:00:00.000Z') }); // 35 days after signup
     const order = seedOrder({
@@ -138,6 +161,7 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       referredByAffiliateId: 'aff_1',
+      referredByAffiliate: { role: 'AFFILIATE' },
       profile: { gender: 'HOMME' },
     } as never);
 
@@ -160,6 +184,7 @@ describe('reconcileChariowOrder — affiliate commission', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       referredByAffiliateId: 'aff_1',
+      referredByAffiliate: { role: 'AFFILIATE' },
       profile: { gender: 'HOMME' },
     } as never);
     prismaMock.affiliateEarning.create.mockResolvedValueOnce({} as never);

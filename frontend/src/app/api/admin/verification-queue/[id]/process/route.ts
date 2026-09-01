@@ -101,7 +101,7 @@ export async function POST(
       if (approve && profile.user.referredByAffiliateId) {
         const referrer = await tx.user.findUnique({
           where: { id: profile.user.referredByAffiliateId },
-          select: { id: true, role: true },
+          select: { id: true, role: true, status: true },
         });
 
         if (referrer?.role === 'AFFILIATE') {
@@ -135,7 +135,10 @@ export async function POST(
               skipDuplicates: true,
             });
           }
-        } else if (referrer) {
+          // A suspended referrer or a self-referral (attacker signs up
+          // twice with their own code) earns nothing — silent, not an
+          // error, same as hitting the monthly cap.
+        } else if (referrer && referrer.status === 'ACTIVE' && referrer.id !== profile.userId) {
           const monthStart = new Date(
             Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
           );

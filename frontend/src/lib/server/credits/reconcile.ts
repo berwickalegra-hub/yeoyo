@@ -159,17 +159,22 @@ export async function reconcileChariowOrder(
     // function body runs at most once per Order, so no separate guard is
     // needed here (unlike the verification bonus, which CAN legitimately
     // be re-attempted if a future flow resets verificationStatus).
+    // Gated on the referrer's role (2026-09-01) — referredByAffiliateId can
+    // now point at a regular user too (peer referral program), who must
+    // never earn cash commission.
     const referralUser = await tx.user.findUnique({
       where: { id: userId },
       select: {
         createdAt: true,
         referredByAffiliateId: true,
+        referredByAffiliate: { select: { role: true } },
         profile: { select: { gender: true } },
       },
     });
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
     if (
       referralUser?.referredByAffiliateId &&
+      referralUser.referredByAffiliate?.role === 'AFFILIATE' &&
       referralUser.profile?.gender === 'HOMME' &&
       paidAt.getTime() <= referralUser.createdAt.getTime() + THIRTY_DAYS_MS
     ) {
