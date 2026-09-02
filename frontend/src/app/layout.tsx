@@ -9,8 +9,9 @@ import { InstallPwaPrompt } from '@/components/yeoyo/InstallPwaPrompt';
 
 // Runs before paint (blocking, no `defer`/`async`) so a stored theme
 // preference from Paramètres → Apparence applies immediately instead of
-// flashing the default terracotta theme for a frame — ThemeProvider's own
+// flashing the default rose theme for a frame — ThemeProvider's own
 // effect only syncs React state to match, it doesn't re-apply this.
+// (The default theme's id is still 'terracotta' — see ThemeContext.tsx.)
 const THEME_INIT_SCRIPT = `
   try {
     var t = localStorage.getItem('yeoyo-theme');
@@ -24,8 +25,8 @@ const dmSans = DM_Sans({
   display: 'swap',
 });
 
-// Headings font for the terracotta/cream default theme (Banani "Rencontres
-// Sérieuses Congo" flow, 2026-08-13) — fonts aren't per-theme (a single
+// Headings font for the default theme (Banani "Rencontres Sérieuses Congo"
+// flow, 2026-08-13) — fonts aren't per-theme (a single
 // pairing applies across every color template, unchanged pattern since the
 // 2026-07-30 DM Sans swap), so this becomes the app-wide headings font.
 const ptSerif = PT_Serif({
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#c17a4e',
+  themeColor: '#d63c6d',
 };
 
 export default function RootLayout({

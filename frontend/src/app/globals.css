@@ -1,9 +1,11 @@
 @import 'tailwindcss';
 
-/* YeOyo design tokens — default is the "terracotta" template (Banani
-   "Rencontres Sérieuses Congo" flow, `l_YkRVFXx5e9`), promoted to the
-   app-wide default per explicit user request 2026-08-13. The former default
-   ("light-blue", flow `alMLvZczLcpt`) is preserved as a selectable alternate
+/* YeOyo design tokens — default is the "rose" romantic palette (2026-09-02,
+   explicit user request: the previous "terracotta"/brown default didn't read
+   as a dating site; primary is now a warm rose, backgrounds a faint blush).
+   Kept under the theme id 'terracotta' in ThemeContext.tsx so stored
+   preferences don't break — only the palette changed, not the id. The former
+   default ("light-blue", flow `alMLvZczLcpt`) is preserved as a selectable alternate
    under `[data-theme='light-blue']` below, same demotion pattern used when
    light-blue itself replaced dark-gold earlier the same day — every theme
    block stays fully self-contained (background through verified) so none of
@@ -21,18 +23,23 @@
    border/bg otherwise — this caused a real black-border bug around the
    landing hero photo, fixed 2026-08-13). */
 @theme {
-  --color-background: #fdfbf8;
-  --color-foreground: #1a1208;
-  --color-border: #e8dfd6;
-  --color-input: #f3ede0;
-  --color-primary: #c17a4e;
+  --color-background: #fff6f8;
+  --color-foreground: #2b1a21;
+  --color-border: #f1dae1;
+  --color-input: #fdeef2;
+  --color-primary: #d63c6d;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #1f3a2e;
+  /* Deep plum-wine — deliberately much darker than `primary` (same
+     light/dark split the old terracotta default had between its green
+     `secondary` and terracotta `primary`) so full-bleed `bg-secondary`
+     bands keep white text readable AND `text-primary` icons still show up
+     on `bg-secondary` chips. */
+  --color-secondary: #5a1730;
   --color-secondary-foreground: #ffffff;
-  --color-muted: #f1eae2;
-  --color-muted-foreground: #7a6b52;
-  --color-accent: #f3e4d9;
-  --color-accent-foreground: #8a4a28;
+  --color-muted: #f8e9ed;
+  --color-muted-foreground: #8c6672;
+  --color-accent: #fce4ea;
+  --color-accent-foreground: #b03060;
   --color-surface: #ffffff;
   --color-verified: #2d6a4f;
   --color-verified-foreground: #ffffff;
@@ -327,6 +334,32 @@ body {
 .animate-heart-pop {
   animation: heart-pop 0.28s ease-out;
 }
+
+/* Looping heartbeat — the match modal's heart badge (2026-08-30, explicit
+   user ask: it read as a static icon between the two avatars; wants it to
+   feel alive, like a heart actually beating). Double-beat pattern (lub-dub)
+   rather than a single smooth pulse, closer to a real heartbeat. */
+@keyframes heartbeat-loop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.18);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.12);
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+.animate-heartbeat {
+  animation: heartbeat-loop 1.4s ease-in-out infinite;
+}
 /* Smooth color/background transition for buttons that flip to a
    "done" state (liked, accepted) instead of snapping instantly. */
 .btn-success-flash {
@@ -519,6 +552,7 @@ body {
   .animate-scale-in,
   .animate-sheet-slide-up,
   .animate-heart-pop,
+  .animate-heartbeat,
   .animate-slide-out-left,
   .animate-slide-out-right,
   .btn-premium,

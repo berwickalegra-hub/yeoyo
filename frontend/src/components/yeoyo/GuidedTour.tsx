@@ -48,14 +48,9 @@ export function GuidedTour({ steps, onClose }: { steps: TourStep[]; onClose: () 
   const isLast = index >= steps.length - 1;
 
   const next = useCallback(() => {
-    setIndex((n) => {
-      if (n >= steps.length - 1) {
-        onClose();
-        return n;
-      }
-      return n + 1;
-    });
-  }, [steps.length, onClose]);
+    if (index >= steps.length - 1) onClose();
+    else setIndex((n) => Math.min(steps.length - 1, n + 1));
+  }, [index, steps.length, onClose]);
 
   const prev = useCallback(() => setIndex((n) => Math.max(0, n - 1)), []);
 

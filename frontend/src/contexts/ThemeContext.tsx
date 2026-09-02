@@ -4,15 +4,16 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 // Color templates the user can pick from Paramètres → Apparence. Each swaps
 // the same set of CSS custom properties (defined in globals.css under
-// `[data-theme="…"]`) — the `@theme` block's default values ARE the
-// 'terracotta' template (Banani "Rencontres Sérieuses Congo" flow,
-// promoted to app-wide default 2026-08-13), so no override is needed for it.
+// `[data-theme="…"]`) — the `@theme` block's default values ARE the default
+// "rose" romantic palette (2026-09-02 user request). Its theme id stays
+// 'terracotta' so previously-stored preferences still resolve to the default;
+// only the palette behind that id changed.
 export const THEMES = [
   {
     id: 'terracotta',
-    label: 'Chaleureux & Terracotta',
+    label: 'Rose & Romantique',
     description: "L'apparence par défaut de YeOyo.",
-    swatch: { background: '#fdfbf8', primary: '#c17a4e', surface: '#ffffff' },
+    swatch: { background: '#fff6f8', primary: '#d63c6d', surface: '#ffffff' },
   },
   {
     id: 'light-blue',
@@ -46,8 +47,8 @@ export const THEMES = [
   },
   {
     id: 'light-rose',
-    label: 'Clair & Rose',
-    description: 'Même thème clair, accent rose.',
+    label: 'Rose vif & fond neutre',
+    description: 'Rose plus vif, fond blanc froid (sans la nuance blush).',
     swatch: { background: '#fafaf9', primary: '#e11d6f', surface: '#ffffff' },
   },
   {
