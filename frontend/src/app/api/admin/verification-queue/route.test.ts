@@ -31,14 +31,18 @@ function makeGet(url: string): NextRequest {
   return new NextRequest(url, { method: 'GET' });
 }
 
-function seedPendingProfile(overrides: Partial<{ id: string; onboardingCompletedAt: Date }> = {}) {
+function seedPendingProfile(overrides: Partial<{ id: string; submittedAt: Date }> = {}) {
   return {
     id: overrides.id ?? 'profile_1',
     userId: 'user_1',
     firstName: 'Awa',
     dateOfBirth: new Date('2000-01-01T00:00:00.000Z'),
+    commune: null,
+    city: 'Kinshasa',
     verificationStatus: 'PENDING',
-    onboardingCompletedAt: overrides.onboardingCompletedAt ?? new Date('2026-05-01T00:00:00.000Z'),
+    verificationSubmittedAt: overrides.submittedAt ?? new Date('2026-05-01T00:00:00.000Z'),
+    verificationCode: 'YO-ABCD',
+    verificationSelfieKey: 'user_1/selfie',
     photos: [],
   };
 }
@@ -50,24 +54,26 @@ beforeEach(() => {
 });
 
 describe('/api/admin/verification-queue — list', () => {
-  it('GET returns pending profiles oldest-onboarded-first', async () => {
+  it('GET returns pending profiles oldest-submitted-first with selfie + code', async () => {
     const p1 = seedPendingProfile({ id: 'p1' });
     prismaMock.profile.findMany.mockResolvedValueOnce([p1] as never);
     prismaMock.profile.count.mockResolvedValueOnce(1 as never);
 
     const res = await GET(makeGet('http://test/api/admin/verification-queue'));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<{ id: string }>; total: number };
+    const body = (await res.json()) as {
+      items: Array<{ id: string; code: string | null; photoUrls: string[] }>;
+      total: number;
+    };
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.id).toBe('p1');
+    expect(body.items[0]?.code).toBe('YO-ABCD');
+    expect(Array.isArray(body.items[0]?.photoUrls)).toBe(true);
     expect(body.total).toBe(1);
 
     const args = prismaMock.profile.findMany.mock.calls[0]?.[0];
-    expect(args?.where).toEqual({
-      verificationStatus: 'PENDING',
-      onboardingCompletedAt: { not: null },
-    });
-    expect(args?.orderBy).toEqual({ onboardingCompletedAt: 'asc' });
+    expect(args?.where).toEqual({ verificationStatus: 'PENDING' });
+    expect(args?.orderBy).toEqual({ verificationSubmittedAt: 'asc' });
   });
 
   it('GET returns empty 200 (never 404) on no rows', async () => {

@@ -1,7 +1,8 @@
-// GET /api/admin/verification-queue — the Admin Panel "Vérification IA"
-// panel. No AI vendor is wired yet (see IMPLEMENTATION-PLAN.md §3.4) — this
-// is the admin-manual-approval stand-in: profiles that finished onboarding
-// but haven't been reviewed, oldest first (longest wait first).
+// GET /api/admin/verification-queue — the Admin Panel "Vérification"
+// panel. Profiles that submitted a code-in-hand selfie (see
+// /api/profile/verification) and are waiting on a human decision, oldest
+// submission first. Each item carries the selfie, the code we asked the
+// user to write, and the profile photos so the admin can compare faces.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -27,8 +28,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const [profiles, total] = await Promise.all([
       prisma.profile.findMany({
-        where: { verificationStatus: 'PENDING', onboardingCompletedAt: { not: null } },
-        orderBy: { onboardingCompletedAt: 'asc' },
+        where: { verificationStatus: 'PENDING' },
+        orderBy: { verificationSubmittedAt: 'asc' },
         take: limit,
         select: {
           id: true,
@@ -37,17 +38,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           dateOfBirth: true,
           commune: true,
           city: true,
-          onboardingCompletedAt: true,
+          verificationSubmittedAt: true,
+          verificationCode: true,
+          verificationSelfieKey: true,
           photos: {
-            where: { isPrimary: true },
-            take: 1,
+            orderBy: { order: 'asc' },
             select: { id: true, fileUpload: { select: { key: true } } },
           },
         },
       }),
-      prisma.profile.count({
-        where: { verificationStatus: 'PENDING', onboardingCompletedAt: { not: null } },
-      }),
+      prisma.profile.count({ where: { verificationStatus: 'PENDING' } }),
     ]);
 
     return NextResponse.json(
@@ -58,9 +58,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           firstName: p.firstName,
           age: ageInYears(p.dateOfBirth),
           city: p.commune ?? p.city,
-          waitingSince: p.onboardingCompletedAt?.toISOString() ?? null,
+          waitingSince: p.verificationSubmittedAt?.toISOString() ?? null,
+          code: p.verificationCode,
+          selfieUrl: p.verificationSelfieKey ? cloudinaryUrlForKey(p.verificationSelfieKey) : null,
           photoCount: p.photos.length,
-          photoUrl: p.photos[0] ? cloudinaryUrlForKey(p.photos[0].fileUpload.key) : null,
+          photoUrls: p.photos
+            .map((ph) => cloudinaryUrlForKey(ph.fileUpload.key))
+            .filter((u): u is string => !!u),
         })),
         total,
       },

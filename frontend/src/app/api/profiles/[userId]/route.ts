@@ -66,6 +66,8 @@ export async function GET(
       !profile ||
       !profile.onboardingCompletedAt ||
       (!profile.visibilityPublic && !isSelf) ||
+      // Profile under a moderation hold — hidden from everyone but its owner.
+      (!!profile.moderationHeldAt && !isSelf) ||
       (!isSelf && profile.demo !== (viewer?.demo ?? false))
     ) {
       return NextResponse.json(

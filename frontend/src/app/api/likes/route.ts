@@ -81,10 +81,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       prisma.profile.findUnique({ where: { userId: targetUserId } }),
       prisma.profile.findUnique({
         where: { userId: auth.user.sub },
-        select: { demo: true },
+        select: { demo: true, moderationHeldAt: true, moderationReason: true },
       }),
     ]);
     if (!targetProfile || !targetProfile.onboardingCompletedAt) {
+      return NextResponse.json(
+        { code: 'PROFILE_NOT_FOUND', message: 'Target profile not found' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    // Actor's own profile is under a moderation hold — no new contact
+    // requests / flash messages while it's in retrait (already-open
+    // conversations are unaffected — those go through a different route).
+    if (actorProfile?.moderationHeldAt) {
+      return NextResponse.json(
+        {
+          code: 'PROFILE_ON_HOLD',
+          message:
+            'Ton profil est en retrait. Corrige-le et attends la revue avant de contacter de nouvelles personnes.',
+        },
+        { status: 403, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    // A held target can't be reached either (it's hidden from discovery, so
+    // in practice the actor never sees its card — this covers a stale UI /
+    // direct call).
+    if (targetProfile.moderationHeldAt) {
       return NextResponse.json(
         { code: 'PROFILE_NOT_FOUND', message: 'Target profile not found' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },

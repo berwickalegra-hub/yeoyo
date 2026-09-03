@@ -67,6 +67,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Profile "en retrait" (moderation hold) — the held user sees NOBODY in
+    // discovery (mirror of being hidden from everyone else's feed). Empty
+    // list + a `held` flag the UI turns into an explanatory banner.
+    if (me.moderationHeldAt) {
+      return NextResponse.json(
+        {
+          profiles: [],
+          page: 1,
+          pageSize: 0,
+          total: 0,
+          hasMore: false,
+          held: true,
+          heldReason: me.moderationReason,
+        },
+        { status: 200, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
     const parsed = Query.safeParse(Object.fromEntries(req.nextUrl.searchParams));
     if (!parsed.success) {
       return NextResponse.json(
@@ -112,6 +130,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       userId: { notIn: excluded },
       ...(q.gender ? { gender: q.gender } : defaultGender ? { gender: defaultGender } : {}),
       visibilityPublic: true,
+      // Profiles under a moderation hold are hidden from everyone's feed.
+      moderationHeldAt: null,
       onboardingCompletedAt: { not: null },
       // Real users only ever see real users; demo/illustration accounts
       // only see each other (so the seed set can still be filmed for promo

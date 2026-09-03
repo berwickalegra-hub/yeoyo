@@ -42,8 +42,14 @@ interface MemberDetail {
     country: string | null;
     intent: string;
     bio: string | null;
-    verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
     verifiedAt: string | null;
+    verificationCode: string | null;
+    verificationSelfieUrl: string | null;
+    verificationSubmittedAt: string | null;
+    verificationRejectionReason: string | null;
+    moderationHeldAt: string | null;
+    moderationReason: string | null;
     onboardingCompletedAt: string | null;
     photos: { id: string; url: string | null; isPrimary: boolean }[];
   } | null;
@@ -70,6 +76,7 @@ function reasonLabel(value: string): string {
 }
 
 const VERIFICATION_BADGE: Record<string, { label: string; className: string }> = {
+  UNVERIFIED: { label: 'Non vérifié', className: 'bg-muted text-muted-foreground' },
   PENDING: { label: 'En attente', className: 'bg-gold/10 text-gold' },
   VERIFIED: { label: 'Vérifié', className: 'bg-verified/10 text-verified' },
   REJECTED: { label: 'Rejeté', className: 'bg-red-500/10 text-red-500' },
@@ -83,6 +90,13 @@ export default function AdminMemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [reason, setReason] = useState('');
   const [processing, setProcessing] = useState<'APPROVE' | 'REJECT' | null>(null);
+  // Manual verification override (no code-in-hand selfie flow).
+  const [verifBusy, setVerifBusy] = useState(false);
+  // Moderation hold (soft-hide) + free-text admin message.
+  const [holdReason, setHoldReason] = useState('');
+  const [modBusy, setModBusy] = useState(false);
+  const [adminMsg, setAdminMsg] = useState('');
+  const [msgBusy, setMsgBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +128,77 @@ export default function AdminMemberDetailPage() {
       toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
     } finally {
       setProcessing(null);
+    }
+  }
+
+  async function manualVerify(action: 'VERIFY' | 'UNVERIFY') {
+    if (!detail?.profile) return;
+    if (
+      action === 'VERIFY' &&
+      !window.confirm(
+        'Marquer ce profil comme vérifié ?\n\nLe badge « Vérifié » apparaîtra sur ses photos et ' +
+          'le membre recevra une notification. À ne faire qu’après avoir regardé les photos ci-dessus.',
+      )
+    ) {
+      return;
+    }
+    setVerifBusy(true);
+    try {
+      await api(`/api/admin/users/${detail.user.id}/verification`, {
+        method: 'POST',
+        body: { action },
+      });
+      toast(
+        action === 'VERIFY' ? 'Profil marqué comme vérifié' : 'Vérification retirée',
+        'success',
+      );
+      await load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setVerifBusy(false);
+    }
+  }
+
+  async function setModeration(action: 'HOLD' | 'RELEASE') {
+    if (!detail) return;
+    if (action === 'HOLD' && holdReason.trim().length < 3) {
+      toast('Indique une raison (visible par le membre).', 'error');
+      return;
+    }
+    setModBusy(true);
+    try {
+      await api(`/api/admin/users/${detail.user.id}/moderation`, {
+        method: 'POST',
+        body: action === 'HOLD' ? { action, reason: holdReason.trim() } : { action },
+      });
+      toast(
+        action === 'HOLD' ? 'Profil mis en retrait — message envoyé.' : 'Profil réactivé.',
+        'success',
+      );
+      setHoldReason('');
+      await load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setModBusy(false);
+    }
+  }
+
+  async function sendAdminMessage() {
+    if (!detail || adminMsg.trim().length === 0) return;
+    setMsgBusy(true);
+    try {
+      await api(`/api/admin/support/${detail.user.id}/reply`, {
+        method: 'POST',
+        body: { content: adminMsg.trim() },
+      });
+      toast('Message envoyé — il apparaît dans son espace Messages.', 'success');
+      setAdminMsg('');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue', 'error');
+    } finally {
+      setMsgBusy(false);
     }
   }
 
@@ -198,6 +283,61 @@ export default function AdminMemberDetailPage() {
             <h2 className="mb-4 font-headings text-sm font-bold text-foreground">
               Comparaison visuelle
             </h2>
+
+            {(profile.verificationSelfieUrl || profile.verificationCode) && (
+              <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-body text-xs font-bold uppercase tracking-wide text-primary">
+                    Selfie de vérification
+                  </span>
+                  {profile.verificationCode && (
+                    <span className="font-body text-xs text-muted-foreground">
+                      code demandé :{' '}
+                      <span className="font-mono font-bold text-primary">
+                        {profile.verificationCode}
+                      </span>
+                    </span>
+                  )}
+                  {profile.verificationSubmittedAt && (
+                    <span className="font-body text-xs text-muted-foreground">
+                      · envoyé le{' '}
+                      {new Date(profile.verificationSubmittedAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  )}
+                </div>
+                {profile.verificationSelfieUrl ? (
+                  <a
+                    href={profile.verificationSelfieUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <div className="relative aspect-[3/4] w-40 overflow-hidden rounded-lg border-2 border-primary/40">
+                      <Image
+                        src={profile.verificationSelfieUrl}
+                        alt={`Selfie de vérification de ${profile.firstName}`}
+                        fill
+                        sizes="160px"
+                        className="object-cover"
+                      />
+                    </div>
+                  </a>
+                ) : (
+                  <p className="font-body text-xs text-muted-foreground">
+                    Selfie non disponible (demande déjà traitée).
+                  </p>
+                )}
+                {profile.verificationRejectionReason && (
+                  <p className="mt-2 font-body text-xs text-red-500">
+                    Dernier rejet : {profile.verificationRejectionReason}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="mb-2 font-body text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Photos du profil
+            </p>
             {profile.photos.length === 0 ? (
               <p className="font-body text-sm text-muted-foreground">Aucune photo soumise.</p>
             ) : (
@@ -360,19 +500,136 @@ export default function AdminMemberDetailPage() {
             </div>
           ) : (
             <div className="rounded-xl border border-border bg-surface p-5">
-              <p className="font-body text-sm text-muted-foreground">
-                Ce profil a déjà été traité —{' '}
-                <span
-                  className={`font-semibold ${VERIFICATION_BADGE[profile.verificationStatus]?.className.split(' ')[1] ?? ''}`}
+              <h2 className="mb-1 font-headings text-sm font-bold text-foreground">
+                Vérification manuelle
+              </h2>
+              {profile.verificationStatus === 'VERIFIED' ? (
+                <p className="font-body text-sm text-muted-foreground">
+                  Profil <span className="font-semibold text-verified">vérifié</span>
+                  {profile.verifiedAt &&
+                    ` le ${new Date(profile.verifiedAt).toLocaleDateString('fr-FR')}`}
+                  . Le badge « Vérifié » est visible sur ses photos.
+                </p>
+              ) : profile.verificationStatus === 'REJECTED' ? (
+                <p className="font-body text-sm text-muted-foreground">
+                  Dernière demande <span className="font-semibold text-red-500">rejetée</span>
+                  {profile.verificationRejectionReason
+                    ? ` — ${profile.verificationRejectionReason}`
+                    : ''}
+                  .
+                </p>
+              ) : (
+                <p className="font-body text-sm text-muted-foreground">
+                  Le membre n&apos;a pas envoyé de demande de vérification. Si tu reconnais ses
+                  vraies photos ci-dessus, tu peux le vérifier directement.
+                </p>
+              )}
+
+              {profile.verificationStatus === 'VERIFIED' ? (
+                <button
+                  type="button"
+                  disabled={verifBusy}
+                  onClick={() => void manualVerify('UNVERIFY')}
+                  className="btn-press mt-3 rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-muted-foreground disabled:opacity-50"
                 >
-                  {VERIFICATION_BADGE[profile.verificationStatus]?.label}
-                </span>
-                {profile.verifiedAt &&
-                  ` le ${new Date(profile.verifiedAt).toLocaleDateString('fr-FR')}`}
-                .
-              </p>
+                  {verifBusy ? '…' : 'Retirer la vérification'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={verifBusy}
+                  onClick={() => void manualVerify('VERIFY')}
+                  className="btn-press mt-3 flex items-center gap-2 rounded-lg bg-verified px-4 py-2 font-body text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  <Icon name="shield-check" size={15} />
+                  {verifBusy ? 'Validation…' : 'Vérifier manuellement ce profil'}
+                </button>
+              )}
             </div>
           )}
+
+          {/* 4. Modération du profil — mise en retrait (soft-hide) */}
+          <div
+            className={`rounded-xl border p-5 ${
+              profile.moderationHeldAt
+                ? 'border-red-500/40 bg-red-500/5'
+                : 'border-border bg-surface'
+            }`}
+          >
+            <p className="font-headings text-sm font-bold text-foreground">Modération du profil</p>
+            {profile.moderationHeldAt ? (
+              <>
+                <p className="mt-1 font-body text-sm text-red-600">
+                  En retrait depuis le{' '}
+                  {new Date(profile.moderationHeldAt).toLocaleDateString('fr-FR')}
+                </p>
+                {profile.moderationReason && (
+                  <p className="mt-0.5 font-body text-sm text-foreground">
+                    Raison : <span className="font-semibold">{profile.moderationReason}</span>
+                  </p>
+                )}
+                <p className="mt-1 font-body text-xs text-muted-foreground">
+                  Le membre est invisible dans Découvrir (des deux côtés) et ne peut pas envoyer de
+                  nouvelles demandes. Ses conversations en cours restent ouvertes.
+                </p>
+                <button
+                  type="button"
+                  disabled={modBusy}
+                  onClick={() => void setModeration('RELEASE')}
+                  className="mt-3 rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  {modBusy ? '…' : 'Réactiver le profil'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 font-body text-xs text-muted-foreground">
+                  Masque le profil (photo non autorisée, contenu interdit…). Le membre garde son
+                  accès, peut corriger son profil, reçoit automatiquement un message avec la raison.
+                </p>
+                <textarea
+                  value={holdReason}
+                  onChange={(e) => setHoldReason(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Raison (visible par le membre) — ex. « Photo non autorisée »"
+                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={modBusy}
+                  onClick={() => void setModeration('HOLD')}
+                  className="mt-2 rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {modBusy ? '…' : 'Mettre le profil en retrait'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* 5. Message direct au membre → arrive dans son espace Messages (Équipe YeOyo) */}
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <p className="font-headings text-sm font-bold text-foreground">Message au membre</p>
+            <p className="mt-1 font-body text-xs text-muted-foreground">
+              Apparaît dans sa conversation « Équipe YeOyo », il peut répondre.
+            </p>
+            <textarea
+              value={adminMsg}
+              onChange={(e) => setAdminMsg(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="Ton message…"
+              className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            />
+            <button
+              type="button"
+              disabled={msgBusy || adminMsg.trim().length === 0}
+              onClick={() => void sendAdminMessage()}
+              className="mt-2 rounded-lg bg-primary px-4 py-2 font-body text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {msgBusy ? 'Envoi…' : 'Envoyer le message'}
+            </button>
+          </div>
         </>
       )}
     </div>

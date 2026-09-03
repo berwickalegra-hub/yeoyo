@@ -67,6 +67,16 @@ function makeGet(url: string): NextRequest {
 
 // Build the row shape the prisma.user.findMany select returns.
 // Matches USER_SELECT in route.ts.
+interface ProfileSlice {
+  commune: string | null;
+  city: string | null;
+  firstName: string | null;
+  country: string | null;
+  verificationStatus: string;
+  verifiedAt: Date | null;
+  moderationHeldAt: Date | null;
+}
+
 interface UserListRow {
   id: string;
   email: string;
@@ -77,6 +87,7 @@ interface UserListRow {
   emailVerifiedAt: Date | null;
   creditBalance: number;
   createdAt: Date;
+  profile: ProfileSlice | null;
 }
 
 function userRow(overrides: Partial<UserListRow> = {}): UserListRow {
@@ -91,6 +102,19 @@ function userRow(overrides: Partial<UserListRow> = {}): UserListRow {
     emailVerifiedAt: overrides.emailVerifiedAt ?? new Date('2026-01-01T00:00:00Z'),
     creditBalance: overrides.creditBalance ?? 0,
     createdAt: overrides.createdAt ?? new Date('2026-05-01T00:00:00Z'),
+    profile: overrides.profile ?? null,
+  };
+}
+
+function profileSlice(overrides: Partial<ProfileSlice> = {}): ProfileSlice {
+  return {
+    commune: overrides.commune ?? null,
+    city: overrides.city ?? null,
+    firstName: overrides.firstName ?? null,
+    country: overrides.country ?? null,
+    verificationStatus: overrides.verificationStatus ?? 'UNVERIFIED',
+    verifiedAt: overrides.verifiedAt ?? null,
+    moderationHeldAt: overrides.moderationHeldAt ?? null,
   };
 }
 
@@ -260,6 +284,100 @@ describe('/api/admin/users [Wave 1] — list', () => {
     const res = await GET(makeGet('http://test/api/admin/users?status=SUSPENDED'));
     const body = (await res.json()) as { items: UserListRow[] };
     expect(body.items[0]?.status).toBe('SUSPENDED');
+  });
+
+  it('GET filters by country (ISO2 on the profile relation)', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([] as never);
+    await GET(makeGet('http://test/api/admin/users?country=cd'));
+    const where = prismaMock.user.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where['profile']).toEqual({ country: 'CD' });
+  });
+
+  it('GET filters by verification status on the profile relation', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([] as never);
+    await GET(makeGet('http://test/api/admin/users?verification=VERIFIED'));
+    const where = prismaMock.user.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where['profile']).toEqual({ verificationStatus: 'VERIFIED' });
+  });
+
+  it('GET ignores an unknown verification value', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([] as never);
+    await GET(makeGet('http://test/api/admin/users?verification=BOGUS'));
+    const where = prismaMock.user.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where['profile']).toBeUndefined();
+  });
+
+  it('GET status=HELD filters on moderationHeldAt, not User.status', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([] as never);
+    await GET(makeGet('http://test/api/admin/users?status=HELD'));
+    const where = prismaMock.user.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where['status']).toBeUndefined();
+    expect(where['profile']).toEqual({ moderationHeldAt: { not: null } });
+  });
+
+  it('GET maps profile fields onto each item (country / verification / held)', async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      userRow({
+        id: 'u1',
+        profile: profileSlice({
+          firstName: 'Awa',
+          country: 'SN',
+          verificationStatus: 'VERIFIED',
+          verifiedAt: new Date('2026-06-01T00:00:00Z'),
+          commune: 'Gombe',
+        }),
+      }),
+      userRow({ id: 'u2', profile: null }),
+    ] as never);
+    const res = await GET(makeGet('http://test/api/admin/users'));
+    const body = (await res.json()) as {
+      items: Array<{
+        firstName: string | null;
+        country: string | null;
+        verificationStatus: string;
+        verified: boolean;
+        held: boolean;
+        city: string | null;
+      }>;
+    };
+    expect(body.items[0]).toMatchObject({
+      firstName: 'Awa',
+      country: 'SN',
+      verificationStatus: 'VERIFIED',
+      verified: true,
+      held: false,
+      city: 'Gombe',
+    });
+    // Profile-less account: safe null / default fallbacks.
+    expect(body.items[1]).toMatchObject({
+      firstName: null,
+      country: null,
+      verificationStatus: 'UNVERIFIED',
+      verified: false,
+      held: false,
+    });
+  });
+
+  it('GET withCounts=1 adds global tab totals; absent otherwise', async () => {
+    prismaMock.user.findMany.mockResolvedValue([] as never);
+    prismaMock.user.count.mockResolvedValue(3 as never);
+
+    const withRes = await GET(makeGet('http://test/api/admin/users?withCounts=1'));
+    const withBody = (await withRes.json()) as { counts?: Record<string, number> };
+    expect(withBody.counts).toEqual({
+      all: 3,
+      verified: 3,
+      pending: 3,
+      unverified: 3,
+      rejected: 3,
+      suspended: 3,
+      held: 3,
+    });
+
+    const plainRes = await GET(makeGet('http://test/api/admin/users'));
+    const plainBody = (await plainRes.json()) as { counts?: unknown };
+    expect(plainBody.counts).toBeUndefined();
+    expect(prismaMock.user.count).toHaveBeenCalledTimes(7);
   });
 });
 

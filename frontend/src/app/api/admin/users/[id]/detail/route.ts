@@ -98,6 +98,14 @@ export async function GET(
               bio: profile.bio,
               verificationStatus: profile.verificationStatus,
               verifiedAt: profile.verifiedAt?.toISOString() ?? null,
+              verificationCode: profile.verificationCode,
+              verificationSelfieUrl: profile.verificationSelfieKey
+                ? cloudinaryUrlForKey(profile.verificationSelfieKey)
+                : null,
+              verificationSubmittedAt: profile.verificationSubmittedAt?.toISOString() ?? null,
+              verificationRejectionReason: profile.verificationRejectionReason,
+              moderationHeldAt: profile.moderationHeldAt?.toISOString() ?? null,
+              moderationReason: profile.moderationReason,
               onboardingCompletedAt: profile.onboardingCompletedAt?.toISOString() ?? null,
               photos: profile.photos.map((p) => ({
                 id: p.id,

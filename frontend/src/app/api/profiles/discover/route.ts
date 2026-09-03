@@ -33,6 +33,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Held profile (moderation) — sees no featured profile, same as it's
+    // hidden from everyone else. `held` drives the banner in the UI.
+    if (me.moderationHeldAt) {
+      return NextResponse.json(
+        { profile: null, held: true, heldReason: me.moderationReason },
+        { status: 200, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
     const oppositeGender = me.gender === 'HOMME' ? 'FEMME' : 'HOMME';
     const genderFilter =
       me.interestedIn === 'TOUS' ? undefined : (me.interestedIn ?? oppositeGender);
@@ -55,6 +64,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         userId: { notIn: excludeIds },
         ...(genderFilter ? { gender: genderFilter } : {}),
         visibilityPublic: true,
+        moderationHeldAt: null,
         onboardingCompletedAt: { not: null },
         // Real users see real users; demo accounts see demo accounts only.
         demo: me.demo,

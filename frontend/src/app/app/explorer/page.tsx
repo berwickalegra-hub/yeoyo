@@ -19,11 +19,13 @@ import { useToast } from '@/contexts/ToastContext';
 import { useCredits } from '@/contexts/CreditsContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
+import { HeldProfileBanner } from '@/components/yeoyo/HeldProfileBanner';
 import { SwipeCard } from '@/components/yeoyo/SwipeCard';
 import { ProfileGridCard } from '@/components/yeoyo/ProfileGridCard';
 import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
 import { LimitReachedModal, type LimitReachedInfo } from '@/components/yeoyo/LimitReachedModal';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { triggerPushPrompt } from '@/lib/yeoyo/push-prompt';
 import { TOPNAV_ITEMS, type NavItem } from '@/components/yeoyo/nav-items';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 
@@ -48,6 +50,10 @@ interface ExplorerResponse {
   profiles: ProfileCard[];
   page: number;
   hasMore: boolean;
+  // Set when the caller's own profile is under a moderation hold — the deck
+  // comes back empty and the UI shows HeldProfileBanner instead.
+  held?: boolean;
+  heldReason?: string | null;
 }
 
 const RELIGIONS = [
@@ -108,6 +114,7 @@ export default function ExplorerPage() {
   const [draftChildren, setDraftChildren] = useState<'0' | undefined>(undefined);
 
   const [deck, setDeck] = useState<ProfileCard[]>([]);
+  const [held, setHeld] = useState<{ reason: string | null } | null>(null);
   const [index, setIndex] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -164,6 +171,7 @@ export default function ExplorerPage() {
       const res = await api<ExplorerResponse>(
         `/api/profiles/explorer?${buildQuery(nextFilters, 1)}`,
       );
+      setHeld(res.held ? { reason: res.heldReason ?? null } : null);
       setDeck(res.profiles);
       setIndex(0);
       setPage(res.page);
@@ -257,6 +265,7 @@ export default function ExplorerPage() {
         title: 'Demande envoyée !',
         subtitle: 'On te préviendra si elle ou il accepte.',
       });
+      triggerPushPrompt('contact-request');
       return true;
     } catch (err) {
       handleLikeError(err);
@@ -279,6 +288,7 @@ export default function ExplorerPage() {
         title: 'Message flash envoyé !',
         subtitle: 'Ton message a été transmis avec ta demande.',
       });
+      triggerPushPrompt('contact-request');
       void refreshCredits();
       return true;
     } catch (err) {
@@ -308,6 +318,7 @@ export default function ExplorerPage() {
         title: 'Demande envoyée !',
         subtitle: 'On te préviendra si elle ou il accepte.',
       });
+      triggerPushPrompt('contact-request');
     } catch (err) {
       handleLikeError(err);
     } finally {
@@ -638,6 +649,8 @@ export default function ExplorerPage() {
               </div>
             )}
 
+            {!loading && held && <HeldProfileBanner reason={held.reason} />}
+
             {loading && viewMode === 'swipe' && <SwipeCardSkeleton />}
             {loading && viewMode === 'grid' && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -699,7 +712,7 @@ export default function ExplorerPage() {
               </div>
             )}
 
-            {!loading && !error && viewMode === 'swipe' && !current && (
+            {!loading && !error && !held && viewMode === 'swipe' && !current && (
               <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
                 <Icon name="layout-grid" size={28} className="text-muted-foreground" />
                 <p className="font-headings text-base font-semibold text-foreground">
@@ -752,7 +765,7 @@ export default function ExplorerPage() {
               </>
             )}
 
-            {!loading && !error && viewMode === 'grid' && deck.length === 0 && (
+            {!loading && !error && !held && viewMode === 'grid' && deck.length === 0 && (
               <div className="animate-fade-in-up mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-border bg-surface p-10 text-center">
                 <Icon name="layout-grid" size={28} className="text-muted-foreground" />
                 <p className="font-headings text-base font-semibold text-foreground">

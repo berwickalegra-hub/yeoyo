@@ -55,6 +55,7 @@ import { Icon } from '@/components/ui/Icon';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { GuidedTour } from '@/components/yeoyo/GuidedTour';
+import { HeldProfileBanner } from '@/components/yeoyo/HeldProfileBanner';
 import { TOUR_STEPS, hasSeenTour, markTourSeen } from '@/lib/yeoyo/guided-tour';
 import { RecommendedProfileCard } from '@/components/yeoyo/RecommendedProfileCard';
 import { ProfileCardSkeleton } from '@/components/yeoyo/ProfileCardSkeleton';
@@ -223,6 +224,7 @@ export default function DecouvrirPage() {
 
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [recommended, setRecommended] = useState<ProfileCard[]>([]);
+  const [held, setHeld] = useState<{ reason: string | null } | null>(null);
   const [likes, setLikes] = useState<LikeRow[]>([]);
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [favoritedBy, setFavoritedBy] = useState<FavoritedBy>({
@@ -267,7 +269,9 @@ export default function DecouvrirPage() {
       setProfile(profileRes.profile);
       const [recRes, likesRes, visitorsRes, favoritedByRes, boostRes, newNearbyRes] =
         await Promise.all([
-          api<{ profiles: ProfileCard[] }>('/api/profiles/explorer?page=1&pageSize=6'),
+          api<{ profiles: ProfileCard[]; held?: boolean; heldReason?: string | null }>(
+            '/api/profiles/explorer?page=1&pageSize=6',
+          ),
           api<{ likes: LikeRow[] }>('/api/likes/received'),
           api<{ total: number }>('/api/profile/visitors'),
           api<FavoritedBy>('/api/profile/favorited-by'),
@@ -275,6 +279,7 @@ export default function DecouvrirPage() {
           api<NewNearbyCount>('/api/profile/new-nearby-count'),
         ]);
       setRecommended(recRes.profiles);
+      setHeld(recRes.held ? { reason: recRes.heldReason ?? null } : null);
       setLikes(likesRes.likes);
       setVisitorsCount(visitorsRes.total);
       setFavoritedBy(favoritedByRes);
@@ -409,6 +414,8 @@ export default function DecouvrirPage() {
             <ProfileCardSkeleton count={4} />
           </div>
         )}
+
+        {!loading && held && <HeldProfileBanner reason={held.reason} />}
 
         {!loading && needsOnboarding && (
           <div className="rounded-xl border border-border bg-surface p-8 text-center">

@@ -17,7 +17,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
-import { estimateLocalPrice, formatLocalPrice, type LocalCurrency } from '@/lib/currency';
+import { displayPrice, type LocalCurrency } from '@/lib/currency';
 import { PHONE_COUNTRIES } from '@/lib/yeoyo/constants';
 
 interface Pack {
@@ -198,25 +198,31 @@ export default function CreditsPage() {
                       </p>
                       <div className="flex items-baseline gap-2">
                         <span className="font-body text-xs text-muted-foreground line-through">
-                          {formatLocalPrice(pack.originalPriceTotal, pack.currency)}
+                          {displayPrice(pack.originalPriceTotal, profileCountry).primary}
                         </span>
                         <span
                           className={`font-headings text-xl font-bold ${active ? 'text-gold' : 'text-foreground'}`}
                         >
-                          {formatLocalPrice(pack.priceTotal, pack.currency)}
+                          {displayPrice(pack.priceTotal, profileCountry).primary}
                         </span>
                       </div>
                       <p className="font-body text-[11px] text-muted-foreground">
-                        Soit {formatLocalPrice(pack.pricePerCredit, pack.currency)} / crédit
+                        Soit {displayPrice(pack.pricePerCredit, profileCountry).primary} / crédit
                       </p>
                       {(() => {
-                        const est = estimateLocalPrice(pack.priceTotal, profileCountry);
-                        if (est.currency === pack.currency) return null;
+                        // RD Congo only: the prices above are an approximate
+                        // conversion to Franc Congolais (rate is hand-set,
+                        // not a live feed). This is the exact amount Chariow
+                        // bills, in FCFA — shown so the buyer isn't
+                        // surprised on Chariow's own checkout page. `charged`
+                        // is null for the FCFA zone, where the price above
+                        // already IS the charge.
+                        const { charged } = displayPrice(pack.priceTotal, profileCountry);
+                        if (!charged) return null;
                         return (
-                          <p className="font-body text-[11px] text-muted-foreground">
-                            {est.approximate ? '≈ ' : ''}
-                            {formatLocalPrice(est.amount, est.currency)}
-                          </p>
+                          <span className="font-body text-[11px] text-muted-foreground">
+                            Facturé {charged} par Chariow
+                          </span>
                         );
                       })()}
                       <div
@@ -267,13 +273,24 @@ export default function CreditsPage() {
             {/* Total + CTA */}
             {selectedPack && (
               <div className="rounded-xl border border-gold/40 bg-gold/5 p-5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <span className="font-body text-sm font-medium text-foreground">
                     Total à payer — {selectedPack.credits} crédits
                   </span>
-                  <span className="font-headings text-xl font-bold text-gold">
-                    {formatLocalPrice(selectedPack.priceTotal, selectedPack.currency)}
-                  </span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="font-headings text-xl font-bold text-gold">
+                      {displayPrice(selectedPack.priceTotal, profileCountry).primary}
+                    </span>
+                    {(() => {
+                      const { charged } = displayPrice(selectedPack.priceTotal, profileCountry);
+                      if (!charged) return null;
+                      return (
+                        <span className="font-body text-xs font-semibold text-muted-foreground">
+                          Facturé {charged} par Chariow
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
                 <button
                   type="button"

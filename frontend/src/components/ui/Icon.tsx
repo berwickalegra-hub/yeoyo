@@ -25,6 +25,7 @@ import {
   Flag,
   Gem,
   Gift,
+  Headphones,
   Heart,
   HeartHandshake,
   Home,
@@ -150,6 +151,7 @@ const ICONS = {
   briefcase: Briefcase,
   plus: Plus,
   'life-buoy': LifeBuoy,
+  headphones: Headphones,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

@@ -19,6 +19,7 @@
 // documented workaround as onboarding/profil and the messages thread.
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, storeCsrfToken } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { COOKIE_PREFIX } from '@/lib/constants';
 
@@ -78,13 +79,21 @@ async function uploadImageWithAuthRetry(file: File): Promise<string> {
 }
 
 export function SupportWidget() {
+  const { user: authUser, loading: authLoading } = useAuth();
+  const authReady = !authLoading && !!authUser;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<SupportMsg[]>([]);
   const [draft, setDraft] = useState('');
   const [pendingImage, setPendingImage] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Split from the send-error below (2026-08-30, explicit user report: a
+  // failed load rendered as a generic empty-state placeholder plus a tiny
+  // red line, with no explanation of what happened or what to do next).
+  // This one gets its own dedicated panel with a retry button; sendError
+  // stays a small inline line near the composer, next to what failed.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
@@ -93,9 +102,13 @@ export function SupportWidget() {
   // the panel was closed must show up the next time it's reopened, not only
   // after a full page reload (2026-08-30, explicit user ask to make sure
   // every part of this widget actually works, not just its first open).
+  // Gated on auth readiness — same reasoning as useNavCounts/
+  // usePushNotifications: firing before AuthProvider's own /api/auth/me
+  // resolves races an expired access token and can surface as a load
+  // failure for no real reason.
   useEffect(() => {
-    if (open) void load();
-  }, [open]);
+    if (open && authReady) void load();
+  }, [open, authReady]);
 
   useEffect(() => {
     if (open) draftInputRef.current?.focus();
@@ -110,9 +123,18 @@ export function SupportWidget() {
     try {
       const res = await api<{ messages: SupportMsg[] }>('/api/support/messages');
       setMessages(res.messages);
-      setError(null);
-    } catch {
-      setError('Impossible de charger tes messages pour le moment.');
+      setLoadError(null);
+    } catch (err) {
+      // Distinguish the common cases so the message actually tells the
+      // person what to do next, instead of one generic line regardless of
+      // cause (2026-08-30, explicit user report + ask).
+      if (err instanceof ApiError && err.status === 0) {
+        setLoadError('Pas de connexion internet. Vérifie ta connexion puis réessaie.');
+      } else if (err instanceof ApiError && err.status === 401) {
+        setLoadError('Ta session a besoin d’être rafraîchie. Réessaie dans un instant.');
+      } else {
+        setLoadError('Impossible de charger tes messages pour le moment. Réessaie.');
+      }
     } finally {
       setLoading(false);
     }
@@ -128,7 +150,7 @@ export function SupportWidget() {
     const content = draft.trim();
     if ((!content && !pendingImage) || sending) return;
     setSending(true);
-    setError(null);
+    setSendError(null);
     try {
       let imageUploadId: string | undefined;
       if (pendingImage) {
@@ -142,7 +164,7 @@ export function SupportWidget() {
       setDraft('');
       setPendingImage(null);
     } catch (err) {
-      setError(
+      setSendError(
         err instanceof ApiError || err instanceof Error ? err.message : 'Une erreur est survenue',
       );
     } finally {
@@ -158,7 +180,7 @@ export function SupportWidget() {
         aria-label="Contacter le support"
         className={`fixed bottom-36 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform active:scale-90 md:bottom-6 md:right-6 ${open ? 'hidden' : 'flex'}`}
       >
-        <Icon name="life-buoy" size={24} />
+        <Icon name="headphones" size={24} />
       </button>
 
       {open && (
@@ -166,7 +188,7 @@ export function SupportWidget() {
           <div className="flex items-center justify-between rounded-t-2xl bg-primary px-4 py-3 text-white">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
-                <Icon name="life-buoy" size={18} />
+                <Icon name="headphones" size={18} />
               </div>
               <div>
                 <p className="font-headings text-sm font-semibold">Support</p>
@@ -184,15 +206,47 @@ export function SupportWidget() {
           </div>
 
           <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4">
-            {loading && messages.length === 0 && (
-              <p className="text-center font-body text-sm text-muted-foreground">Chargement…</p>
+            {loading && messages.length === 0 && !loadError && (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <Icon name="refresh-cw" size={20} className="animate-spin text-muted-foreground" />
+                <p className="font-body text-sm text-muted-foreground">Chargement…</p>
+              </div>
             )}
 
-            {!loading && messages.length === 0 && (
-              <p className="text-center font-body text-sm text-muted-foreground">
-                Un souci, une question ? Écris-nous — tu peux aussi joindre une capture
-                d&rsquo;écran.
-              </p>
+            {loadError && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500">
+                  <Icon name="x-circle" size={22} />
+                </span>
+                <div>
+                  <p className="font-headings text-sm font-semibold text-foreground">{loadError}</p>
+                  <p className="mt-1 max-w-[220px] font-body text-xs text-muted-foreground">
+                    Tu peux réessayer, ou nous écrire directement à contact@yeoyo.app.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void load()}
+                  className="rounded-lg border border-primary px-4 py-2 font-body text-xs font-semibold text-primary"
+                >
+                  Réessayer
+                </button>
+              </div>
+            )}
+
+            {!loading && !loadError && messages.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Icon name="headphones" size={26} />
+                </span>
+                <p className="font-headings text-sm font-semibold text-foreground">
+                  Un problème, une question ?
+                </p>
+                <p className="max-w-[240px] font-body text-xs text-muted-foreground">
+                  Contacte le service client — on peut t&rsquo;aider. Écris ton message ci-dessous,
+                  tu peux aussi joindre une capture d&rsquo;écran.
+                </p>
+              </div>
             )}
 
             <div className="flex flex-col gap-3">
@@ -221,9 +275,9 @@ export function SupportWidget() {
               ))}
             </div>
 
-            {error && (
+            {sendError && (
               <p role="alert" className="mt-3 text-center font-body text-xs text-red-500">
-                {error}
+                {sendError}
               </p>
             )}
           </div>

@@ -44,6 +44,12 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'YeOyo',
   },
+  // Google Search Console "HTML tag" verification. Paste the token from
+  // Search Console into GOOGLE_SITE_VERIFICATION (Vercel env) and redeploy —
+  // Next emits <meta name="google-site-verification">. Omitted when unset.
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+    : {}),
 };
 
 export const viewport: Viewport = {

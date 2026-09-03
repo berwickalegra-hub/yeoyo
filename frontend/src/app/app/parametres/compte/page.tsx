@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -15,14 +16,18 @@ export default function ComptePage() {
   const badgeCounts = useNavCounts();
 
   const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ profile: { verifiedAt: string | null } }>('/api/profile');
+      const res = await api<{
+        profile: { verifiedAt: string | null; verificationStatus: string };
+      }>('/api/profile');
       setVerifiedAt(res.profile.verifiedAt);
+      setVerificationStatus(res.profile.verificationStatus);
     } catch {
       /* profile may not exist yet — verification status simply shows "non vérifié" */
     }
@@ -69,10 +74,23 @@ export default function ComptePage() {
             helper={
               verifiedAt
                 ? `Vérifié le ${new Date(verifiedAt).toLocaleDateString('fr-FR')}`
-                : 'Non vérifié'
+                : verificationStatus === 'PENDING'
+                  ? 'Demande en cours d’examen'
+                  : verificationStatus === 'REJECTED'
+                    ? 'Demande refusée — tu peux recommencer'
+                    : 'Non vérifié'
             }
           >
-            <span className={`h-2 w-2 rounded-full ${verifiedAt ? 'bg-verified' : 'bg-muted'}`} />
+            {verifiedAt || verificationStatus === 'PENDING' ? (
+              <span className={`h-2 w-2 rounded-full ${verifiedAt ? 'bg-verified' : 'bg-gold'}`} />
+            ) : (
+              <Link
+                href="/app/verification"
+                className="rounded-lg bg-primary px-3 py-1.5 font-body text-xs font-semibold text-primary-foreground"
+              >
+                Vérifier
+              </Link>
+            )}
           </SettingsRow>
         </SettingsSection>
 

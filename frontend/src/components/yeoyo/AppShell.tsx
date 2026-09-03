@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { TopNav, type SidebarUser, type SidebarBadgeCounts } from './TopNav';
 import { MobileTabBar } from './MobileTabBar';
 import { SupportWidget } from './SupportWidget';
+import { NotificationPrompt } from './NotificationPrompt';
 import type { SidebarTab } from './nav-items';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -103,6 +104,7 @@ export function AppShell({
         variant={compactMobileNav ? (hideMobileAccueilBar ? 'none' : 'minimal') : 'full'}
       />
       {showCoach && <SupportWidget />}
+      <NotificationPrompt />
     </div>
   );
 }

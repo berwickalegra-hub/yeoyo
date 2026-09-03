@@ -67,6 +67,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { TopNav } from '@/components/yeoyo/TopNav';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
 import { MatchStories } from '@/components/yeoyo/MatchStories';
+import { MatchedHeader } from '@/components/yeoyo/MatchedHeader';
 import { CreditConfirmModal } from '@/components/yeoyo/CreditConfirmModal';
 import {
   closeAblySafely,
@@ -740,6 +741,14 @@ export default function MessageThreadPage() {
         </div>
 
         <div className="flex flex-1 flex-col">
+          {active && (
+            <MatchedHeader
+              myName={user.email}
+              myAvatarUrl={user.avatarUrl}
+              otherName={active.otherUser.firstName}
+              otherPhotoUrl={active.otherUser.photoUrl}
+            />
+          )}
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <a href="/app/messages" className="lg:hidden">

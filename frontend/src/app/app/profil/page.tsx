@@ -104,6 +104,22 @@ const INTERESTED_IN_OPTIONS = [
   { value: 'TOUS', label: 'Les deux' },
 ];
 
+// Red "à compléter" treatment for an optional-but-empty section (2026-08-31,
+// explicit user ask: every incomplete part of the profile must stand out in
+// red until it's filled, to nudge the user to finish it). Card wrappers must
+// use a bare `border` class so the colour here wins.
+const incompleteCardCls = (empty: boolean): string =>
+  empty ? 'border-red-500/50 ring-1 ring-red-500/20' : 'border-border';
+
+function ACompleterTag({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span className="ml-2 rounded-md bg-red-500/10 px-1.5 py-0.5 align-middle font-body text-xs font-semibold text-red-600">
+      À compléter
+    </span>
+  );
+}
+
 function readCsrfToken(): string | null {
   if (typeof window === 'undefined') return null;
   const key = `${COOKIE_PREFIX}-csrf`;
@@ -462,7 +478,10 @@ export default function ProfilPage() {
             {(() => {
               const missing: string[] = [];
               if (profile.photos.length === 0) missing.push('une photo');
-              if (!profile.bio || !profile.bio.trim()) missing.push('ta vision du mariage (bio)');
+              if (!profile.bio || !profile.bio.trim()) missing.push('ta vision du mariage');
+              if (!profile.qualities || !profile.qualities.trim()) missing.push('tes qualités');
+              if (!profile.flaws || !profile.flaws.trim()) missing.push('tes défauts');
+              if (profile.interests.length === 0) missing.push("tes centres d'intérêt");
               if (!profile.country) missing.push('ton pays');
               if (!profile.city || !profile.city.trim()) missing.push('ta ville');
               if (missing.length === 0) return null;
@@ -562,9 +581,16 @@ export default function ProfilPage() {
               {/* Left column */}
               <div className="flex flex-col gap-5 lg:col-span-2">
                 {/* Photo gallery */}
-                <div className="rounded-xl border border-border bg-surface p-5">
+                <div
+                  className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                    profile.photos.length === 0,
+                  )}`}
+                >
                   <div className="mb-4 flex items-center justify-between">
-                    <p className="font-headings text-base font-bold text-foreground">Mes photos</p>
+                    <p className="font-headings text-base font-bold text-foreground">
+                      Mes photos
+                      <ACompleterTag show={profile.photos.length === 0} />
+                    </p>
                     <span className="font-body text-xs text-muted-foreground">
                       {profile.photos.length} / 6 photos
                     </span>
@@ -611,20 +637,14 @@ export default function ProfilPage() {
 
                 {/* Vision du mariage — real bio field, inline editable */}
                 <div
-                  className={`rounded-xl border bg-surface p-5 ${
-                    !profile.bio || !profile.bio.trim()
-                      ? 'border-red-500/50 ring-1 ring-red-500/20'
-                      : 'border-border'
-                  }`}
+                  className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                    !profile.bio || !profile.bio.trim(),
+                  )}`}
                 >
                   <div className="mb-4 flex items-center justify-between">
                     <p className="font-headings text-base font-bold text-foreground">
                       Ma vision du mariage
-                      {(!profile.bio || !profile.bio.trim()) && (
-                        <span className="ml-2 font-body text-xs font-semibold text-red-600">
-                          À compléter
-                        </span>
-                      )}
+                      <ACompleterTag show={!profile.bio || !profile.bio.trim()} />
                     </p>
                     {!editingBio && (
                       <button
@@ -686,10 +706,15 @@ export default function ProfilPage() {
                     editing the same free-text fields from two different
                     pages was redundant, not two real features. */}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-surface p-5">
+                  <div
+                    className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                      !profile.qualities || !profile.qualities.trim(),
+                    )}`}
+                  >
                     <div className="mb-4 flex items-center justify-between">
                       <p className="font-headings text-base font-bold text-foreground">
                         Mes qualités
+                        <ACompleterTag show={!profile.qualities || !profile.qualities.trim()} />
                       </p>
                       {!editingQualities && (
                         <button
@@ -746,10 +771,15 @@ export default function ProfilPage() {
                     )}
                   </div>
 
-                  <div className="rounded-xl border border-border bg-surface p-5">
+                  <div
+                    className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                      !profile.flaws || !profile.flaws.trim(),
+                    )}`}
+                  >
                     <div className="mb-4 flex items-center justify-between">
                       <p className="font-headings text-base font-bold text-foreground">
                         Mes défauts
+                        <ACompleterTag show={!profile.flaws || !profile.flaws.trim()} />
                       </p>
                       {!editingFlaws && (
                         <button
@@ -810,10 +840,15 @@ export default function ProfilPage() {
                     on Profile; shown on the discovery card
                     (ProfileInfoSections) so a match can judge compatibility
                     before sending a request. */}
-                <div className="rounded-xl border border-border bg-surface p-5">
+                <div
+                  className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                    profile.interests.length === 0,
+                  )}`}
+                >
                   <div className="mb-4 flex items-center justify-between">
                     <p className="font-headings text-base font-bold text-foreground">
                       Mes centres d&apos;intérêt
+                      <ACompleterTag show={profile.interests.length === 0} />
                     </p>
                     {!editingInterests && (
                       <button
@@ -1328,45 +1363,65 @@ export default function ProfilPage() {
 
               {/* Right sidebar */}
               <div className="flex flex-col gap-5">
-                {/* Verification — admin-manual-approval only (see
-                    STATUS.md), no self-service submit flow exists anywhere
-                    in the app. The link below intentionally reads "Voir le
-                    statut" (was "Finaliser la vérification", a CTA implying
-                    an action the user can't actually take) and only routes
-                    to the passive status row on Compte. */}
-                <div className="rounded-xl border border-border bg-surface p-5">
+                {/* Verification — self-service flow at /app/verification
+                    (2026-08-31): the user submits a code-in-hand selfie, an
+                    admin approves/rejects, a rejection can be redone. This
+                    card mirrors the 4 states and links into that page. */}
+                <div
+                  className={`rounded-xl border bg-surface p-5 ${incompleteCardCls(
+                    profile.verificationStatus === 'UNVERIFIED' ||
+                      profile.verificationStatus === 'REJECTED',
+                  )}`}
+                >
                   <p className="mb-4 font-headings text-base font-bold text-foreground">
                     Vérification
                   </p>
                   {profile.verificationStatus === 'VERIFIED' ? (
                     <div className="mb-4 flex items-center gap-2 rounded-lg bg-verified/10 px-3 py-2.5">
-                      <Icon name="check-circle" size={16} className="text-verified" />
+                      <Icon name="shield-check" size={16} className="text-verified" />
                       <span className="font-body text-sm text-foreground">
                         Ton profil est vérifié
+                      </span>
+                    </div>
+                  ) : profile.verificationStatus === 'PENDING' ? (
+                    <div className="mb-4 flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-2.5">
+                      <Icon name="clock" size={16} className="text-gold" />
+                      <span className="font-body text-sm text-foreground">
+                        Demande en cours d&rsquo;examen
                       </span>
                     </div>
                   ) : profile.verificationStatus === 'REJECTED' ? (
                     <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2.5">
                       <Icon name="info" size={16} className="text-red-500" />
                       <span className="font-body text-sm text-foreground">
-                        Vérification refusée — contacte le support
+                        Demande refusée — tu peux recommencer
                       </span>
                     </div>
                   ) : (
                     <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted px-3 py-2.5">
-                      <Icon name="clock" size={16} className="text-muted-foreground" />
+                      <Icon name="shield" size={16} className="text-muted-foreground" />
                       <span className="font-body text-sm text-muted-foreground">
-                        En attente de vérification
+                        Profil pas encore vérifié
                       </span>
                     </div>
                   )}
-                  {profile.verificationStatus !== 'VERIFIED' && (
+                  {profile.verificationStatus !== 'VERIFIED' &&
+                    profile.verificationStatus !== 'PENDING' && (
+                      <Link
+                        href="/app/verification"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 font-body text-sm font-bold text-primary-foreground"
+                      >
+                        <Icon name="shield-check" size={14} />
+                        Vérifier mon profil
+                      </Link>
+                    )}
+                  {profile.verificationStatus === 'PENDING' && (
                     <Link
-                      href="/app/parametres/compte"
+                      href="/app/verification"
                       className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 font-body text-sm font-medium text-foreground"
                     >
                       <Icon name="eye" size={14} />
-                      Voir le statut de vérification
+                      Voir ma demande
                     </Link>
                   )}
                 </div>

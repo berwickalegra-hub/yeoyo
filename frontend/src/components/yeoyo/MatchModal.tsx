@@ -42,8 +42,8 @@ export function MatchModal({
             size={72}
             className="ring-4 ring-background"
           />
-          <div className="-mx-3 z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
-            <Icon name="heart" size={18} />
+          <div className="animate-heartbeat -mx-3 z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+            <Icon name="heart" size={18} fill="currentColor" />
           </div>
           <UserAvatar
             name={otherName}

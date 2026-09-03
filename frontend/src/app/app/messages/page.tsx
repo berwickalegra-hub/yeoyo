@@ -8,22 +8,30 @@
 // extra request is needed; filters on the other participant's first name.
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui/Icon';
 import { AppShell } from '@/components/yeoyo/AppShell';
 import { ConversationListItem } from '@/components/yeoyo/ConversationListItem';
 import { MatchStories } from '@/components/yeoyo/MatchStories';
+import { TeamThreadRow } from '@/components/yeoyo/TeamThreadRow';
 import { MessageListSkeleton } from '@/components/yeoyo/MessageListSkeleton';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
 import { useConversations } from '@/lib/yeoyo/useConversations';
+import { triggerPushPrompt } from '@/lib/yeoyo/push-prompt';
 
 export default function MessagesPage() {
   const user = useUser();
   const badgeCounts = useNavCounts();
   const { conversations, loading } = useConversations();
   const [search, setSearch] = useState('');
+
+  // First visit to the inbox is a good moment to offer push notifications —
+  // the <NotificationPrompt> in AppShell decides whether to actually show it.
+  useEffect(() => {
+    triggerPushPrompt('messages-open');
+  }, []);
 
   // A conversation with no message yet = a fresh match — it shows in the
   // "Nouveaux matchs" strip only, never in the thread list below. It joins
@@ -56,6 +64,7 @@ export default function MessagesPage() {
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-5">
             <h1 className="font-headings text-xl font-bold text-foreground">Messages</h1>
           </div>
+          <TeamThreadRow />
           {!loading && <MatchStories matches={newMatches} />}
           {threads.length > 0 && (
             <div className="border-b border-border px-4 py-3">

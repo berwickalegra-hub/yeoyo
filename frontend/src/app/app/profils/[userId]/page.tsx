@@ -50,6 +50,7 @@ import { RequestSentOverlay } from '@/components/yeoyo/RequestSentOverlay';
 import { LimitReachedModal, type LimitReachedInfo } from '@/components/yeoyo/LimitReachedModal';
 import { REPORT_REASONS } from '@/lib/yeoyo/constants';
 import { useNavCounts } from '@/lib/yeoyo/useNavCounts';
+import { triggerPushPrompt } from '@/lib/yeoyo/push-prompt';
 import type { ProfileCard } from '@/lib/yeoyo/types';
 import { useLikePop } from '@/lib/yeoyo/useLikePop';
 
@@ -130,6 +131,7 @@ export default function ProfileDetailPage() {
         title: 'Demande envoyée !',
         subtitle: 'On te préviendra si elle ou il accepte.',
       });
+      triggerPushPrompt('contact-request');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'CONTACT_REQUEST_QUOTA_EXCEEDED') {
         // Daily cap now (2026-08-30, explicit user ask — was monthly), so
